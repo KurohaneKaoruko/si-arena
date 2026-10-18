@@ -1,6 +1,8 @@
 import { fileURLToPath } from "node:url";
 import { defineProject } from "vitest/config";
-import testConfig from "./tsconfig.test.json" with { type: "json" };
+import testConfig from "../typescript/test.json" with { type: "json" };
+
+const testConfigUrl = new URL("../typescript/test.json", import.meta.url);
 
 // Share source mappings with TypeScript. Production exports still point to dist.
 const alias = Object.entries(testConfig.compilerOptions.paths).map(([pattern, targets]) => {
@@ -9,7 +11,7 @@ const alias = Object.entries(testConfig.compilerOptions.paths).map(([pattern, ta
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
   return {
     find: new RegExp(`^${escaped.replace("*", "(.+)")}$`),
-    replacement: fileURLToPath(new URL(target, import.meta.url)).replace("*", "$1"),
+    replacement: fileURLToPath(new URL(target, testConfigUrl)).replace("*", "$1"),
   };
 });
 

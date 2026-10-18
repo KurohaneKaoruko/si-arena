@@ -74,9 +74,10 @@ SI Arena（`si-arena`，SI = Super Intelligence）是 AI 编程自由竞技游�
 - lint 使用 oxlint，格式化使用 oxfmt；不引入 ESLint 或 Prettier。
 - 提交经过 git hooks：pre-commit 用 lint-staged 对暂存文件执行 `oxlint --fix` 与 `oxfmt`，commit-msg 用 commitlint 校验 Conventional Commits 格式；hooks 由根 `prepare` 脚本在 `pnpm install` 时安装，需要跳过时使用 `--no-verify`。
 - 命令从仓库根目录执行，不硬编码个人机器上的绝对路径。
+- 共享配置放在 `configs/typescript/` 和 `configs/vitest/`，根目录保留标准工具入口，各 workspace 保留自己的配置。调整配置位置时同步更新继承、导入、脚本及相对路径基准。
 - 相对 TypeScript 导入省略扩展名，Vue/CSS 等资源保留实际扩展名，类型导入使用 `import type`；使用 `moduleResolution: Bundler`，由 tsdown 构建 ESM 与类型声明，前端使用 Vite。保持现有 strict 配置，不用 `any` 或关闭检查规避契约问题。
-- 全仓测试使用 Vitest，按 workspace 声明项目并合并根共享配置；测试与辅助文件采用 TypeScript，显式导入 `test`、`expect` 等 API。纯逻辑使用 Node，Vue 组件使用独立 jsdom 项目，不将 DOM 配置传播给规则。
-- 源码测试与类型检查共用 `tsconfig.test.json` 的测试映射，不依赖旧 dist；生产 exports 保持指向构建产物。新增公开子路径同步维护测试解析。测试代码和配置必须纳入类型检查，不把 Vitest 运行成功当作类型检查通过。
+- 全仓测试使用 Vitest，按 workspace 声明项目并合并共享设置（`configs/vitest/shared.ts`）；测试与辅助文件采用 TypeScript，显式导入 `test`、`expect` 等 API。纯逻辑使用 Node，Vue 组件使用独立 jsdom 项目，不将 DOM 配置传播给规则。
+- 源码测试与类型检查共用 `configs/typescript/test.json` 的测试映射，不依赖旧 dist；生产 exports 保持指向构建产物。新增公开子路径同步维护测试解析。测试代码和配置必须纳入类型检查，不把 Vitest 运行成功当作类型检查通过。
 - Vue 使用 Composition API 与 `<script setup lang="ts">`，路由由 Vue Router 管理，样式遵循已有 Tailwind 主题。新增界面处理加载、错误与空数据，并支持窄屏、键盘操作和清晰焦点。
 - 外部输入在边界校验，包括 API、玩家输出、Memory、IPC 和回放；TypeScript 类型不能代替运行时校验。
 - 保持改动与任务范围一致，不进行无关重构、依赖升级或整仓格式化；不手工修改生成的 `dist`、`node_modules` 或 lockfile 内容。

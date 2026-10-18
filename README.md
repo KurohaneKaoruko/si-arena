@@ -71,13 +71,15 @@ PostgreSQL 的本地启动命令为 `docker compose up -d db`，数据保存在�
 
 apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、player、cli；games/paper 包含圈地的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
 
+共享配置集中在 `configs/`：`typescript/base.json` 定义编译选项，`typescript/test.json` 定义测试源码映射和检查范围，`typescript/tooling.json` 检查工具配置与脚本，`vitest/shared.ts` 定义各测试项目共用的设置。根目录保留 `vitest.config.ts`、`tsdown.config.ts` 工具入口；各 workspace 保留自己的配置并引用共享设置。
+
 ## 测试
 
 全仓使用 Vitest，根 `vitest.config.ts` 通过 `test.projects` 发现 apps、packages 与 games 下的项目配置。Node 模块使用 Node 环境；web 与 player 的 Vue 组件使用 jsdom 和 Vue 插件。新增模块沿用对应目录结构，添加自己的 `vitest.config.ts` 即可被发现，项目名须唯一。
 
-`vitest.shared.ts` 统一测试文件模式、mock 清理和 workspace 源码解析。测试使用 `tests/**/*.test.ts`，显式从 Vitest 导入 `test`、`expect` 等 API。源码路径统一维护在 `tsconfig.test.json`，Vitest 与测试类型检查使用相同映射；生产包的 exports 仍指向 dist。新增游戏的标准根入口、rules、sdk、renderer 均可复用映射，自定义公开子路径需补充相应映射。
+`configs/vitest/shared.ts` 统一测试文件模式、mock 清理和 workspace 源码解析。测试使用 `tests/**/*.test.ts`，显式从 Vitest 导入 `test`、`expect` 等 API。源码路径统一维护在 `configs/typescript/test.json`，Vitest 与测试类型检查使用相同映射；生产包的 exports 仍指向 dist。新增游戏的标准根入口、rules、sdk、renderer 均可复用映射，自定义公开子路径需补充相应映射。
 
-`pnpm test` 无需预先构建。测试配置使用 Vite runner loader，以支持无后缀的 TypeScript 配置导入。Node 测试、辅助文件和项目配置纳入 `tsconfig.test.json`；Vue 测试由 web 的 `tsconfig.test.json` 和 vue-tsc 检查。Vitest 执行成功不能替代类型检查，`pnpm typecheck` 会检查这些文件。
+`pnpm test` 无需预先构建。测试配置使用 Vite runner loader，以支持无后缀的 TypeScript 配置导入。Node 测试、辅助文件和项目配置纳入 `configs/typescript/test.json`；Vue 测试由 web 的 `tsconfig.test.json` 和 vue-tsc 检查。Vitest 执行成功不能替代类型检查，`pnpm typecheck` 会检查这些文件。
 
 ```sh
 pnpm test

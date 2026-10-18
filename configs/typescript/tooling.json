@@ -1,0 +1,12 @@
+{
+  "extends": "./base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "../../tsdown.config.ts",
+    "../../vitest.config.ts",
+    "../**/*.ts",
+    "../../scripts/**/*.ts"
+  ]
+}

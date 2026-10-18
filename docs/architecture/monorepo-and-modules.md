@@ -5,6 +5,13 @@
 仓库项目标识为 `si-arena`，产品名称为 SI Arena，SI 代表 Super Intelligence。对外发布的 npm 包统一使用 `@si-arena` 组织：公共包按职责命名为 `@si-arena/protocol`、`@si-arena/engine`、`@si-arena/sandbox`、`@si-arena/player` 和 `@si-arena/cli`，游戏包采用 `@si-arena/game-<gameId>`，圈地为 `@si-arena/game-paper`。平台 web、server 和 worker 是私有 workspace 应用，不作为玩家开发包发布。
 
 ```text
+configs/
+  typescript/
+    base.json            共享 TypeScript 编译选项
+    test.json            测试源码映射与检查范围
+    tooling.json         工具配置与脚本类型检查
+  vitest/
+    shared.ts            测试项目共享设置
 apps/
   web/                   Vue 平台网站
   server/                Fastify API 与主动匹配
@@ -45,17 +52,19 @@ games/
 
 仓库源码采用 TypeScript ESM，相对 TypeScript 导入省略扩展名，目录入口也可省略 `index`。Vue、CSS 等资源保留实际扩展名；跨包使用公开的包名或 export 子路径，不引用其他包的源码路径。
 
-共享 TypeScript 配置使用 `module: ESNext`、`moduleResolution: Bundler` 与 `noEmit`，`tsc` 负责类型检查。Node 应用、共享包和游戏包使用根 `tsdown.config.ts`，以 unbundle 模式保持 `src` 到 `dist` 的目录对应关系，并输出 ESM、类型声明与 source map。前端由 Vite 构建。
+共享 TypeScript 配置位于 `configs/typescript/base.json`，使用 `module: ESNext`、`moduleResolution: Bundler` 与 `noEmit`，`tsc` 负责类型检查。`configs/typescript/tooling.json` 检查根工具入口、configs 下的 TypeScript 配置和 scripts 下的脚本。各 workspace 保留自己的配置入口并继承共享配置；根目录保留 `vitest.config.ts` 与 `tsdown.config.ts` 工具入口。Node 应用、共享包和游戏包使用根 `tsdown.config.ts`，以 unbundle 模式保持 `src` 到 `dist` 的目录对应关系，并输出 ESM、类型声明与 source map。前端由 Vite 构建。
 
 构建器负责将产物的相对导入解析为 Node 可加载的文件路径；运行时入口和 package exports 仍指向实际的 `.js`、`.d.ts` 文件。开发时 Node 应用通过 tsx 解析源码，不要求生产环境安装自定义模块加载器。游戏的纯规则、SDK 与 renderer 出口保持独立，构建不能将其合并成带入服务端或浏览器专属依赖的单一入口。
 
 ## 测试项目
 
-整个 monorepo 使用 Vitest，不为各游戏引入不同测试框架。根 `vitest.config.ts` 只承担项目发现、统一报告与 V8 覆盖率；各 workspace 用 `vitest.config.ts` 声明唯一项目名、根目录与环境，并显式合并 `vitest.shared.ts`。需要分离 renderer 与规则测试时，新增命名配置如 `vitest.renderer.config.ts`，根目录的通配发现无需逐个登记。
+整个 monorepo 使用 Vitest，不为各游戏引入不同测试框架。根 `vitest.config.ts` 只承担项目发现、统一报告与 V8 覆盖率；各 workspace 用 `vitest.config.ts` 声明唯一项目名、根目录与环境，并显式合并 `configs/vitest/shared.ts`。需要分离 renderer 与规则测试时，新增命名配置如 `vitest.renderer.config.ts`，根目录的通配发现无需逐个登记。
 
 纯规则、协议、引擎、沙箱、CLI、server 和 worker 使用 Node 环境。Vue 组件测试使用 jsdom 和 Vue 插件，不能将 DOM 全局环境注入纯规则测试。测试文件统一为 `tests/**/*.test.ts`，辅助文件同样使用 TypeScript；配置采用 runner loader，支持仓库约定的无后缀配置导入。
 
-测试中的跨包引用仍使用公开包名与子路径，由 `tsconfig.test.json` 的测试专用 paths 和 `vitest.shared.ts` 的相同映射解析到 workspace 源码。生产 TypeScript 配置与 package exports 不启用测试映射。源码测试不依赖旧 dist；根入口和游戏标准子路径已有通配映射，新增自定义公开子路径需同步增加测试映射。
+测试中的跨包引用仍使用公开包名与子路径，由 `configs/typescript/test.json` 的测试专用 paths 和 `configs/vitest/shared.ts` 的相同映射解析到 workspace 源码。生产 TypeScript 配置与 package exports 不启用测试映射。源码测试不依赖旧 dist；根入口和游戏标准子路径已有通配映射，新增自定义公开子路径需同步增加测试映射。
+
+TypeScript 的 paths、include、exclude 和 rootDir 按声明它们的配置文件位置解析；Vitest 的源码映射也以 `configs/typescript/test.json` 所在位置为基准，避免依赖运行命令时的工作目录。
 
 `pnpm typecheck` 在生产源码检查之外执行测试、辅助文件和配置的严格类型检查；web 的 Vue 测试使用 vue-tsc。确需构造非法输入的测试在明确的 unknown 边界进行断言转换，不通过 any 或关闭 strict 绕过检查。
 
