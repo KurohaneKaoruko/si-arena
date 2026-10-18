@@ -21,9 +21,20 @@ catalog:
   "tsx": "4.23.15"
   "oxlint": "1.88.0"
   "oxfmt": "0.73.0"
+  "simple-git-hooks": "2.14.0"
+  "lint-staged": "17.6.0"
+  "@commitlint/cli": "21.2.4"
+  "@commitlint/config-conventional": "21.2.4"
 
 minimumReleaseAgeExclude:
   - ret@0.5.1
+  - "@commitlint/cli@21.2.4"
+  - "@commitlint/config-conventional@21.2.4"
+  - "@commitlint/ensure@21.2.4"
+  - "@commitlint/lint@21.2.4"
+  - "@commitlint/load@21.2.4"
+  - "@commitlint/rules@21.2.4"
 
 allowBuilds:
   esbuild: true
+  simple-git-hooks: true

@@ -72,6 +72,7 @@ SI Arena（`si-arena`，SI = Super Intelligence）是 AI 编程自由竞技游�
 
 - 使用 Node.js 26、根 `packageManager` 固定的 pnpm 12（pnpm 通过 `manage-package-manager-versions` 自行切换版本，不使用 corepack），TypeScript ESM；不另加 npm/yarn lockfile。
 - lint 使用 oxlint，格式化使用 oxfmt；不引入 ESLint 或 Prettier。
+- 提交经过 git hooks：pre-commit 用 lint-staged 对暂存文件执行 `oxlint --fix` 与 `oxfmt`，commit-msg 用 commitlint 校验 Conventional Commits 格式；hooks 由根 `prepare` 脚本在 `pnpm install` 时安装，需要跳过时使用 `--no-verify`。
 - 命令从仓库根目录执行，不硬编码个人机器上的绝对路径。
 - NodeNext 的相对 TypeScript 导入使用 `.js` 扩展名，类型导入使用 `import type`；保持现有 strict 配置，不用 `any` 或关闭检查规避契约问题。
 - Vue 使用 Composition API 与 `<script setup lang="ts">`，路由由 Vue Router 管理，样式遵循已有 Tailwind 主题。新增界面处理加载、错误与空数据，并支持窄屏、键盘操作和清晰焦点。

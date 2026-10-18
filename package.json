@@ -18,14 +18,32 @@
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test",
     "arena": "node packages/cli/dist/main.js",
     "db:generate": "pnpm --filter @si-arena/server db:generate",
-    "db:migrate": "pnpm --filter @si-arena/server db:migrate"
+    "db:migrate": "pnpm --filter @si-arena/server db:migrate",
+    "prepare": "simple-git-hooks"
   },
   "devDependencies": {
+    "@commitlint/cli": "catalog:",
+    "@commitlint/config-conventional": "catalog:",
     "@types/node": "catalog:",
+    "lint-staged": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
+    "simple-git-hooks": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm exec lint-staged",
+    "commit-msg": "pnpm exec commitlint --edit \"$1\""
+  },
+  "lint-staged": {
+    "*.{ts,mts,cts,js,mjs,cjs,vue}": [
+      "oxlint --fix",
+      "oxfmt --no-error-on-unmatched-pattern"
+    ],
+    "*.{json,yaml,yml,css,md}": [
+      "oxfmt --no-error-on-unmatched-pattern"
+    ]
   },
   "engines": {
     "node": ">=26",

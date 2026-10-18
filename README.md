@@ -63,6 +63,8 @@ API 提供 `/health`、`/api/games` 和 `/api/games/:gameId`。health 仅表示 
 | `pnpm arena --help`                    | 仓库内 CLI 帮助              |
 | `pnpm db:generate` / `pnpm db:migrate` | Drizzle 迁移生成与应用       |
 
+提交时 git hooks 自动运行：pre-commit 用 lint-staged 对暂存文件执行 `oxlint --fix` 与 `oxfmt`，commit-msg 用 commitlint 校验 Conventional Commits 格式（如 `feat: ...`、`chore: ...`）。hooks 在 `pnpm install` 时由根 `prepare` 脚本安装。
+
 PostgreSQL 的本地启动命令为 `docker compose up -d db`，数据保存在命名 volume；数据库连接使用 .env 中的 DATABASE_URL。游戏目录与规则页不依赖数据库连接。
 
 apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、player、cli；games/paper 包含圈地的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
