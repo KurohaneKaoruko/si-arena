@@ -1,3 +1,5 @@
+import type { PAPER_CONFIG, PAPER_MAX_TICKS } from "../constants";
+
 export type PaperDirection = "up" | "right" | "down" | "left";
 export type PaperAction = { type: "move"; direction: PaperDirection } | { type: "idle" };
 
@@ -10,9 +12,9 @@ export interface PaperPlayer {
 
 export interface PaperState {
   tick: number;
-  width: 40;
-  height: 30;
-  maxTicks: 600;
+  width: typeof PAPER_CONFIG.width;
+  height: typeof PAPER_CONFIG.height;
+  maxTicks: typeof PAPER_MAX_TICKS;
   territory: number[];
   trails: number[];
   players: [PaperPlayer, PaperPlayer];

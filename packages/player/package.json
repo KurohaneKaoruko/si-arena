@@ -18,7 +18,8 @@
     "build": "tsdown --config ../../tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsdown --config ../../tsdown.config.ts --watch",
-    "prepack": "pnpm build"
+    "prepack": "pnpm build",
+    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project player"
   },
   "dependencies": {
     "@si-arena/protocol": "workspace:*"

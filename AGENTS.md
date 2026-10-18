@@ -75,6 +75,8 @@ SI Arena（`si-arena`，SI = Super Intelligence）是 AI 编程自由竞技游�
 - 提交经过 git hooks：pre-commit 用 lint-staged 对暂存文件执行 `oxlint --fix` 与 `oxfmt`，commit-msg 用 commitlint 校验 Conventional Commits 格式；hooks 由根 `prepare` 脚本在 `pnpm install` 时安装，需要跳过时使用 `--no-verify`。
 - 命令从仓库根目录执行，不硬编码个人机器上的绝对路径。
 - 相对 TypeScript 导入省略扩展名，Vue/CSS 等资源保留实际扩展名，类型导入使用 `import type`；使用 `moduleResolution: Bundler`，由 tsdown 构建 ESM 与类型声明，前端使用 Vite。保持现有 strict 配置，不用 `any` 或关闭检查规避契约问题。
+- 全仓测试使用 Vitest，按 workspace 声明项目并合并根共享配置；测试与辅助文件采用 TypeScript，显式导入 `test`、`expect` 等 API。纯逻辑使用 Node，Vue 组件使用独立 jsdom 项目，不将 DOM 配置传播给规则。
+- 源码测试与类型检查共用 `tsconfig.test.json` 的测试映射，不依赖旧 dist；生产 exports 保持指向构建产物。新增公开子路径同步维护测试解析。测试代码和配置必须纳入类型检查，不把 Vitest 运行成功当作类型检查通过。
 - Vue 使用 Composition API 与 `<script setup lang="ts">`，路由由 Vue Router 管理，样式遵循已有 Tailwind 主题。新增界面处理加载、错误与空数据，并支持窄屏、键盘操作和清晰焦点。
 - 外部输入在边界校验，包括 API、玩家输出、Memory、IPC 和回放；TypeScript 类型不能代替运行时校验。
 - 保持改动与任务范围一致，不进行无关重构、依赖升级或整仓格式化；不手工修改生成的 `dist`、`node_modules` 或 lockfile 内容。
@@ -88,6 +90,9 @@ pnpm dev
 pnpm build
 pnpm check
 pnpm test
+pnpm test:watch
+pnpm test:coverage
+pnpm test:artifacts
 pnpm arena --help
 ```
 
@@ -96,10 +101,10 @@ pnpm arena --help
 ## 验证与交付
 
 - 按改动选择验证：纯文档改动检查链接、代码块和格式即可；代码改动运行受影响检查，提交交付前用 `pnpm check` 汇总验证，构建或包边界变更另运行 `pnpm build`。
-- `pnpm check` 包含类型检查、lint、格式检查与测试，不包含全量生产构建。针对单包检查时，先构建其依赖的共享包，可使用 `pnpm build:packages`。
+- `pnpm check` 包含类型检查、lint、格式检查与测试，不包含全量生产构建。源码测试无需预构建；单独执行生产源码的类型检查时，先用 `pnpm build:packages` 构建共享依赖。
 - 为会改变胜负、确定性、隔离、恢复或结算的行为补充有意义的测试，不为简单展示修改添加只复述实现的测试。
 - 规则与回放验证碰撞、同时事件、终局和重演一致性；沙箱验证超限隔离、旧 Memory 保留及下一 tick 恢复；平台验证主动匹配、并发幂等与重复结算。
-- 修改 CLI 或分发机制时，在仓库外解包运行验证，避免 workspace 链接掩盖缺失产物；修改界面时检查桌面和手机布局。
+- 修改构建、exports、CLI 或分发机制时执行 `pnpm test:artifacts`，在仓库外通过真实 Node 与 NodeNext 消费者验证打包产物，避免测试别名和 workspace 链接掩盖问题；修改界面时检查桌面和手机布局。
 - 行为、协议、资源或命令变化时同步更新对应设计、SDK、提示词、示例和 README。文档只写确定的设计，不加入“待定”“草案”等标签；影响需求的未决问题先与用户讨论清楚。
 - 完成后说明改动、验证结果及实际限制；没有执行的验证不能声称通过。
 - 保留用户已有修改，不擅自回退、清理或覆盖。提交与推送按用户指令执行，新增提交前检查差异与暂存内容。

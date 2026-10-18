@@ -7,7 +7,9 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vue-tsc --noEmit && vite build",
     "typecheck": "vue-tsc --noEmit",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project web",
+    "typecheck:test": "vue-tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
     "@si-arena/game-paper": "workspace:*",
@@ -19,6 +21,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
+    "@vue/test-utils": "catalog:",
     "tailwindcss": "catalog:",
     "vite": "catalog:",
     "vue-tsc": "catalog:"

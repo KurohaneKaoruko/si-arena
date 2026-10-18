@@ -49,6 +49,20 @@ games/
 
 构建器负责将产物的相对导入解析为 Node 可加载的文件路径；运行时入口和 package exports 仍指向实际的 `.js`、`.d.ts` 文件。开发时 Node 应用通过 tsx 解析源码，不要求生产环境安装自定义模块加载器。游戏的纯规则、SDK 与 renderer 出口保持独立，构建不能将其合并成带入服务端或浏览器专属依赖的单一入口。
 
+## 测试项目
+
+整个 monorepo 使用 Vitest，不为各游戏引入不同测试框架。根 `vitest.config.ts` 只承担项目发现、统一报告与 V8 覆盖率；各 workspace 用 `vitest.config.ts` 声明唯一项目名、根目录与环境，并显式合并 `vitest.shared.ts`。需要分离 renderer 与规则测试时，新增命名配置如 `vitest.renderer.config.ts`，根目录的通配发现无需逐个登记。
+
+纯规则、协议、引擎、沙箱、CLI、server 和 worker 使用 Node 环境。Vue 组件测试使用 jsdom 和 Vue 插件，不能将 DOM 全局环境注入纯规则测试。测试文件统一为 `tests/**/*.test.ts`，辅助文件同样使用 TypeScript；配置采用 runner loader，支持仓库约定的无后缀配置导入。
+
+测试中的跨包引用仍使用公开包名与子路径，由 `tsconfig.test.json` 的测试专用 paths 和 `vitest.shared.ts` 的相同映射解析到 workspace 源码。生产 TypeScript 配置与 package exports 不启用测试映射。源码测试不依赖旧 dist；根入口和游戏标准子路径已有通配映射，新增自定义公开子路径需同步增加测试映射。
+
+`pnpm typecheck` 在生产源码检查之外执行测试、辅助文件和配置的严格类型检查；web 的 Vue 测试使用 vue-tsc。确需构造非法输入的测试在明确的 unknown 边界进行断言转换，不通过 any 或关闭 strict 绕过检查。
+
+`pnpm test` 单次运行全仓，`pnpm test:watch` 监听源码与依赖变化，`--project` 按名称筛选，`pnpm test:coverage` 统一输出源码覆盖率至根 coverage 目录。覆盖率包含未执行的业务源码，避免只报告已导入文件。
+
+源码测试与分发验证分别执行。`pnpm test:artifacts` 完成生产构建、公开包打包和仓库外解压，检查所有公开 JS/类型入口；再用真实 Node 和严格 NodeNext 消费者验证加载、CLI、完整比赛与编译后的 API。验证进程不使用测试别名或 TS loader，不依赖 workspace 软链接，也不进行发布或正式比赛计分。
+
 ## 游戏模块接口
 
 游戏规则实现以下契约；JSON 和结果类型由 protocol 包导出：

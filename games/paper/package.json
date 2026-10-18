@@ -19,6 +19,10 @@
     "./renderer": {
       "types": "./dist/renderer/index.d.ts",
       "import": "./dist/renderer/index.js"
+    },
+    "./rules": {
+      "types": "./dist/rules/index.d.ts",
+      "import": "./dist/rules/index.js"
     }
   },
   "publishConfig": {
@@ -28,7 +32,8 @@
     "build": "tsdown --config ../../tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsdown --config ../../tsdown.config.ts --watch",
-    "prepack": "pnpm build"
+    "prepack": "pnpm build",
+    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project paper-rules"
   },
   "dependencies": {
     "@si-arena/protocol": "workspace:*"

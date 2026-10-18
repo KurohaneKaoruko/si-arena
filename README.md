@@ -61,7 +61,7 @@ API 提供 `/health`、`/api/games` 和 `/api/games/:gameId`。health 仅表示 
 | `pnpm dev:worker`                      | worker 启动入口              |
 | `pnpm build`                           | 按依赖顺序构建全部 workspace |
 | `pnpm check`                           | 类型、lint、格式和契约测试   |
-| `pnpm test`                            | 资源配置与 API 集成测试      |
+| `pnpm test`                            | Vitest 全仓源码测试          |
 | `pnpm arena --help`                    | 仓库内 CLI 帮助              |
 | `pnpm db:generate` / `pnpm db:migrate` | Drizzle 迁移生成与应用       |
 
@@ -70,6 +70,26 @@ API 提供 `/health`、`/api/games` 和 `/api/games/:gameId`。health 仅表示 
 PostgreSQL 的本地启动命令为 `docker compose up -d db`，数据保存在命名 volume；数据库连接使用 .env 中的 DATABASE_URL。游戏目录与规则页不依赖数据库连接。
 
 apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、player、cli；games/paper 包含圈地的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
+
+## 测试
+
+全仓使用 Vitest，根 `vitest.config.ts` 通过 `test.projects` 发现 apps、packages 与 games 下的项目配置。Node 模块使用 Node 环境；web 与 player 的 Vue 组件使用 jsdom 和 Vue 插件。新增模块沿用对应目录结构，添加自己的 `vitest.config.ts` 即可被发现，项目名须唯一。
+
+`vitest.shared.ts` 统一测试文件模式、mock 清理和 workspace 源码解析。测试使用 `tests/**/*.test.ts`，显式从 Vitest 导入 `test`、`expect` 等 API。源码路径统一维护在 `tsconfig.test.json`，Vitest 与测试类型检查使用相同映射；生产包的 exports 仍指向 dist。新增游戏的标准根入口、rules、sdk、renderer 均可复用映射，自定义公开子路径需补充相应映射。
+
+`pnpm test` 无需预先构建。测试配置使用 Vite runner loader，以支持无后缀的 TypeScript 配置导入。Node 测试、辅助文件和项目配置纳入 `tsconfig.test.json`；Vue 测试由 web 的 `tsconfig.test.json` 和 vue-tsc 检查。Vitest 执行成功不能替代类型检查，`pnpm typecheck` 会检查这些文件。
+
+```sh
+pnpm test
+pnpm test --project paper-rules
+pnpm test:watch --project paper-rules
+pnpm test:coverage
+pnpm test:artifacts
+```
+
+覆盖率由根配置统一汇总源码，包含未覆盖的源文件，输出文本、HTML 与 LCOV 报告至 `coverage/`。仅声明类型的模块没有可执行逻辑，不据此添加无意义的运行时测试。
+
+`pnpm test:artifacts` 先完成生产构建，再将公开 workspace 包打包、解压至仓库外；使用未加载 TypeScript loader 的真实 Node 校验 exports、CLI、已编译 API 和完整圈地比赛，并通过严格 NodeNext 消费者检查声明文件。该命令不发布 npm 包，不连接业务数据库，临时目录在结束后清理。
 
 ## 玩家开发包
 

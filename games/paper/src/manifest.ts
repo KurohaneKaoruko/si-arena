@@ -1,3 +1,4 @@
+import { PAPER_CONFIG, PAPER_MAX_TICKS } from "./constants";
 import {
   resolveResourceLimits,
   type GameCatalogEntry,
@@ -12,8 +13,8 @@ export const paperManifest = {
   botProtocolVersion: 1,
   minPlayers: 2,
   maxPlayers: 2,
-  maxTicks: 600,
-  config: { width: 40, height: 30, initialTerritorySize: 3 },
+  maxTicks: PAPER_MAX_TICKS,
+  config: PAPER_CONFIG,
 } satisfies GameManifest;
 
 export const paperCatalogEntry: GameCatalogEntry = {
