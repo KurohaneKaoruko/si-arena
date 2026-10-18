@@ -1,0 +1,31 @@
+packages:
+  - apps/*
+  - packages/*
+  - games/*
+
+catalog:
+  'typescript': '5.9.3'
+  '@types/node': '24.19.2'
+  'vue': '3.5.44'
+  'vue-router': '4.6.4'
+  'vite': '8.3.4'
+  '@vitejs/plugin-vue': '6.0.10'
+  'tailwindcss': '4.3.3'
+  '@tailwindcss/vite': '4.3.3'
+  'vue-tsc': '3.3.13'
+  'fastify': '5.12.7'
+  'drizzle-orm': '0.45.4'
+  'drizzle-kit': '0.31.11'
+  'pg': '8.23.1'
+  '@types/pg': '8.23.1'
+  'tsx': '4.23.15'
+  'prettier': '3.9.10'
+  'eslint': '10.13.0'
+  '@eslint/js': '10.0.1'
+  'typescript-eslint': '8.71.2'
+  'eslint-plugin-vue': '10.11.1'
+  'eslint-config-prettier': '10.1.8'
+
+onlyBuiltDependencies:
+  - esbuild
+  - '@tailwindcss/oxide'

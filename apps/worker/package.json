@@ -1,0 +1,21 @@
+{
+  "name": "@si-arena/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env --import tsx --watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file-if-exists=../../.env dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@si-arena/protocol": "workspace:*",
+    "@si-arena/game-paper": "workspace:*",
+    "@si-arena/engine": "workspace:*",
+    "@si-arena/sandbox": "workspace:*"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "si-arena",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=10 <11"
+  },
+  "scripts": {
+    "dev": "corepack pnpm build:packages && corepack pnpm -r --parallel run dev",
+    "dev:web": "corepack pnpm build:packages && corepack pnpm --filter @si-arena/web dev",
+    "dev:server": "corepack pnpm build:packages && corepack pnpm --filter @si-arena/server dev",
+    "dev:worker": "corepack pnpm build:packages && corepack pnpm --filter @si-arena/worker dev",
+    "build": "corepack pnpm -r --workspace-concurrency=1 run build",
+    "build:packages": "corepack pnpm -r --filter './packages/**' --filter './games/**' --workspace-concurrency=1 run build",
+    "typecheck": "corepack pnpm build:packages && corepack pnpm -r --workspace-concurrency=1 run typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "corepack pnpm build:packages && corepack pnpm --filter @si-arena/server build && corepack pnpm -r --if-present run test",
+    "check": "corepack pnpm typecheck && corepack pnpm lint && corepack pnpm format:check && corepack pnpm test",
+    "arena": "node packages/cli/dist/main.js",
+    "db:generate": "corepack pnpm --filter @si-arena/server db:generate",
+    "db:migrate": "corepack pnpm --filter @si-arena/server db:migrate"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "prettier": "catalog:",
+    "eslint": "catalog:",
+    "@eslint/js": "catalog:",
+    "typescript-eslint": "catalog:",
+    "eslint-plugin-vue": "catalog:",
+    "eslint-config-prettier": "catalog:"
+  }
+}

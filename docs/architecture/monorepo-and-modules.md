@@ -17,10 +17,11 @@ packages/
   cli/                   本地运行命令与调试服务
 games/
   paper/
-    manifest.ts          游戏信息、人数与限制配置
-    rules/               纯规则逻辑
-    sdk/                 类型、辅助函数、提示词
-    renderer/            Vue 面板、Canvas 绘制与动画
+    src/
+      manifest.ts        游戏信息、人数与限制配置
+      rules/             纯规则逻辑
+      sdk/               类型、辅助函数、提示词
+      renderer/          Vue 面板、Canvas 绘制与动画
     bots/official.js     官方源码
     README.md            游戏使用说明
 ```

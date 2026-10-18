@@ -26,27 +26,50 @@ SI Arena 是一个通过网页参与的 AI 编程竞技游戏平台。玩家在�
 
 ## 技术方向
 
-| 部分 | 选型 |
-| --- | --- |
-| 仓库与包管理 | pnpm 10 workspace monorepo |
-| 网站 | Vue 3、TypeScript、Vite、Vue Router、Tailwind CSS |
-| 业务后端 | Node.js 24 LTS、TypeScript、Fastify 5 |
-| 数据库 | PostgreSQL 18、Drizzle ORM、node-postgres |
+| 部分         | 选型                                                        |
+| ------------ | ----------------------------------------------------------- |
+| 仓库与包管理 | pnpm 10 workspace monorepo                                  |
+| 网站         | Vue 3、TypeScript、Vite、Vue Router、Tailwind CSS           |
+| 业务后端     | Node.js 24 LTS、TypeScript、Fastify 5                       |
+| 数据库       | PostgreSQL 18、Drizzle ORM、node-postgres                   |
 | 玩家代码执行 | quickjs-emscripten 同步发行版、QuickJS-WASM、独立执行子进程 |
-| 游戏扩展 | 独立游戏包：规则、SDK、说明、渲染器、官方 bot |
-| 本地调试 | 与服务端共用引擎、游戏包和沙箱的 CLI 与可视化工具 |
+| 游戏扩展     | 独立游戏包：规则、SDK、说明、渲染器、官方 bot               |
+| 本地调试     | 与服务端共用引擎、游戏包和沙箱的 CLI 与可视化工具           |
 
 回放保存初始世界状态和每 tick 的有效动作意图，通过确定性的规则引擎还原比赛，不依赖玩家代码。本地回放可以包含玩家日志；本地与服务端回放都记录执行错误。
 
-## 本地开发入口
+## 仓库开发
 
-统一 CLI 按游戏下载独立开发包，无需全局安装：
+要求 Node.js 24 和 pnpm 10；根目录的 packageManager 固定 pnpm 精确版本，`.nvmrc` 用于选择 Node 主版本。
 
 ```sh
-npx @si-arena/cli@latest init paper ./paper-bot
+corepack pnpm install
+cp .env.example .env
+pnpm dev
 ```
 
-命令下载游戏发行对应的引擎、SDK、沙箱、官方 bot 和本地工具，生成开发目录。安装依赖后，通过开发包内的 `pnpm arena dev`、`pnpm arena run` 和 `pnpm arena replay` 调试、对战和查看回放。流程见 [本地开发与调试](docs/designs/local-development.md)。
+网页地址为 [http://127.0.0.1:5173](http://127.0.0.1:5173)，API 地址为 [http://127.0.0.1:3000](http://127.0.0.1:3000)。Vite 将 `/api` 与 `/health` 代理到 API。`pnpm dev` 先构建共享包，再并行监视各 workspace 的变化。
+
+API 提供 `/health`、`/api/games` 和 `/api/games/:gameId`。health 仅表示 HTTP 进程存活，不代表数据库或比赛执行服务就绪。worker 入口负责读取配置，不自动创建比赛。
+
+| 命令                                   | 用途                         |
+| -------------------------------------- | ---------------------------- |
+| `pnpm dev:web`                         | 网页开发服务                 |
+| `pnpm dev:server`                      | Fastify 开发服务             |
+| `pnpm dev:worker`                      | worker 启动入口              |
+| `pnpm build`                           | 按依赖顺序构建全部 workspace |
+| `pnpm check`                           | 类型、lint、格式和契约测试   |
+| `pnpm test`                            | 资源配置与 API 集成测试      |
+| `pnpm arena --help`                    | 仓库内 CLI 帮助              |
+| `pnpm db:generate` / `pnpm db:migrate` | Drizzle 迁移生成与应用       |
+
+PostgreSQL 的本地启动命令为 `docker compose up -d db`，数据保存在命名 volume；数据库连接使用 .env 中的 DATABASE_URL。游戏目录与规则页不依赖数据库连接。
+
+apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、player、cli；games/paper 包含圈地的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
+
+## 玩家开发包
+
+统一 CLI 的下载、调试和回放协议见 [本地开发与调试](docs/designs/local-development.md) 与 [分发设计](docs/architecture/distribution-and-development.md)。npm 包统一属于 `@si-arena`，游戏开发包与平台服务通过发行清单保持版本一致。
 
 ## 文档导航
 

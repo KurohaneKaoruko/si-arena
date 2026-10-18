@@ -1,0 +1,58 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --color-arena-background: #0f172a;
+  --color-arena-card: #182236;
+  --color-arena-border: #334155;
+  --color-arena-text: #f8fafc;
+  --color-arena-muted: #a8b8cc;
+  --color-arena-accent: #a3e635;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  body {
+    @apply m-0 bg-arena-background font-sans text-arena-text antialiased;
+  }
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:not(:disabled),
+  a {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-arena-accent);
+    outline-offset: 5px;
+  }
+  ::selection {
+    background: var(--color-arena-accent);
+    color: var(--color-arena-background);
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-arena-border bg-arena-card;
+  }
+  .button-secondary {
+    @apply inline-flex min-h-11 items-center justify-center rounded-lg border border-arena-border px-5 text-sm font-medium text-arena-text transition-colors hover:border-arena-accent hover:text-arena-accent;
+  }
+  .skip-link {
+    @apply fixed top-3 left-3 z-50 -translate-y-24 rounded-lg bg-arena-accent px-5 py-3 font-medium text-arena-background focus:translate-y-0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
+}
