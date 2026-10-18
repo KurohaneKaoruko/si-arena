@@ -69,7 +69,7 @@ pnpm 打包会转换 workspace 依赖声明，但不会自动把所有依赖实�
 
 `release.json` 记录：开发包格式版本、游戏 ID、规则发行标识、botProtocolVersion、引擎兼容标识、沙箱和 SDK 的精确软件版本、默认配置、游戏解析后的完整 `resolvedLimits`、Node/pnpm 要求，以及关键文件校验值。发布档案不可覆盖；外部发行元数据另外记录整个 ZIP 的大小和摘要。
 
-CLI 启动时检查 Node 主版本，初始化和本地执行均要求 Node.js 24。运行环境采用 Node.js 24 LTS 与 pnpm 10，包配置声明 `node: >=24 <25`、`pnpm: >=10 <11`。每次发行在清单和锁文件中记录构建所用精确版本及依赖，不在安装时漂移版本。构建入口读取根 package.json 的 packageManager 和锁文件，拒绝锁文件不同步的构建。
+CLI 启动时检查 Node 主版本，初始化和本地执行均要求 Node.js 26 及以上。运行环境采用 Node.js 26 与 pnpm 12，包配置声明 `node: >=26`、`pnpm: >=12`。每次发行在清单和锁文件中记录构建所用精确版本及依赖，不在安装时漂移版本。构建入口读取根 package.json 的 packageManager 和锁文件，拒绝锁文件不同步的构建。
 
 回放播放器使用可信发行注册表查找兼容规则与 renderer。保留已发布软件包以支持旧回放，但不保留用户历史 bot。
 

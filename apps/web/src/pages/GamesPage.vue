@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { GameCatalogEntry } from '@si-arena/protocol'
-import { RouterLink } from 'vue-router'
-import { useApiResource } from '../composables/useApiResource.js'
+import type { GameCatalogEntry } from "@si-arena/protocol";
+import { RouterLink } from "vue-router";
+import { useApiResource } from "../composables/useApiResource.js";
 
 const { data, pending, error, reload } = useApiResource<{ games: GameCatalogEntry[] }>(
-  () => '/api/games',
-)
+  () => "/api/games",
+);
 </script>
 
 <template>
@@ -42,7 +42,7 @@ const { data, pending, error, reload } = useApiResource<{ games: GameCatalogEntr
           <span
             class="flex size-14 items-center justify-center rounded-xl bg-arena-accent/10 font-mono text-xl text-arena-accent"
             aria-hidden="true"
-            >{{ String(index + 1).padStart(2, '0') }}</span
+            >{{ String(index + 1).padStart(2, "0") }}</span
           >
           <span
             class="rounded-full border border-arena-border px-3 py-1 font-mono text-xs text-arena-muted"

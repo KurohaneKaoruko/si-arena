@@ -13,17 +13,17 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
-    "@si-arena/protocol": "workspace:*",
     "@si-arena/game-paper": "workspace:*",
-    "fastify": "catalog:",
+    "@si-arena/protocol": "workspace:*",
     "drizzle-orm": "catalog:",
+    "fastify": "catalog:",
     "pg": "catalog:"
-  },
-  "engines": {
-    "node": ">=24 <25"
   },
   "devDependencies": {
     "@types/pg": "catalog:",
     "drizzle-kit": "catalog:"
+  },
+  "engines": {
+    "node": ">=26"
   }
 }

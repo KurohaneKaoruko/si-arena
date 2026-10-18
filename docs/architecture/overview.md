@@ -5,8 +5,8 @@
 | 层次 | 选型与职责 |
 | --- | --- |
 | 前端 | Vue 3 + TypeScript + Vite + Vue Router + Tailwind CSS |
-| 包管理 | pnpm 10 workspace，以 pnpm 脚本编排构建，不额外引入 monorepo 框架 |
-| 业务 API | Node.js 24 LTS + TypeScript + Fastify 5 |
+| 包管理 | pnpm 12 workspace，以 pnpm 脚本编排构建，不额外引入 monorepo 框架 |
+| 业务 API | Node.js 26 + TypeScript + Fastify 5 |
 | 数据 | PostgreSQL 18 + Drizzle ORM + node-postgres |
 | 任务 | 首版 PostgreSQL 任务表，短事务领取、租约、幂等终态 |
 | 比赛运行 | 独立 Node.js worker，调用共享引擎和游戏包 |

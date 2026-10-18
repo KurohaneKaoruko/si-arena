@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import type { GameCatalogEntry } from '@si-arena/protocol'
-import { computed } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
-import { useApiResource } from '../composables/useApiResource.js'
-import { gamePresentations } from '../games/index.js'
+import type { GameCatalogEntry } from "@si-arena/protocol";
+import { computed } from "vue";
+import { RouterLink, useRoute } from "vue-router";
+import { useApiResource } from "../composables/useApiResource.js";
+import { gamePresentations } from "../games/index.js";
 
-const route = useRoute()
-const path = computed(() => `/api/games/${encodeURIComponent(String(route.params.gameId))}`)
-const { data: game, pending, error, reload } = useApiResource<GameCatalogEntry>(() => path.value)
-const presentation = computed(() => gamePresentations.get(String(route.params.gameId)))
+const route = useRoute();
+const path = computed(() => `/api/games/${encodeURIComponent(String(route.params.gameId))}`);
+const { data: game, pending, error, reload } = useApiResource<GameCatalogEntry>(() => path.value);
+const presentation = computed(() => gamePresentations.get(String(route.params.gameId)));
 const stats = computed(() =>
   game.value && presentation.value ? presentation.value.getStats(game.value) : [],
-)
+);
 </script>
 
 <template>

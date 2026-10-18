@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync } from "node:fs";
 
-const metadata = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
-  name: string
-  version: string
-}
-export const CLI_NAME = metadata.name
-export const CLI_VERSION = metadata.version
+const metadata = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+  name: string;
+  version: string;
+};
+export const CLI_NAME = metadata.name;
+export const CLI_VERSION = metadata.version;

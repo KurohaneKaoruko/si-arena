@@ -1,12 +1,12 @@
 {
   "name": "@si-arena/game-paper",
   "version": "0.0.0",
-  "type": "module",
   "files": [
     "dist",
     "bots",
     "README.md"
   ],
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -21,6 +21,9 @@
       "import": "./dist/renderer/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -30,10 +33,7 @@
   "dependencies": {
     "@si-arena/protocol": "workspace:*"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=26"
   }
 }

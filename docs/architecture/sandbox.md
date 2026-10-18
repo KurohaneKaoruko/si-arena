@@ -47,7 +47,7 @@ QuickJS 是解释执行引擎，不采用 V8 JIT，计算密集策略的速度�
 
 QuickJS 分配限制不等于整个 Node 进程的 RSS 限制，也不包含所有宿主缓冲区。WASM 线性内存、Node 开销、IPC 缓冲仍需单独预算。首版不启用可转移大缓冲区、共享内存等非必要能力。
 
-CPU 使用线程计时而非 `Date.now()` 差值。执行环境为 Node.js 24 LTS，使用 `process.threadCpuUsage()` 的 user 与 system 差值计量。[Node.js 文档](https://nodejs.org/docs/latest-v24.x/api/process.html#processthreadcpuusagepreviousvalue)执行器读取该游戏发行的完整资源配置，默认每 tick 20ms CPU、500ms 墙钟，不能在代码中写死为所有游戏的固定值。
+CPU 使用线程计时而非 `Date.now()` 差值。执行环境为 Node.js 26，使用 `process.threadCpuUsage()` 的 user 与 system 差值计量。[Node.js 文档](https://nodejs.org/docs/latest-v26.x/api/process.html#processthreadcpuusagepreviousvalue)执行器读取该游戏发行的完整资源配置，默认每 tick 20ms CPU、500ms 墙钟，不能在代码中写死为所有游戏的固定值。
 
 中断回调有检查粒度，不能承诺每条 JS 指令后检查。部分耗时路径可能不能及时响应中断，必须有父进程墙钟兜底。正常输出前再次检查预算；框架已确认的资源失败必须锁定为失败，不能靠玩家 catch 异常后返回动作绕过。
 

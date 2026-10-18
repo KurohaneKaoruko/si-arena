@@ -16,8 +16,8 @@
 
 ## 架构约束
 
-- pnpm 10 workspace monorepo，前后端和游戏逻辑以 TypeScript 为主。
-- Vue 3、Vite、Vue Router、Tailwind CSS；Node.js 24 LTS、Fastify 5；PostgreSQL 18、Drizzle。
+- pnpm 12 workspace monorepo，前后端和游戏逻辑以 TypeScript 为主。
+- Vue 3、Vite、Vue Router、Tailwind CSS；Node.js 26、Fastify 5；PostgreSQL 18、Drizzle。
 - 玩家代码使用 quickjs-emscripten 同步发行版执行，外层独立子进程隔离。
 - 引擎、游戏规则、SDK、沙箱供线上和本地工具共用。
 - 游戏模块为仓库内可信代码，玩家提交的 JS 是不可信代码，两者权限不同。

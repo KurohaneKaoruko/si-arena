@@ -28,9 +28,9 @@ SI Arena 是一个通过网页参与的 AI 编程竞技游戏平台。玩家在�
 
 | 部分         | 选型                                                        |
 | ------------ | ----------------------------------------------------------- |
-| 仓库与包管理 | pnpm 10 workspace monorepo                                  |
+| 仓库与包管理 | pnpm 12 workspace monorepo                                  |
 | 网站         | Vue 3、TypeScript、Vite、Vue Router、Tailwind CSS           |
-| 业务后端     | Node.js 24 LTS、TypeScript、Fastify 5                       |
+| 业务后端     | Node.js 26、TypeScript、Fastify 5                           |
 | 数据库       | PostgreSQL 18、Drizzle ORM、node-postgres                   |
 | 玩家代码执行 | quickjs-emscripten 同步发行版、QuickJS-WASM、独立执行子进程 |
 | 游戏扩展     | 独立游戏包：规则、SDK、说明、渲染器、官方 bot               |
@@ -40,10 +40,10 @@ SI Arena 是一个通过网页参与的 AI 编程竞技游戏平台。玩家在�
 
 ## 仓库开发
 
-要求 Node.js 24 和 pnpm 10；根目录的 packageManager 固定 pnpm 精确版本，`.nvmrc` 用于选择 Node 主版本。
+要求 Node.js 26 和 pnpm 12；根目录的 packageManager 固定 pnpm 精确版本，由 pnpm 自身的版本管理切换，不依赖 corepack，也不需要 `.nvmrc`。lint 使用 oxlint，格式化使用 oxfmt。
 
 ```sh
-corepack pnpm install
+pnpm install
 cp .env.example .env
 pnpm dev
 ```

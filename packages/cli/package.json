@@ -1,15 +1,21 @@
 {
   "name": "@si-arena/cli",
   "version": "0.0.0",
-  "type": "module",
+  "bin": {
+    "arena": "./dist/main.js"
+  },
   "files": [
     "dist"
   ],
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -17,16 +23,10 @@
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
     "prepack": "tsc -p tsconfig.json"
   },
-  "publishConfig": {
-    "access": "public"
-  },
-  "engines": {
-    "node": ">=24 <25"
-  },
   "dependencies": {
     "@si-arena/protocol": "workspace:*"
   },
-  "bin": {
-    "arena": "./dist/main.js"
+  "engines": {
+    "node": ">=26"
   }
 }

@@ -10,12 +10,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@si-arena/protocol": "workspace:*",
-    "@si-arena/game-paper": "workspace:*",
     "@si-arena/engine": "workspace:*",
+    "@si-arena/game-paper": "workspace:*",
+    "@si-arena/protocol": "workspace:*",
     "@si-arena/sandbox": "workspace:*"
   },
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=26"
   }
 }
