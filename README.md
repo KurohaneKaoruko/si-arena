@@ -50,6 +50,8 @@ pnpm dev
 
 网页地址为 [http://127.0.0.1:5173](http://127.0.0.1:5173)，API 地址为 [http://127.0.0.1:3000](http://127.0.0.1:3000)。Vite 将 `/api` 与 `/health` 代理到 API。`pnpm dev` 先构建共享包，再并行监视各 workspace 的变化。
 
+源码的相对 TypeScript 导入省略扩展名，例如 `import { buildApp } from "./app"`。TypeScript 使用 Bundler 模块解析并负责类型检查；Node 应用和共享包通过根 `tsdown.config.ts` 构建 ESM 与类型声明，保持各包既有 dist 路径，输出中的导入由构建器处理为 Node 可直接加载的形式。前端继续使用 Vite；Vue、CSS 等资源引用保留扩展名。
+
 API 提供 `/health`、`/api/games` 和 `/api/games/:gameId`。health 仅表示 HTTP 进程存活，不代表数据库或比赛执行服务就绪。worker 入口负责读取配置，不自动创建比赛。
 
 | 命令                                   | 用途                         |

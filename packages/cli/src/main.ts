@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { CLI_NAME, CLI_VERSION } from "./index.js";
+import { CLI_NAME, CLI_VERSION } from "./index";
 
 if (Number(process.versions.node.split(".")[0]) < 26) {
   console.error("SI Arena requires Node.js 26 or newer.");

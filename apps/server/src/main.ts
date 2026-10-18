@@ -1,5 +1,5 @@
-import { buildApp } from "./app.js";
-import { readServerConfig } from "./config.js";
+import { buildApp } from "./app";
+import { readServerConfig } from "./config";
 
 const config = readServerConfig();
 const app = buildApp({ logger: { level: config.logLevel } });

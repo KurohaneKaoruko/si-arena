@@ -1,5 +1,5 @@
-import type { JsonObject, JsonValue } from "./json.js";
-import type { ResourceLimits } from "./resources.js";
+import type { JsonObject, JsonValue } from "./json";
+import type { ResourceLimits } from "./resources";
 
 export type ExecutionErrorType =
   | "RUNTIME_ERROR"

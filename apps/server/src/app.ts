@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { gameCatalog } from "./games.js";
+import { gameCatalog } from "./games";
 
 export function buildApp(options: { logger?: boolean | { level: string } } = {}) {
   const app = Fastify({ logger: options.logger ?? false });

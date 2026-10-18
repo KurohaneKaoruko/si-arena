@@ -18,10 +18,10 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsdown --config ../../tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
-    "prepack": "tsc -p tsconfig.json"
+    "dev": "tsdown --config ../../tsdown.config.ts --watch",
+    "prepack": "pnpm build"
   },
   "dependencies": {
     "@si-arena/protocol": "workspace:*"

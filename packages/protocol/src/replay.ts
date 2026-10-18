@@ -1,7 +1,7 @@
-import type { ExecutionError, PlayerLog } from "./execution.js";
-import type { GameResult } from "./game.js";
-import type { JsonObject } from "./json.js";
-import type { ResourceLimits } from "./resources.js";
+import type { ExecutionError, PlayerLog } from "./execution";
+import type { GameResult } from "./game";
+import type { JsonObject } from "./json";
+import type { ResourceLimits } from "./resources";
 
 export interface Replay<State, Action> {
   formatVersion: 1;

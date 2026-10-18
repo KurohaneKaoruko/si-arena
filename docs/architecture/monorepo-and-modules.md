@@ -41,6 +41,14 @@ games/
 
 依赖环、从游戏规则导入业务数据库、从本地工具调用平台私有 API 均应作为结构错误处理。
 
+## 模块解析与构建
+
+仓库源码采用 TypeScript ESM，相对 TypeScript 导入省略扩展名，目录入口也可省略 `index`。Vue、CSS 等资源保留实际扩展名；跨包使用公开的包名或 export 子路径，不引用其他包的源码路径。
+
+共享 TypeScript 配置使用 `module: ESNext`、`moduleResolution: Bundler` 与 `noEmit`，`tsc` 负责类型检查。Node 应用、共享包和游戏包使用根 `tsdown.config.ts`，以 unbundle 模式保持 `src` 到 `dist` 的目录对应关系，并输出 ESM、类型声明与 source map。前端由 Vite 构建。
+
+构建器负责将产物的相对导入解析为 Node 可加载的文件路径；运行时入口和 package exports 仍指向实际的 `.js`、`.d.ts` 文件。开发时 Node 应用通过 tsx 解析源码，不要求生产环境安装自定义模块加载器。游戏的纯规则、SDK 与 renderer 出口保持独立，构建不能将其合并成带入服务端或浏览器专属依赖的单一入口。
+
 ## 游戏模块接口
 
 游戏规则实现以下契约；JSON 和结果类型由 protocol 包导出：

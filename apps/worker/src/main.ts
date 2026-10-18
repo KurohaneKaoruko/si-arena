@@ -1,5 +1,5 @@
 import { SANDBOX_RUNTIME } from "@si-arena/sandbox";
-import { readWorkerConfig } from "./config.js";
+import { readWorkerConfig } from "./config";
 
 const config = readWorkerConfig();
 console.log(

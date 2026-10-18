@@ -10,7 +10,7 @@
     "dev:worker": "pnpm build:packages && pnpm --filter @si-arena/worker dev",
     "build": "pnpm -r --workspace-concurrency=1 run build",
     "build:packages": "pnpm -r --filter './packages/**' --filter './games/**' --workspace-concurrency=1 run build",
-    "typecheck": "pnpm build:packages && pnpm -r --workspace-concurrency=1 run typecheck",
+    "typecheck": "pnpm build:packages && tsc -p tsconfig.tooling.json --noEmit && pnpm -r --workspace-concurrency=1 run typecheck",
     "lint": "oxlint .",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
@@ -29,6 +29,7 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "simple-git-hooks": "catalog:",
+    "tsdown": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
   },

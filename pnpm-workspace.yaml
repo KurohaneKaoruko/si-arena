@@ -5,6 +5,7 @@ packages:
 
 catalog:
   "typescript": "6.0.3"
+  "tsdown": "0.23.1"
   "@types/node": "26.6.5"
   "vue": "3.5.44"
   "vue-router": "5.4.0"

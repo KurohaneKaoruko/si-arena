@@ -2,8 +2,8 @@
 import type { GameCatalogEntry } from "@si-arena/protocol";
 import { computed } from "vue";
 import { RouterLink, useRoute } from "vue-router";
-import { useApiResource } from "../composables/useApiResource.js";
-import { gamePresentations } from "../games/index.js";
+import { useApiResource } from "../composables/useApiResource";
+import { gamePresentations } from "../games/index";
 
 const route = useRoute();
 const path = computed(() => `/api/games/${encodeURIComponent(String(route.params.gameId))}`);

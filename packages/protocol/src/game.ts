@@ -1,5 +1,5 @@
-import type { DeepReadonly, JsonObject, JsonValue } from "./json.js";
-import type { ResourceLimitOverrides, ResourceLimits } from "./resources.js";
+import type { DeepReadonly, JsonObject, JsonValue } from "./json";
+import type { ResourceLimitOverrides, ResourceLimits } from "./resources";
 
 export interface GameManifest {
   id: string;
