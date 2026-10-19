@@ -86,7 +86,9 @@ test("the published official Paper bot plays under the normal release limits and
   );
   expect(result.result.players.find((player) => player.id === "official")!.rank).toBe(1);
   expect(await replayMatch(sink.replay, paperGame)).toEqual(result);
-}, 30000);
+  // A full 600-tick match on slow shared CI runners needs well over the
+  // default 5s test timeout.
+}, 60000);
 
 test("Paper SDK executes inside the guest and offers a shortest legal route home", async () => {
   let state = paperGame.rules.init({

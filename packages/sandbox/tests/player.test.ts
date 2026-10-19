@@ -45,6 +45,27 @@ async function create(
   return player;
 }
 
+// The CPU thresholds in the performance tests below were calibrated on a fast
+// reference core; shared CI runners execute the same WASM work 2-3x slower.
+// Measure this machine's steady sandbox cost and scale budgets and thresholds
+// by the same factor, keeping the regression signal (roughly a 2x cost step)
+// detectable on any hardware.
+async function cpuSpeedFactor(): Promise<number> {
+  const player = await create("export default ()=>({type:'move'})", {
+    limits: limits({ cpuMs: 1000, wallMs: 10000 }),
+  });
+  try {
+    // The first tick pays one-time JIT warm-up; the second reflects steady cost.
+    await player.execute(0, {});
+    const steady = await player.execute(1, {});
+    const baseline = steady.resources?.cpuUsedUs ?? 0;
+    if (!steady.ok || baseline <= 0) throw new Error("CPU speed calibration failed");
+    return Math.max(1, baseline / 2_000);
+  } finally {
+    await player.close();
+  }
+}
+
 test("ticks preserve only committed Memory, reset globals, use detached observations and SDK", async () => {
   const player = await create(
     `let count=0; export default ({observation,Memory,sdk}) => {
@@ -533,56 +554,75 @@ test("oversized source is rejected before creating an executor", async () => {
   );
 });
 
-// The first tick rides its budget closely, so a busy parallel test run can
-// inflate measured CPU; a real regression (per-tick billed Acorn) fails every
-// attempt, while load spikes do not survive a retry.
 test("large valid sources stay playable within the default CPU budget", { retry: 2 }, async () => {
+  const factor = await cpuSpeedFactor();
   // ~64KiB of statements: with the static check unbilled, tick 0 costs setup
-  // plus compile (~26ms measured here); when the check was billed inside the
-  // window, the ~26ms Acorn parse put tick 0 near 52ms and the source could
-  // never play. The threshold sits between with headroom on both sides.
+  // plus compile; when the check was billed inside the window, the extra Acorn
+  // parse put tick 0 near double. The scaled threshold sits between the two
+  // with headroom on both sides.
   const filler = Array.from({ length: 3000 }, (_, i) => `const filler${i}=${i};`).join("");
   const player = await create(`${filler}export default ()=>({type:'move'})`, {
     // Wall time is not the property under test; a generous wall budget keeps a
     // busy parallel test run from turning spawn latency into a failure.
-    limits: limits({ cpuMs: 100, wallMs: 2000 }),
+    limits: limits({ cpuMs: Math.ceil(100 * factor), wallMs: Math.ceil(2000 * factor) }),
   });
   const first = await player.execute(0, {});
   expect(first.ok).toBe(true);
-  expect(first.resources?.cpuUsedUs).toBeLessThan(45_000);
+  expect(first.resources?.cpuUsedUs).toBeLessThan(45_000 * factor);
   expect((await player.execute(1, {})).ok).toBe(true);
 });
 
 test("steady-state ticks do not pay for static source checks", { retry: 2 }, async () => {
-  // Re-parsing ~64KiB with Acorn on every tick kept steady-state CPU around 34ms;
-  // the QuickJS compile alone runs near 9ms, well under the 20ms assertion. The
-  // retry absorbs CPU-time inflation from a busy parallel test run.
+  const factor = await cpuSpeedFactor();
+  // Re-parsing ~64KiB with Acorn on every tick roughly doubled steady-state
+  // cost; the QuickJS compile alone stays far below the same scaled threshold.
+  // The retry absorbs CPU-time inflation from a busy parallel test run.
   const filler = Array.from({ length: 3000 }, (_, i) => `const filler${i}=${i};`).join("");
   const player = await create(`${filler}export default ()=>({type:'move'})`, {
-    limits: limits({ cpuMs: 100, wallMs: 1000 }),
+    limits: limits({ cpuMs: Math.ceil(100 * factor), wallMs: Math.ceil(1000 * factor) }),
   });
   expect((await player.execute(0, {})).ok).toBe(true);
   const steady = await player.execute(1, {});
   expect(steady.ok).toBe(true);
-  expect(steady.resources?.cpuUsedUs).toBeLessThan(20_000);
+  expect(steady.resources?.cpuUsedUs).toBeLessThan(20_000 * factor);
 });
 
 test(
   "large valid sources pass isolated validation under production budgets",
   { retry: 2 },
   async () => {
-    // ~31KiB parses for ~13ms with Acorn; when the static check was billed inside
-    // the validation window, valid sources of this size were rejected as CPU_LIMIT.
+    const factor = await cpuSpeedFactor();
+    // Billing the static check inside the validation window roughly doubled the
+    // cost and rejected valid sources of this size as CPU_LIMIT; compile alone
+    // fits the scaled budget with room to spare.
     const filler = Array.from({ length: 1500 }, (_, i) => `const filler${i}=${i};`).join("");
     expect(
       await validateSource({
         source: `${filler}export default ()=>({type:'move'})`,
-        limits: limits({ cpuMs: 20, wallMs: 500 }),
+        limits: limits({ cpuMs: Math.ceil(20 * factor), wallMs: Math.ceil(500 * factor) }),
         isolation: { kind: "local" },
       }),
     ).toEqual({ ok: true });
   },
 );
+
+test("trusted setup is never CPU-interrupted and the player budget covers guest work", async () => {
+  // A ~64KiB source guarantees guest compilation alone exceeds a 1ms budget on
+  // any hardware. With whole-tick billing, slow hosts tripped the interrupt
+  // during trusted bootstrap evaluation and the match died as a system failure;
+  // guest-scoped billing degrades the tick to a player CPU error instead.
+  const filler = Array.from({ length: 3000 }, (_, i) => `const filler${i}=${i};`).join("");
+  const player = await create(`${filler}export default ()=>({type:'move'})`, {
+    limits: limits({ cpuMs: 1, wallMs: 5000 }),
+  });
+  for (const tick of [0, 1]) {
+    await expect(player.execute(tick, {})).resolves.toMatchObject({
+      ok: false,
+      action: { type: "idle" },
+      error: { type: "CPU_LIMIT" },
+    });
+  }
+});
 
 test("sources rejected by the static check still fail the first tick as ENTRYPOINT_ERROR", async () => {
   const player = await create(`import x from 'x';export default ()=>({type:'move'})`);

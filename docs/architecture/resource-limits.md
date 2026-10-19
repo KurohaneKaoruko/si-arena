@@ -42,7 +42,7 @@ export const manifest = {
 | JS 源码 `codeBytes` | 256KiB | 上传与本地加载时检查；超过则拒绝，原线上代码不变 |
 | QuickJS 分配内存 `heapBytes` | 32MiB | 每玩家每 tick 独立 Runtime；包括源码加载、观察、SDK、Memory 和用户对象的分配 |
 | 调用栈 `stackBytes` | 256KiB | 设置 Runtime 栈上限，触发时当 tick 失败 |
-| CPU 时间 `cpuMs` | 20ms | 执行线程 user + system CPU；每 tick 重新计量，不结转、不累计 bucket |
+| CPU 时间 `cpuMs` | 20ms | 玩家代码求值阶段的执行线程 user + system CPU；每 tick 重新计量，不结转、不累计 bucket |
 | 执行墙钟时间 `wallMs` | 500ms | 父进程从分派本 tick 请求开始计时，超时终止该玩家执行进程 |
 | Memory `memoryBytes` | 64KiB | 每玩家每场；序列化后检查，不符合 JSON 协议或超限则丢弃当 tick 提交 |
 | 单个动作 `actionBytes` | 1KiB | 规范 JSON 动作；超过或不符合游戏 schema 时记为非法动作 |
@@ -53,7 +53,7 @@ export const manifest = {
 | 执行子进程总内存 `processMemoryBytes` | 256MiB | 线上按进程独立资源组限制，包括 Node、WASM 和宿主缓冲 |
 | 执行子进程初始化 `startupMs` | 5s | 加载可信运行器和 WASM；首次初始化失败视为系统失败，不计分 |
 
-CPU 计量包含观察与 Memory 注入、玩家源码初始化、SDK 初始化、入口执行、日志格式化与动作/Memory 序列化。加载可信 WASM、启动 Node 和等待操作系统调度不计入玩家 CPU，但受初始化或墙钟限制。
+CPU 计量从进入玩家源码求值开始：包含玩家源码初始化、入口执行、日志格式化与动作/Memory 序列化。可信引导（运行时与上下文创建、观察与 Memory 注入、SDK 初始化）不被 CPU 中断、不计入 `cpuMs`，由 `wallMs` 兜底——宿主变慢时平台固定开销不能吃掉玩家预算，更不能把整场判为系统失败。加载可信 WASM、启动 Node 和等待操作系统调度同样不计入。资源上报中的 `cpuUsedUs` 仍记录整 tick 线程 CPU 用于诊断。
 
 中断回调检测 CPU 用量，正常返回后再次检查。超过当前游戏 `cpuMs` 的结果不能提交，默认值为 20ms；中断存在检查粒度，资源预算不是微秒级抢占承诺。墙钟看门狗使用该游戏的 `wallMs`，用于阻断无法及时响应中断的路径，不用墙钟差值冒充 CPU。
 

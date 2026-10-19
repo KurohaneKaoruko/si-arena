@@ -210,6 +210,18 @@ function withRuntime(
     const usage = process.threadCpuUsage(started);
     return usage.user + usage.system;
   };
+  // The cpuMs budget covers player work only. Trusted setup (runtime, context,
+  // bootstrap, SDK) is never CPU-interrupted and is not billed against the
+  // player: on a slow or contended host the fixed platform overhead must not
+  // eat the player budget, let alone turn every tick into a system failure.
+  // The wall watchdog in the parent process bounds trusted phases instead.
+  let guest = false;
+  let guestStartedUs = 0;
+  const enterGuest = () => {
+    guest = true;
+    guestStartedUs = cpu();
+  };
+  const billedCpu = () => (guest ? cpu() - guestStartedUs : 0);
   const profile: Record<string, number> = {};
   let previous = 0;
   const mark = (phase: string) => {
@@ -218,7 +230,7 @@ function withRuntime(
     previous = now;
   };
   const failure = (): ExecutionError | undefined => {
-    if (cpu() > limits.cpuMs * 1000) cpuFailed = true;
+    if (billedCpu() > limits.cpuMs * 1000) cpuFailed = true;
     const native = flags["_arena_get_failure"]();
     if (native & 1) return { type: "HEAP_LIMIT", message: "QuickJS allocation limit exceeded" };
     if (native & 2) return { type: "STACK_LIMIT", message: "QuickJS stack limit exceeded" };
@@ -229,7 +241,7 @@ function withRuntime(
   runtime.setMemoryLimit(limits.heapBytes);
   runtime.setMaxStackSize(limits.stackBytes);
   runtime.setInterruptHandler(() => {
-    if (cpu() > limits.cpuMs * 1000) cpuFailed = true;
+    if (guest && billedCpu() > limits.cpuMs * 1000) cpuFailed = true;
     return cpuFailed || flags["_arena_get_failure"]() !== 0;
   });
   runtime.setModuleLoader(() => ({ error: new Error("Module imports are disabled") }));
@@ -245,10 +257,6 @@ function withRuntime(
     const unwrap = (result: ReturnType<QuickJSContext["evalCode"]>): QuickJSHandle => {
       if (result.error) throw new GuestFault(keep(result.error));
       return keep(result.value);
-    };
-    let guest = false;
-    const enterGuest = () => {
-      guest = true;
     };
     let payload: string;
     try {
