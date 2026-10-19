@@ -271,7 +271,12 @@ function withRuntime(
     }
     const resource = guest ? failure() : undefined;
     if (resource) payload = JSON.stringify({ ok: false, error: resource });
-    return { payload, cpuUsedUs: cpu(), profile };
+    // Report the player work only. The trusted setup (runtime, context,
+    // bootstrap, SDK) is never billed against cpuMs, so it must not appear in
+    // the reported usage either: the budget check and the engine both read
+    // this value and would otherwise charge the platform overhead to the
+    // player. The phase breakdown stays available in the internal profile.
+    return { payload, cpuUsedUs: billedCpu(), profile };
   } finally {
     mark("outputUs");
     for (const handle of handles.toReversed()) if (handle.alive) handle.dispose();

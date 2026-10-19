@@ -42,6 +42,6 @@ SDK 是沙箱内的可信辅助代码，直接通过参数提供，不需要也�
 
 每 tick 重建 JS Runtime/Context，全局变量不能跨 tick 保存，只有显式 JSON 对象 `Memory` 延续。直接修改 `Memory`，返回值只包含动作。禁止异步函数、Promise、import、动态 import、require、网络、文件和宿主 API；不依赖现实时间或随机 API。所有随机策略应使用自己的可复现算法并把状态放入 Memory。
 
-当运行异常、CPU/堆/栈、Memory 或动作超限时，丢弃本 tick 的动作和候选 Memory，使用 idle 并保留上次成功的 Memory，下一 tick 再执行。CPU 统计包含本 tick 的 SDK 和序列化；具体预算以游戏页面及开发包 release.json 的 `resolvedLimits` 为准。
+当运行异常、CPU/堆/栈、Memory 或动作超限时，丢弃本 tick 的动作和候选 Memory，使用 idle 并保留上次成功的 Memory，下一 tick 再执行。CPU 统计只包含玩家自身：源码求值、入口执行、日志格式化与动作/Memory 序列化（其中调用的 SDK 计入）；沙箱运行时创建与 SDK 初始化属于平台开销，不计入玩家预算。具体预算以游戏页面及开发包 release.json 的 `resolvedLimits` 为准。
 
 本地 `console.log/info/warn/error/debug` 会在预算内捕获，并关联 tick 保存到回放；线上不收集玩家日志。回放支持查看有效动作、执行错误和资源消耗，不保存玩家源码或 Memory。

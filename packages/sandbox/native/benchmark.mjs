@@ -45,7 +45,7 @@ const player = await SandboxPlayer.create({
   parseAction: (action) => ({ ok: true, action }),
 });
 const wallUs = [],
-  cpuUs = [];
+  playerCpuUs = [];
 try {
   for (let tick = 0; tick < 105; tick++) {
     const started = performance.now();
@@ -53,7 +53,7 @@ try {
     if (!result.ok) throw new Error(JSON.stringify(result.error));
     if (tick >= 5) {
       wallUs.push((performance.now() - started) * 1000);
-      cpuUs.push(result.resources.cpuUsedUs);
+      playerCpuUs.push(result.resources.cpuUsedUs);
     }
   }
 } finally {
@@ -76,7 +76,7 @@ console.log(
       cpu: cpus()[0].model,
       samples: 100,
       units: "microseconds",
-      threadCpu: summary(cpuUs),
+      playerCpu: summary(playerCpuUs),
       roundTripWall: summary(wallUs),
       phases: Object.fromEntries(
         Object.keys(samples[0].profile).map((key) => [
@@ -84,7 +84,7 @@ console.log(
           summary(samples.map((sample) => sample.profile[key])),
         ]),
       ),
-      note: "Local microbenchmark, 5 warm-up ticks excluded. Round-trip wall includes IPC, host validation, scheduling and teardown; it is not player CPU.",
+      note: "Local microbenchmark, 5 warm-up ticks excluded. playerCpu is the billed player CPU: source evaluation, entry call and action/Memory serialization, SDK calls included; the trusted sandbox setup is platform overhead and is not billed against the player budget. phases is the thread CPU breakdown of the in-process run and still contains that trusted setup. roundTripWall includes IPC, host validation, scheduling and teardown; it is not player CPU.",
     },
     null,
     2,

@@ -47,7 +47,7 @@ async function create(
 
 // The CPU thresholds in the performance tests below were calibrated on a fast
 // reference core; shared CI runners execute the same WASM work 2-3x slower.
-// Measure this machine's steady sandbox cost and scale budgets and thresholds
+// Measure this machine's steady player cost and scale budgets and thresholds
 // by the same factor, keeping the regression signal (roughly a 2x cost step)
 // detectable on any hardware.
 async function cpuSpeedFactor(): Promise<number> {
@@ -60,7 +60,7 @@ async function cpuSpeedFactor(): Promise<number> {
     const steady = await player.execute(1, {});
     const baseline = steady.resources?.cpuUsedUs ?? 0;
     if (!steady.ok || baseline <= 0) throw new Error("CPU speed calibration failed");
-    return Math.max(1, baseline / 2_000);
+    return Math.max(1, baseline / 120);
   } finally {
     await player.close();
   }
@@ -292,6 +292,30 @@ test("top-level work and serialization count toward the CPU budget", async () =>
   const output = await player.execute(0, {});
   expect(output.error?.type).toBe("CPU_LIMIT");
   expect(output.resources?.cpuUsedUs).toBeGreaterThanOrEqual(25000);
+});
+
+test("trusted setup is not billed against the player CPU budget", { retry: 2 }, async () => {
+  // Reporting must follow billing: the runtime, context, bootstrap and SDK
+  // setup must never appear in cpuUsedUs. Both probes pay the same platform
+  // setup and differ only in guest work, so whole-tick reporting would add
+  // roughly the same setup to both and pull the ratio towards 1, while the
+  // billed values keep the light tick far below the spin.
+  const light = await create("export default ()=>({type:'move'})", {
+    limits: limits({ cpuMs: 1000, wallMs: 10000 }),
+  });
+  const spin = await create(
+    `let s=0;for(let i=0;i<120000;i++)s+=i;export default ()=>({type:'move'})`,
+    { limits: limits({ cpuMs: 1000, wallMs: 10000 }) },
+  );
+  await light.execute(0, {});
+  await spin.execute(0, {});
+  const steadyLight = await light.execute(1, {});
+  const steadySpin = await spin.execute(1, {});
+  expect(steadyLight.ok).toBe(true);
+  expect(steadySpin.ok).toBe(true);
+  expect((steadyLight.resources?.cpuUsedUs ?? 0) * 5).toBeLessThanOrEqual(
+    steadySpin.resources?.cpuUsedUs ?? 0,
+  );
 });
 
 test("promise results are rejected and queued jobs are never drained", async () => {
