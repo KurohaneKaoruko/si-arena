@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 
 export interface SelectOption {
   value: string;
   label: string;
-  disabled?: boolean;
+  disabled?: boolean | undefined;
 }
 
 const props = withDefaults(
@@ -15,8 +15,8 @@ const props = withDefaults(
     /** 无可见标签时用作无障碍名称。 */
     label?: string | undefined;
     placeholder?: string | undefined;
-    size?: "sm" | "md";
-    disabled?: boolean;
+    size?: "sm" | "md" | undefined;
+    disabled?: boolean | undefined;
   }>(),
   { size: "md" },
 );
@@ -30,18 +30,31 @@ const activeIndex = ref(-1);
 /** 下方空间不足时向上弹出，避免弹层溢出视口。 */
 const dropUp = ref(false);
 
-const listboxId = computed(() => `${props.id ?? "select"}-listbox`);
+const uid = useId();
+const listboxId = `${uid}-listbox`;
+const optionId = (index: number) => `${uid}-option-${index}`;
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue));
+/** 弹层持有 DOM 焦点时，当前高亮项要靠 aria-activedescendant 暴露给辅助技术。 */
+const activeOptionId = computed(() =>
+  activeIndex.value >= 0 ? optionId(activeIndex.value) : undefined,
+);
 
+/** 弹层的最大高度与单个选项的高度，用来估算需要的空间。 */
+const LIST_MAX_HEIGHT = 240;
+const OPTION_HEIGHT = 32;
+
+function reposition() {
+  const rect = trigger.value?.getBoundingClientRect();
+  if (!rect) return;
+  const below = window.innerHeight - rect.bottom;
+  const above = rect.top;
+  const needed = Math.min(props.options.length * OPTION_HEIGHT + 8, LIST_MAX_HEIGHT);
+  // 下方够就往下弹；不够就往上弹，两侧都不够时选空间更大的一侧。
+  dropUp.value = below < needed && (above >= needed || above > below);
+}
 function openList() {
   if (props.disabled) return;
-  const rect = trigger.value?.getBoundingClientRect();
-  if (rect) {
-    const below = window.innerHeight - rect.bottom;
-    const above = rect.top;
-    const needed = Math.min(props.options.length * 32 + 10, 250);
-    dropUp.value = below < needed && above > below;
-  }
+  reposition();
   open.value = true;
   activeIndex.value = props.options.findIndex((option) => option.value === props.modelValue);
   void nextTick(() => listbox.value?.focus());
@@ -56,15 +69,7 @@ function choose(option: SelectOption | undefined) {
   emit("update:modelValue", option.value);
   closeList();
 }
-function move(delta: number) {
-  const count = props.options.length;
-  if (!count) return;
-  let next = activeIndex.value;
-  for (let step = 0; step < count; step++) {
-    next = (next + delta + count) % count;
-    if (!props.options[next]?.disabled) break;
-  }
-  activeIndex.value = next;
+function scrollActiveIntoView() {
   void nextTick(() => {
     // scrollIntoView 在部分环境（如 jsdom）不存在
     listbox.value?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView?.({
@@ -72,17 +77,44 @@ function move(delta: number) {
     });
   });
 }
+/** 跳到指定位置，并沿 direction 方向跳过禁用项。 */
+function moveTo(target: number, direction: 1 | -1) {
+  const count = props.options.length;
+  if (!count) return;
+  let index = target;
+  for (let step = 0; step < count; step++) {
+    if (!props.options[index]?.disabled) break;
+    index = (index + direction + count) % count;
+  }
+  activeIndex.value = index;
+  scrollActiveIntoView();
+}
+/** 相对当前高亮项移动；还没有高亮项时按方向落到首项或末项。 */
+function move(delta: number) {
+  const count = props.options.length;
+  if (!count) return;
+  if (activeIndex.value === -1) {
+    moveTo(delta > 0 ? 0 : count - 1, delta > 0 ? 1 : -1);
+    return;
+  }
+  moveTo((activeIndex.value + delta + count) % count, delta > 0 ? 1 : -1);
+}
 function onTriggerKeydown(event: KeyboardEvent) {
   if (props.disabled) return;
   if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Enter") {
     event.preventDefault();
+    // 弹层自己消费这些按键，不让外层的快捷键处理抢走。
+    event.stopPropagation();
     openList();
   } else if (event.key === " " && !open.value) {
     event.preventDefault();
+    event.stopPropagation();
     openList();
   }
 }
 function onListKeydown(event: KeyboardEvent) {
+  // 弹层独占键盘：这些按键不再冒泡，避免触发外层（例如回放播放器）的快捷键。
+  event.stopPropagation();
   if (event.key === "ArrowDown") {
     event.preventDefault();
     move(1);
@@ -91,10 +123,10 @@ function onListKeydown(event: KeyboardEvent) {
     move(-1);
   } else if (event.key === "Home") {
     event.preventDefault();
-    activeIndex.value = 0;
+    moveTo(0, 1);
   } else if (event.key === "End") {
     event.preventDefault();
-    activeIndex.value = props.options.length - 1;
+    moveTo(props.options.length - 1, -1);
   } else if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
     choose(props.options[activeIndex.value]);
@@ -109,6 +141,9 @@ function onPointerDown(event: PointerEvent) {
   if (!open.value) return;
   if (root.value && !root.value.contains(event.target as Node)) closeList(false);
 }
+function onViewportChange() {
+  if (open.value) reposition();
+}
 watch(
   () => props.modelValue,
   () => {
@@ -116,8 +151,16 @@ watch(
     activeIndex.value = props.options.findIndex((option) => option.value === props.modelValue);
   },
 );
-onMounted(() => document.addEventListener("pointerdown", onPointerDown));
-onBeforeUnmount(() => document.removeEventListener("pointerdown", onPointerDown));
+onMounted(() => {
+  document.addEventListener("pointerdown", onPointerDown);
+  window.addEventListener("scroll", onViewportChange, true);
+  window.addEventListener("resize", onViewportChange);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", onPointerDown);
+  window.removeEventListener("scroll", onViewportChange, true);
+  window.removeEventListener("resize", onViewportChange);
+});
 </script>
 
 <template>
@@ -130,7 +173,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onPointerDown)
       :aria-label="label"
       :aria-expanded="open"
       aria-haspopup="listbox"
-      :aria-controls="listboxId"
+      :aria-controls="open ? listboxId : undefined"
       :disabled="disabled"
       class="flex w-full min-w-0 items-center gap-2 border border-line bg-surface text-left text-ink transition hover:border-line-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/10 disabled:cursor-not-allowed disabled:bg-subtle disabled:opacity-60"
       :class="
@@ -150,7 +193,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onPointerDown)
         aria-hidden="true"
       >
         <path
-          d="M4 6.5 8 10.5 12 6.5"
+          d="M4 6.5L8 10.5L12 6.5"
           stroke="currentColor"
           stroke-width="1.5"
           stroke-linecap="round"
@@ -165,6 +208,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onPointerDown)
         ref="listbox"
         role="listbox"
         :aria-label="label"
+        :aria-activedescendant="activeOptionId"
         tabindex="-1"
         class="absolute left-0 z-50 max-h-60 w-full min-w-32 overflow-auto rounded-card border border-line bg-surface p-1 shadow-pop focus:outline-none"
         :class="dropUp ? 'bottom-full mb-1' : 'top-full mt-1'"
@@ -172,6 +216,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onPointerDown)
       >
         <li
           v-for="(option, index) in options"
+          :id="optionId(index)"
           :key="option.value"
           role="option"
           :data-value="option.value"
@@ -196,7 +241,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onPointerDown)
             aria-hidden="true"
           >
             <path
-              d="M3.5 8.5 6.5 11.5 12.5 5"
+              d="M3.5 8.5L6.5 11.5L12.5 5"
               stroke="currentColor"
               stroke-width="1.75"
               stroke-linecap="round"

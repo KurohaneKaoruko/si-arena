@@ -170,7 +170,7 @@ function jumpError(direction: -1 | 1) {
 function keyboard(event: KeyboardEvent) {
   if (
     event.target instanceof HTMLElement &&
-    event.target.closest("input,select,textarea,button,a,summary")
+    event.target.closest("input,textarea,button,a,summary,[role=listbox],[role=option]")
   )
     return;
   if (event.altKey || event.ctrlKey || event.metaKey) return;
