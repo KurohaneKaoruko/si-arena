@@ -97,6 +97,18 @@ pnpm test:artifacts
 
 `pnpm test:artifacts` 先完成生产构建，再将公开 workspace 包打包、解压至仓库外并安装声明的运行依赖；使用未加载 TypeScript loader 的真实 Node 校验 exports、CLI、已编译 API、完整圈地比赛及沙箱子进程，并通过严格 NodeNext 消费者检查声明文件。该命令不发布 npm 包，不连接业务数据库，临时目录在结束后清理。
 
+## 本地 CLI
+
+先运行 `pnpm build:packages`，再执行：
+
+```sh
+pnpm arena run --bot ./games/paper/bots/official.js --seed 42
+pnpm arena run --bot ./my-bot.js --opponent ./another-bot.js --matches 20 --seed 42
+pnpm arena replay ./replays/match-实际文件名.json.gz --verify --logs
+```
+
+CLI 支持指定 bot、官方或本地对手、顺序批量比赛、gzip 回放及日志校验。输出 JSON Lines，包含发行、完整限额、结果和回放绝对路径。回放无需 bot 文件。根脚本通过可信配置注册游戏，CLI 自身不绑定圈地。命令与接入方式见 [CLI 说明](packages/cli/README.md)。下载初始化和可视化调试页面尚未实现。
+
 ## 玩家开发包
 
 统一 CLI 的下载、调试和回放协议见 [本地开发与调试](docs/designs/local-development.md) 与 [分发设计](docs/architecture/distribution-and-development.md)。npm 包统一属于 `@si-arena`，游戏开发包与平台服务通过发行清单保持版本一致。

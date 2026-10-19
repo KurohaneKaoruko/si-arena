@@ -1,0 +1,239 @@
+import { constants } from "node:fs";
+import { open } from "node:fs/promises";
+import { basename } from "node:path";
+import { randomUUID } from "node:crypto";
+import {
+  cloneJson,
+  freezeJson,
+  type DeepReadonly,
+  type ExecutionError,
+  type GameCatalogEntry,
+  type JsonValue,
+  type PlayerLog,
+} from "@si-arena/protocol";
+import {
+  ENGINE_COMPATIBILITY,
+  replayMatch,
+  runMatch,
+  type GameDefinition,
+  type ReplayFooter,
+  type ReplayPlayer,
+  type ReplayTick,
+} from "@si-arena/engine";
+import { ReplayFileSink } from "@si-arena/engine/node";
+import { MatchLogBudget, SandboxPlayer, validateSource } from "@si-arena/sandbox";
+
+export type LocalDiagnostic = { tick: number; playerId: string } & (
+  | { kind: "log"; log: PlayerLog }
+  | { kind: "error"; error: ExecutionError }
+  | { kind: "logs-truncated" }
+);
+export interface LocalSummary extends ReplayFooter {
+  matchId: string;
+  errorCount: number;
+  logCount: number;
+  truncatedTicks: number;
+}
+export interface PreparedLocalMatch {
+  readonly players: readonly Readonly<ReplayPlayer>[];
+  run(options: { seed: number; replay: string; signal?: AbortSignal }): Promise<LocalSummary>;
+}
+/** Trusted registrations are executable host code, separate from player source and replay data. */
+export interface LocalGameRegistration {
+  readonly manifest: DeepReadonly<GameCatalogEntry>;
+  prepare(botPaths: readonly string[], signal?: AbortSignal): Promise<PreparedLocalMatch>;
+  verify(
+    raw: unknown,
+    options?: { signal?: AbortSignal; diagnostics?: boolean },
+  ): Promise<LocalSummary & { diagnostics: LocalDiagnostic[] }>;
+}
+
+const MAX_REPLAY_BYTES = 64 * 1024 * 1024;
+
+/** A closure preserves each game's type parameters without coupling the CLI to any game. */
+export function defineLocalGame<
+  State extends { tick: number },
+  Observation,
+  Action extends JsonValue,
+  Event,
+>(options: {
+  game: GameDefinition<State, Observation, Action, Event>;
+  sdkSource: string;
+  officialBotUrl: URL;
+}): LocalGameRegistration {
+  const { game, sdkSource, officialBotUrl } = options;
+  const manifest = freezeJson(cloneJson(game.manifest));
+  return {
+    manifest,
+    async prepare(botPaths, signal) {
+      checkCancelled(signal);
+      if (!botPaths.length) throw new Error("At least one local bot file is required");
+      const count = botPaths.length === 1 ? manifest.minPlayers : botPaths.length;
+      if (count < manifest.minPlayers || count > manifest.maxPlayers)
+        throw new Error(`Game requires ${manifest.minPlayers}–${manifest.maxPlayers} players`);
+      const inputs = Array.from({ length: count }, (_, slot) => {
+        const path = botPaths[slot];
+        const official = path === undefined;
+        return {
+          path: path ?? officialBotUrl,
+          player: {
+            id: slot === 0 ? "bot" : official ? `official-${slot}` : `opponent-${slot}`,
+            slot,
+            name: official ? "Official" : basename(path!),
+            official,
+          },
+        };
+      });
+      // Read once for the entire batch. Editing a file only affects the next invocation.
+      const sources: string[] = [];
+      for (const input of inputs) {
+        checkCancelled(signal);
+        const source = await readBotSource(input.path, manifest.resolvedLimits.codeBytes);
+        const validation = await validateSource({
+          source,
+          limits: cloneJson(manifest.resolvedLimits),
+          isolation: { kind: "local" },
+        });
+        checkCancelled(signal);
+        if (!validation.ok)
+          throw new Error(
+            `${input.player.id}: ${validation.error.type}: ${validation.error.message}`,
+          );
+        sources.push(source);
+      }
+      const players = freezeJson(inputs.map((input) => input.player));
+      return {
+        players,
+        async run({ seed, replay, signal: matchSignal }) {
+          const matchId = `local-${randomUUID()}`;
+          const stats = counters();
+          const logBudget = new MatchLogBudget(manifest.resolvedLimits.logs.matchBytes);
+          const summary = await runMatch({
+            matchId,
+            game,
+            players: cloneJson(players) as ReplayPlayer[],
+            seed,
+            captureLogs: true,
+            sink: new ReplayFileSink<State, Action>(replay, MAX_REPLAY_BYTES),
+            ...(matchSignal ? { signal: matchSignal } : {}),
+            onTick: ({ record }) => stats.add(record),
+            async createExecutor(player, context) {
+              let pending: Promise<SandboxPlayer<Action>> | undefined;
+              let closed = false;
+              // The actual per-tick fallback comes from the engine's world snapshot.
+              return {
+                async execute(tick, observation, defaultAction) {
+                  if (closed) throw new Error("Local executor is closed");
+                  pending ??= SandboxPlayer.create({
+                    ...context,
+                    playerId: player.id,
+                    source: sources[player.slot]!,
+                    sdkSource,
+                    limits: cloneJson(manifest.resolvedLimits),
+                    isolation: { kind: "local" },
+                    parseAction: game.rules.parseAction,
+                    defaultAction,
+                    logBudget,
+                  });
+                  const executor = await pending;
+                  if (closed) {
+                    await executor.close();
+                    throw new Error("Local executor is closed");
+                  }
+                  return executor.execute(tick, observation, defaultAction);
+                },
+                async close() {
+                  closed = true;
+                  await (await pending)?.close();
+                },
+              };
+            },
+          });
+          return {
+            matchId,
+            result: summary.result,
+            finalStateHash: summary.finalStateHash,
+            ...stats.value,
+          };
+        },
+      };
+    },
+    async verify(raw, settings = {}) {
+      checkCancelled(settings.signal);
+      const stats = counters();
+      const diagnostics: LocalDiagnostic[] = [];
+      const summary = await replayMatch(raw, game, {
+        maxBytes: MAX_REPLAY_BYTES,
+        onTick({ record }) {
+          checkCancelled(settings.signal);
+          stats.add(record);
+          if (settings.diagnostics) {
+            for (const [playerId, error] of Object.entries(record.errors ?? {}))
+              diagnostics.push({
+                kind: "error",
+                tick: record.tick,
+                playerId,
+                error: cloneJson(error),
+              });
+            for (const [playerId, logs] of Object.entries(record.logs ?? {}))
+              for (const log of logs)
+                diagnostics.push({ kind: "log", tick: record.tick, playerId, log: cloneJson(log) });
+            for (const playerId of Object.keys(record.logsTruncated ?? {}))
+              diagnostics.push({ kind: "logs-truncated", tick: record.tick, playerId });
+          }
+        },
+      });
+      checkCancelled(settings.signal);
+      // Only return diagnostics after the final result and state hash have been verified.
+      const matchId = (raw as { matchId: string }).matchId;
+      return {
+        matchId,
+        result: summary.result,
+        finalStateHash: summary.finalStateHash,
+        ...stats.value,
+        diagnostics,
+      };
+    },
+  };
+}
+
+export function checkCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new Error("Local operation cancelled");
+}
+
+function counters() {
+  const value = { errorCount: 0, logCount: 0, truncatedTicks: 0 };
+  return {
+    value,
+    add(record: DeepReadonly<ReplayTick<unknown>>) {
+      value.errorCount += Object.keys(record.errors ?? {}).length;
+      value.logCount += Object.values(record.logs ?? {}).reduce(
+        (sum, logs) => sum + logs.length,
+        0,
+      );
+      if (Object.keys(record.logsTruncated ?? {}).length) value.truncatedTicks++;
+    },
+  };
+}
+
+async function readBotSource(path: string | URL, maxBytes: number): Promise<string> {
+  const file = await open(path, constants.O_RDONLY | constants.O_NONBLOCK);
+  try {
+    const stat = await file.stat();
+    if (!stat.isFile()) throw new Error("Bot source must be a regular file");
+    if (stat.size > maxBytes) throw new Error(`Bot source exceeds ${maxBytes} bytes`);
+    const buffer = Buffer.alloc(maxBytes + 1);
+    let size = 0;
+    while (size <= maxBytes) {
+      const { bytesRead } = await file.read(buffer, size, buffer.length - size, null);
+      if (bytesRead === 0) break;
+      size += bytesRead;
+    }
+    if (size > maxBytes) throw new Error(`Bot source exceeds ${maxBytes} bytes`);
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, size));
+  } finally {
+    await file.close();
+  }
+}
+
+export { ENGINE_COMPATIBILITY };

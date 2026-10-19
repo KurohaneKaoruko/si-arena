@@ -119,6 +119,10 @@ import { resolveResourceLimits } from "@si-arena/protocol";
 import { paperGame } from "@si-arena/game-paper/game";
 import type { PaperState, PaperAction } from "@si-arena/game-paper/sdk";
 import { MemoryReplaySink, runMatch, replayMatch } from "@si-arena/engine";
+import { defineLocalGame } from "@si-arena/cli";
+import { PAPER_SDK_SOURCE, officialBotUrl } from "@si-arena/game-paper/game";
+const registration = defineLocalGame({game:paperGame,sdkSource:PAPER_SDK_SOURCE,officialBotUrl});
+if(registration.manifest.id!=="paper")throw new Error("Packed CLI registration failed");
 let state = paperRules.init({
   seed: 2, config: paperManifest.config,
   players: [{ id: "alpha", slot: 0 }, { id: "beta", slot: 1 }],
@@ -186,6 +190,72 @@ if(played.result.reason!=="last-survivor" || replayed.finalStateHash!==played.fi
     runNode([join(cliDirectory, "dist/main.js"), "--version"], temporary).trim(),
     `${cliManifest.name} ${cliManifest.version}`,
   );
+  await writeFile(
+    join(temporary, "arena.config.mjs"),
+    `
+import {defineLocalGame} from "@si-arena/cli";
+import {paperGame,PAPER_SDK_SOURCE,officialBotUrl} from "@si-arena/game-paper/game";
+export default [defineLocalGame({game:paperGame,sdkSource:PAPER_SDK_SOURCE,officialBotUrl})];
+`,
+  );
+  await writeFile(
+    join(temporary, "bot.js"),
+    `export default ({Memory})=>{Memory.n=(Memory.n??0)+1;console.log(Memory.n);return {type:"move",direction:"left"}}`,
+  );
+  await writeFile(join(temporary, "opponent.js"), `export default ()=>({type:"idle"})`);
+  const cliRun = runNode(
+    [
+      join(cliDirectory, "dist/main.js"),
+      "--registry",
+      "./arena.config.mjs",
+      "run",
+      "--bot",
+      "./bot.js",
+      "--opponent",
+      "./opponent.js",
+      "--matches",
+      "2",
+      "--seed",
+      "42",
+    ],
+    temporary,
+  )
+    .trim()
+    .split("\n")
+    .map(
+      (line) =>
+        JSON.parse(line) as {
+          type: string;
+          replay?: string;
+          logCount?: number;
+          verified?: boolean;
+          matches?: number;
+        },
+    );
+  assert.equal(cliRun.filter((record) => record.type === "match").length, 2);
+  assert.equal(cliRun.at(-1)?.matches, 2);
+  const cliMatch = cliRun.find((record) => record.type === "match");
+  assert.ok(cliMatch?.replay);
+  assert.ok(cliMatch.logCount! > 0);
+  await rm(join(temporary, "bot.js"));
+  await rm(join(temporary, "opponent.js"));
+  const cliReplay = runNode(
+    [
+      join(cliDirectory, "dist/main.js"),
+      "--registry",
+      "./arena.config.mjs",
+      "replay",
+      cliMatch.replay,
+      "--verify",
+      "--logs",
+    ],
+    temporary,
+  )
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as { type: string; verified?: boolean });
+  assert.ok(cliReplay.some((record) => record.type === "diagnostic"));
+  assert.equal(cliReplay.at(-1)?.verified, true);
   const appUrl = pathToFileURL(join(root, "apps/server/dist/app.js")).href;
   runNode(
     [
@@ -204,7 +274,7 @@ if(played.result.reason!=="last-survivor" || replayed.finalStateHash!==played.fi
     root,
   );
   console.log(
-    `Verified ${archives.length} packed packages and ${entries.length} public exports outside the workspace, strict NodeNext types, a 600-tick match, isolated sandbox, CLI and compiled API.`,
+    `Verified ${archives.length} packed packages and ${entries.length} public exports outside the workspace, strict NodeNext types, a 600-tick match, isolated sandbox, CLI batch/replay without bot files and compiled API.`,
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

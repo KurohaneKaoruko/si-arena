@@ -265,6 +265,12 @@ importers:
       '@commitlint/config-conventional':
         specifier: 'catalog:'
         version: 21.2.4
+      '@si-arena/cli':
+        specifier: workspace:*
+        version: link:packages/cli
+      '@si-arena/game-paper':
+        specifier: workspace:*
+        version: link:games/paper
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.5
@@ -393,9 +399,15 @@ importers:
 
   packages/cli:
     dependencies:
+      '@si-arena/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@si-arena/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
 
   packages/engine:
     dependencies:

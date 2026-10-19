@@ -5,7 +5,8 @@
     "arena": "./dist/main.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "type": "module",
   "exports": {
@@ -25,7 +26,9 @@
     "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project cli"
   },
   "dependencies": {
-    "@si-arena/protocol": "workspace:*"
+    "@si-arena/engine": "workspace:*",
+    "@si-arena/protocol": "workspace:*",
+    "@si-arena/sandbox": "workspace:*"
   },
   "engines": {
     "node": ">=26"

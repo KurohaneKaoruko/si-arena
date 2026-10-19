@@ -30,6 +30,16 @@ CLI npm 包的构建配置包含平台公开 API 基址，`--server <url>` 可�
 
 CLI 不携带全部游戏，新游戏通过同一发行 API 与下载包接入。网站保留 ZIP 下载入口，与 CLI 共用产物、发行清单、校验信息和冻结的 `resolvedLimits`。
 
+## 本地命令与可信注册
+
+`arena run --bot <file>` 执行单场或顺序批量比赛。`--opponent <file>` 可重复指定本地对手，省略时补入官方 bot。每批开始前读取并检查源码，每场重新创建 Memory。`--matches` 范围 1–1000，`--seed` 从指定 uint32 开始递增并回绕。`--out` 目录保存不可覆盖的 gzip 回放；取消时删除未完成文件，保留已完成文件。
+
+终端回放入口为 `arena replay <file> --verify`；`--logs` 打印完整校验成功后的日志、错误和截断标记，不执行玩家代码。标准输出使用 JSON Lines，分别给出发行与限额、单场结果、批量摘要或回放校验结果。
+
+CLI 通过 `defineLocalGame({ game, sdkSource, officialBotUrl })` 注册游戏，不依赖具体游戏包。发行启动器可通过 `runCli` 注入注册集合；仓库工具使用显式 `--registry <local-module>` 加载可信配置。模块运行在宿主中，不能是玩家源码，也不能由回放指定；CLI 不自动发现配置、不加载远程模块。多个游戏使用 `--game` 选择，同一注册固定规则发行，历史回放必须匹配对应发行。
+
+注册配置负责组装可信的软件组件，不能取代下载时的发行清单与完整性校验。下载发行仍按 release.json 和外部元数据协议固定组件。已实现的命令操作见 [CLI README](../../packages/cli/README.md)。
+
 ## 开发包内容
 
 每个游戏提供独立 ZIP 开发包，解压后结构如下：

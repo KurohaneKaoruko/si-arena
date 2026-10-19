@@ -37,6 +37,8 @@ pnpm arena replay ./replays/match.json.gz
 
 `replay` 不加载玩家代码，只读取回放及匹配的软件规则版本。
 
+终端独立校验使用 `arena replay <file> --verify`，加 `--logs` 可输出玩家日志与执行错误，所有诊断在完整重演通过后显示。运行命令输出 JSON Lines，包含发行与限额、每场结果、回放路径及整批胜平负；操作见 [CLI 使用说明](../../packages/cli/README.md)。
+
 ## 日志
 
 本地工具捕获 `console.log/info/warn/error/debug`。每条日志关联比赛、tick、玩家与输出顺序，打印时生成内容快照，不保留可变对象引用。

@@ -1,8 +1,9 @@
-import { readFileSync } from "node:fs";
-
-const metadata = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
-  name: string;
-  version: string;
-};
-export const CLI_NAME = metadata.name;
-export const CLI_VERSION = metadata.version;
+export { CLI_NAME, CLI_VERSION } from "./metadata";
+export { runCli, type CliContext } from "./commands";
+export {
+  defineLocalGame,
+  type LocalGameRegistration,
+  type PreparedLocalMatch,
+  type LocalSummary,
+  type LocalDiagnostic,
+} from "./local-game";
