@@ -2,7 +2,7 @@
 
 ## 目录
 
-仓库项目标识为 `si-arena`，产品名称为 SI Arena，SI 代表 Super Intelligence。对外发布的 npm 包统一使用 `@si-arena` 组织：公共包按职责命名为 `@si-arena/protocol`、`@si-arena/engine`、`@si-arena/sandbox`、`@si-arena/player` 和 `@si-arena/cli`，游戏包采用 `@si-arena/game-<gameId>`，圈地为 `@si-arena/game-paper`。平台 web、server 和 worker 是私有 workspace 应用，不作为玩家开发包发布。
+仓库项目标识为 `si-arena`，产品名称为 SI Arena，SI 代表 Super Intelligence。对外发布的 npm 包统一使用 `@si-arena` 组织：公共包按职责命名为 `@si-arena/protocol`、`@si-arena/engine`、`@si-arena/sandbox`、`@si-arena/player` 和 `@si-arena/cli`，游戏包采用 `@si-arena/game-<gameId>`，圈地为 `@si-arena/game-paper`。平台 web、server 和 worker 是私有 workspace 应用，不作为玩家开发包发布。`@si-arena/db` 是私有共享包，承载 Drizzle 表结构、数据库连接工厂与迁移目录，仅供 server 和 worker 在 workspace 内部使用，不对外发布。
 
 ```text
 configs/
@@ -22,6 +22,7 @@ packages/
   sandbox/               玩家执行协议、父进程与子进程入口、WASM 绑定
   player/                Vue 回放播放器与通用控件
   cli/                   本地运行命令与调试服务
+  db/                    共享 Drizzle 表结构、数据库连接与迁移（私有包）
 games/
   paper/
     src/

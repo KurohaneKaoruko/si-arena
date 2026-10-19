@@ -1,15 +1,15 @@
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { migrationsFolder } from "@si-arena/db";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Client } from "pg";
 import { AUTH_RATE_LIMITS, subjectHashForIp } from "../src/auth/rate-limit";
 import { buildApp } from "../src/app";
-import { createDatabase } from "../src/db";
+import { createDatabase } from "@si-arena/db";
 import { sweepExpiredAuthData } from "../src/db/cleanup";
 import { ensureOfficialAccounts } from "../src/db/official";
-import { authRateLimits, gameEntries, sessions, users } from "../src/db/schema";
+import { authRateLimits, gameEntries, sessions, users } from "@si-arena/db";
 import { registeredGames } from "../src/games";
 
 /**
@@ -65,7 +65,7 @@ beforeAll(async () => {
   url.pathname = `/${testDbName}`;
   database = createDatabase(url.href);
   await migrate(database.db, {
-    migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)),
+    migrationsFolder,
   });
   app = buildApp({ db: database.db });
 });

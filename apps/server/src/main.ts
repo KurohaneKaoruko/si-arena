@@ -1,7 +1,7 @@
 import { buildApp } from "./app";
 import { readServerConfig } from "./config";
 import { sweepExpiredAuthData } from "./db/cleanup";
-import { createDatabase } from "./db";
+import { createDatabase } from "@si-arena/db";
 import { ensureOfficialAccounts } from "./db/official";
 import { registeredGames } from "./games";
 

@@ -43,6 +43,10 @@ try {
   runPnpm([
     "--filter",
     "./packages/**",
+    // @si-arena/db is a private workspace-only package; only distributed
+    // packages belong in the packed-artifact verification.
+    "--filter",
+    "!./packages/db",
     "--filter",
     "./games/**",
     "-r",

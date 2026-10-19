@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { RESERVED_USERNAME_OFFICIAL } from "@si-arena/protocol";
 import type { RegisteredGame } from "../games";
-import { gameEntries, users } from "./schema";
+import { gameEntries, users } from "@si-arena/db";
 
 /**
  * Idempotent deployment initialization: upsert the official account and install each

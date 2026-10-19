@@ -9,7 +9,7 @@ if (!url) throw new Error("Set DATABASE_URL before running database commands.");
 
 export default defineConfig({
   dialect: "postgresql",
-  schema: "./src/db/schema/**/*.ts",
+  schema: "./src/schema/**/*.ts",
   out: "./drizzle",
   dbCredentials: { url },
   strict: true,

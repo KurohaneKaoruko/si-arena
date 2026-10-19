@@ -26,17 +26,18 @@ SI Arena（`si-arena`，SI = Super Intelligence）是 AI 编程自由竞技游�
 
 ## 仓库职责与依赖方向
 
-| 目录                | 职责与边界                                             |
-| ------------------- | ------------------------------------------------------ |
-| `apps/web`          | Vue 网站，组装页面、播放器与游戏 renderer              |
-| `apps/server`       | Fastify API、账号、上传和主动匹配                      |
-| `apps/worker`       | 领取已有比赛，组装执行器与游戏，保存回放并结算         |
-| `packages/protocol` | 共享 JSON、游戏、资源、执行和回放契约；不依赖业务包    |
-| `packages/engine`   | 通用 tick 编排；通过适配器执行玩家代码，不绑定具体游戏 |
-| `packages/sandbox`  | QuickJS-WASM 与隔离执行；不依赖账号、数据库或画面      |
-| `packages/player`   | 通用 Vue 回放播放器；不执行 bot，不引入服务端模块      |
-| `packages/cli`      | `arena` 命令和本地调试，复用引擎、沙箱与游戏包         |
-| `games/<gameId>`    | manifest、纯规则、SDK、说明、renderer 与官方 bot       |
+| 目录                | 职责与边界                                                        |
+| ------------------- | ----------------------------------------------------------------- |
+| `apps/web`          | Vue 网站，组装页面、播放器与游戏 renderer                         |
+| `apps/server`       | Fastify API、账号、上传和主动匹配                                 |
+| `apps/worker`       | 领取已有比赛，组装执行器与游戏，保存回放并结算                    |
+| `packages/protocol` | 共享 JSON、游戏、资源、执行和回放契约；不依赖业务包               |
+| `packages/engine`   | 通用 tick 编排；通过适配器执行玩家代码，不绑定具体游戏            |
+| `packages/sandbox`  | QuickJS-WASM 与隔离执行；不依赖账号、数据库或画面                 |
+| `packages/player`   | 通用 Vue 回放播放器；不执行 bot，不引入服务端模块                 |
+| `packages/cli`      | `arena` 命令和本地调试，复用引擎、沙箱与游戏包                    |
+| `packages/db`       | 共享 Drizzle 表结构、连接与迁移；私有包，仅 server 与 worker 使用 |
+| `games/<gameId>`    | manifest、纯规则、SDK、说明、renderer 与官方 bot                  |
 
 - 通过 workspace 包的公开 exports 导入，内部依赖使用 `workspace:*`；不跨包引用 `src` 或 `dist` 私有路径。
 - 公共依赖版本集中在 `pnpm-workspace.yaml` 的 catalog，使用 `catalog:` 引用；修改依赖同步维护 lockfile。

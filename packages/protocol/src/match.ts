@@ -4,6 +4,18 @@ import type { ResourceLimits } from "./resources";
 
 export type MatchStatus = "pending" | "running" | "completed" | "failed";
 
+/**
+ * Controlled failure reasons for failed matches, written by the worker and
+ * surfaced verbatim in match details.
+ */
+export const MATCH_FAILURE_REASONS = [
+  "ENTRY_CHANGED_BEFORE_START",
+  "WORKER_LOST",
+  "EXECUTION_FAILED",
+] as const;
+
+export type MatchFailureReason = (typeof MATCH_FAILURE_REASONS)[number];
+
 /** Why an otherwise authenticated user cannot initiate a match for a game right now. */
 export type CannotMatchReason = "NO_CODE" | "PROTOCOL_MISMATCH" | "CODE_TOO_LARGE";
 
@@ -34,7 +46,7 @@ export interface MatchDetail extends MatchSummary {
   seed: number;
   initiatorId: string;
   result?: GameResult;
-  failureReason?: string;
+  failureReason?: MatchFailureReason;
   updatedAt: string;
 }
 

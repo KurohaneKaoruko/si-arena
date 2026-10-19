@@ -1,13 +1,13 @@
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { migrationsFolder } from "@si-arena/db";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { and, eq, notInArray } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Client } from "pg";
 import { buildApp } from "../src/app";
-import { createDatabase } from "../src/db";
+import { createDatabase } from "@si-arena/db";
 import { ensureOfficialAccounts } from "../src/db/official";
-import { gameEntries, matchParticipants, matches } from "../src/db/schema";
+import { gameEntries, matchParticipants, matches } from "@si-arena/db";
 import { registeredGames } from "../src/games";
 import type { InjectResponse } from "./helpers";
 
@@ -85,7 +85,7 @@ beforeAll(async () => {
   url.pathname = `/${testDbName}`;
   database = createDatabase(url.href);
   await migrate(database.db, {
-    migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)),
+    migrationsFolder,
   });
   await ensureOfficialAccounts(database.db, registeredGames);
   app = buildApp({ db: database.db });
@@ -318,7 +318,7 @@ dbTest("real opponents are preferred and the recent one is skipped when possible
   await uploadOfficialBot(third.token);
   await database.db
     .update(matches)
-    .set({ status: "failed", failureReason: "seed-test-cleanup" })
+    .set({ status: "failed", failureReason: "WORKER_LOST" })
     .where(eq(matches.id, matchId));
   const paperEntry = registeredGames.find((game) => game.entry.id === "paper")?.entry;
   if (!paperEntry) throw new Error("paper game is not registered");

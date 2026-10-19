@@ -316,6 +316,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@si-arena/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@si-arena/game-paper':
         specifier: workspace:*
         version: link:../../games/paper
@@ -338,9 +341,6 @@ importers:
       '@types/pg':
         specifier: 'catalog:'
         version: 8.23.1
-      drizzle-kit:
-        specifier: 'catalog:'
-        version: 0.31.11
 
   apps/web:
     dependencies:
@@ -381,6 +381,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@si-arena/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@si-arena/engine':
         specifier: workspace:*
         version: link:../../packages/engine
@@ -393,6 +396,16 @@ importers:
       '@si-arena/sandbox':
         specifier: workspace:*
         version: link:../../packages/sandbox
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.4(@types/pg@8.23.1)(pg@8.23.1)
+      pg:
+        specifier: 'catalog:'
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.23.1
 
   games/paper:
     dependencies:
@@ -411,6 +424,25 @@ importers:
       '@si-arena/sandbox':
         specifier: workspace:*
         version: link:../sandbox
+
+  packages/db:
+    dependencies:
+      '@si-arena/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.4(@types/pg@8.23.1)(pg@8.23.1)
+      pg:
+        specifier: 'catalog:'
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.23.1
+      drizzle-kit:
+        specifier: 'catalog:'
+        version: 0.31.11
 
   packages/engine:
     dependencies:

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { sessions, users } from "../db/schema";
-import type { Executor } from "../db";
+import { sessions, users } from "@si-arena/db";
+import type { Executor } from "@si-arena/db";
 import { sendError } from "../http/errors";
 import { createSessionToken, hashSessionToken, parseBearerAuthorization } from "./token";
 

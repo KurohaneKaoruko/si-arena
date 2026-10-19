@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { normalizeUsername, validatePassword, validateUsername } from "@si-arena/protocol";
-import { sessions, users } from "../db/schema";
+import { sessions, users } from "@si-arena/db";
 import { sendError } from "../http/errors";
 import { dummyPasswordHash, hashPassword, passwordHashLimiter, verifyPassword } from "./password";
 import { consumeAuthRateLimit } from "./rate-limit";

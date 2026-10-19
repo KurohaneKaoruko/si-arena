@@ -6,7 +6,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { MatchDetail, MatchStatus, MatchSummary } from "@si-arena/protocol";
 import { requireSession } from "../auth/session";
 import { isUniqueViolation, uniqueConstraintName } from "../db/errors";
-import { gameEntries, matchParticipants, matches, users } from "../db/schema";
+import { gameEntries, matchParticipants, matches, users } from "@si-arena/db";
 import { sendError } from "../http/errors";
 import { parsePagination } from "../http/pagination";
 import { gameCatalog } from "../games";

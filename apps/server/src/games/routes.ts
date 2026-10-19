@@ -7,7 +7,7 @@ import {
   type GameMeResponse,
 } from "@si-arena/protocol";
 import { requireSession } from "../auth/session";
-import { gameEntries, users } from "../db/schema";
+import { gameEntries, users } from "@si-arena/db";
 import { sendError } from "../http/errors";
 import { parsePagination } from "../http/pagination";
 import { gameCatalog } from "../games";

@@ -11,7 +11,12 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { GameResult, JsonObject, ResourceLimits } from "@si-arena/protocol";
+import type {
+  GameResult,
+  JsonObject,
+  MatchFailureReason,
+  ResourceLimits,
+} from "@si-arena/protocol";
 import { users } from "./users";
 
 /** Written by the worker at settlement; only completed rows expose their file publicly. */
@@ -41,7 +46,7 @@ export const matches = pgTable(
     executionId: uuid("execution_id"),
     result: jsonb("result").$type<GameResult>(),
     replayFile: jsonb("replay_file").$type<ReplayFileRef>(),
-    failureReason: text("failure_reason"),
+    failureReason: text("failure_reason").$type<MatchFailureReason>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -1,6 +1,6 @@
 import { lt, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { authRateLimits, sessions } from "./schema";
+import { authRateLimits, sessions } from "@si-arena/db";
 
 /** Removes expired sessions and stale rate-limit windows; runs periodically at startup. */
 export async function sweepExpiredAuthData(db: NodePgDatabase): Promise<void> {
