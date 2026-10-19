@@ -8,16 +8,20 @@ import {
   type DeepReadonly,
   type ExecutionError,
   type GameCatalogEntry,
+  type JsonObject,
   type JsonValue,
   type PlayerLog,
+  type Replay,
 } from "@si-arena/protocol";
 import {
   ENGINE_COMPATIBILITY,
+  MemoryReplaySink,
   replayMatch,
   runMatch,
   type GameDefinition,
   type ReplayFooter,
   type ReplayPlayer,
+  type ReplaySink,
   type ReplayTick,
 } from "@si-arena/engine";
 import { ReplayFileSink } from "@si-arena/engine/node";
@@ -36,7 +40,16 @@ export interface LocalSummary extends ReplayFooter {
 }
 export interface PreparedLocalMatch {
   readonly players: readonly Readonly<ReplayPlayer>[];
-  run(options: { seed: number; replay: string; signal?: AbortSignal }): Promise<LocalSummary>;
+  run(options: {
+    seed: number;
+    /** Persisted gzip replay path; omit to keep the replay in memory as replayData. */
+    replay?: string;
+    signal?: AbortSignal;
+    /** Committed Memory observed after each player executor outcome (live debug sessions). */
+    onMemory?(playerId: string, tick: number, memory: JsonObject): void;
+    /** Notified with the number of completed ticks after each tick. */
+    onTick?(completedTicks: number): void;
+  }): Promise<LocalSummary & { replayData?: Readonly<Replay<unknown, unknown>> }>;
 }
 /** Trusted registrations are executable host code, separate from player source and replay data. */
 export interface LocalGameRegistration {
@@ -104,21 +117,29 @@ export function defineLocalGame<
       const players = freezeJson(inputs.map((input) => input.player));
       return {
         players,
-        async run({ seed, replay, signal: matchSignal }) {
+        async run({ seed, replay, signal: matchSignal, onMemory, onTick }) {
           const matchId = `local-${randomUUID()}`;
           const stats = counters();
           const logBudget = new MatchLogBudget(manifest.resolvedLimits.logs.matchBytes);
+          const memorySink = replay
+            ? undefined
+            : new MemoryReplaySink<State, Action>(MAX_REPLAY_BYTES);
+          const sink: ReplaySink<State, Action> =
+            memorySink ?? new ReplayFileSink<State, Action>(replay!, MAX_REPLAY_BYTES);
           const summary = await runMatch({
             matchId,
             game,
             players: cloneJson(players) as ReplayPlayer[],
             seed,
             captureLogs: true,
-            sink: new ReplayFileSink<State, Action>(replay, MAX_REPLAY_BYTES),
+            sink,
             ...(matchSignal ? { signal: matchSignal } : {}),
-            onTick: ({ record }) => stats.add(record),
+            onTick: ({ record }) => {
+              stats.add(record);
+              onTick?.(record.tick + 1);
+            },
             async createExecutor(player, context) {
-              return createSandboxExecutor({
+              const executor = createSandboxExecutor({
                 ...context,
                 playerId: player.id,
                 source: sources[player.slot]!,
@@ -128,6 +149,15 @@ export function defineLocalGame<
                 parseAction: game.rules.parseAction,
                 logBudget,
               });
+              if (!onMemory) return executor;
+              return {
+                async execute(tick, observation, defaultAction) {
+                  const outcome = await executor.execute(tick, observation, defaultAction);
+                  onMemory(player.id, tick, outcome.memory);
+                  return outcome;
+                },
+                close: () => executor.close(),
+              };
             },
           });
           return {
@@ -135,6 +165,7 @@ export function defineLocalGame<
             result: summary.result,
             finalStateHash: summary.finalStateHash,
             ...stats.value,
+            ...(memorySink ? { replayData: memorySink.replay } : {}),
           };
         },
       };

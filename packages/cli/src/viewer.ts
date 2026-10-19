@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
 import { createReadStream } from "node:fs";
-import { readdir, stat } from "node:fs/promises";
-import { extname, join, resolve as resolvePath } from "node:path";
+import { stat } from "node:fs/promises";
 import { once } from "node:events";
+import { collectStaticFiles, isLoopbackRequest, staticHeaders } from "./static-server";
 
 export async function serveReplay(options: {
   directory: string;
@@ -11,37 +11,16 @@ export async function serveReplay(options: {
   signal?: AbortSignal;
 }): Promise<void> {
   options.signal?.throwIfAborted();
-  const files = new Map<string, string>();
-  async function collect(directory: string, prefix: string) {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const path = join(directory, entry.name);
-      const url = `${prefix}/${entry.name}`;
-      if (entry.isDirectory()) await collect(path, url);
-      else if (entry.isFile()) files.set(url, path);
-    }
-  }
-  await collect(resolvePath(options.directory), "");
+  const files = await collectStaticFiles(options.directory);
   if (!files.has("/index.html")) throw new Error("Local replay viewer is missing");
   const replayInfo = await stat(options.replay);
   if (!replayInfo.isFile() || replayInfo.size > 32 * 1024 * 1024)
     throw new Error("Replay must be a regular gzip file no larger than 32 MiB");
   files.set("/replay.json.gz", options.replay);
   files.set("/", files.get("/index.html")!);
-  const types: Record<string, string> = {
-    ".html": "text/html; charset=utf-8",
-    ".js": "text/javascript; charset=utf-8",
-    ".css": "text/css; charset=utf-8",
-    ".gz": "application/gzip",
-    ".svg": "image/svg+xml",
-  };
   const server = createServer((request, response) => {
     const address = server.address();
-    if (
-      !address ||
-      typeof address === "string" ||
-      request.headers.host !== `127.0.0.1:${address.port}` ||
-      request.method !== "GET"
-    ) {
+    if (!isLoopbackRequest(address, request.headers.host) || request.method !== "GET") {
       response.writeHead(403).end();
       return;
     }
@@ -50,13 +29,7 @@ export async function serveReplay(options: {
       response.writeHead(404).end();
       return;
     }
-    response.writeHead(200, {
-      "Content-Type": types[extname(file)] ?? "application/octet-stream",
-      "Cache-Control": "no-store",
-      "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy":
-        "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
-    });
+    response.writeHead(200, staticHeaders(file));
     const stream = createReadStream(file);
     stream.on("error", () => response.destroy());
     response.on("close", () => stream.destroy());

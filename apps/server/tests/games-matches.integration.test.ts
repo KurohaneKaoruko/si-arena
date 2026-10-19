@@ -236,7 +236,7 @@ dbTest("matching falls back to the official account and is idempotent", async ()
   const match = created.json();
   expect(match.status).toBe("pending");
   expect(match.gameId).toBe("paper");
-  expect(match.release).toBe("paper@0.0.0");
+  expect(match.release).toBe("paper@0.1.0");
   expect(Number.isInteger(match.seed)).toBe(true);
   expect(match.seed).toBeGreaterThanOrEqual(0);
   expect(match.seed).toBeLessThanOrEqual(4294967295);

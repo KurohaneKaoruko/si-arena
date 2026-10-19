@@ -9,7 +9,7 @@
 ```sh
 pnpm exec arena init paper ./paper-bot --server http://127.0.0.1:3000
 # 指定历史发行，不读取 current 别名
-pnpm exec arena init paper ./paper-bot --release paper@0.0.0 --server http://127.0.0.1:3000
+pnpm exec arena init paper ./paper-bot --release paper@0.1.0 --server http://127.0.0.1:3000
 ```
 
 对外入口是 `npx @si-arena/cli@latest init paper ./paper-bot`（需要已发布的 npm 包）。CLI 构建使用 `SI_ARENA_SERVER_URL` 固定默认平台地址，本地默认 loopback。`--server` 允许 HTTPS 和 loopback HTTP，下载仅使用同源元数据中的固定发行地址，不跟随 HTTP 重定向。
@@ -20,12 +20,13 @@ pnpm exec arena init paper ./paper-bot --release paper@0.0.0 --server http://127
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm arena dev --bot ./bot.js
 pnpm arena run --bot ./bot.js --seed 42
 pnpm arena replay ./replays/实际文件名.json.gz
 pnpm arena replay ./replays/实际文件名.json.gz --verify --logs
 ```
 
-无 `--verify` 的开发包回放命令仅监听 127.0.0.1，输出 URL 并提供固定播放器资源和指定回放，Ctrl+C 停止。运行不依赖平台服务，网页共享同一播放器和 renderer。`arena dev` 的实时运行会话与 Memory 调试服务单独提供。
+无 `--verify` 的开发包回放命令仅监听 127.0.0.1，输出 URL 并提供固定播放器资源和指定回放，Ctrl+C 停止。`arena dev` 同样仅监听 127.0.0.1 并依赖开发包内置的调试页资源，启动即自动开局，运行不依赖平台服务，网页共享同一播放器和 renderer。
 
 从仓库根目录执行：
 
@@ -48,6 +49,17 @@ export default function tick({ observation, Memory, sdk }) {
 ```
 
 动作由游戏定义。运行错误、超限或非法动作会记录到回放并使用游戏默认动作，下一 tick 继续；系统或规则错误会使本场失败。
+
+## 实时调试
+
+`arena dev --bot ./bot.js [--opponent <file>] [--seed <uint32>]` 仅在独立开发包内提供（依赖开发包内置的调试页资源）。命令启动后立即与官方 bot 或 `--opponent` 指定的本地对手开局，stdout 输出 `dev` JSON Line 包含 URL；浏览器打开后：
+
+- 运行中显示 tick 进度，整场完成后自动载入完整播放器：时间轴、逐 tick 前进、错误跳转、日志筛选、观察与 CPU。
+- Tick 诊断面板提供所选选手 Memory 提交前后的对比。Memory 只存在于实时会话，不写入回放，记录总量有上限，超限后停止记录并提示。
+- 「重新开局（同种子）」按当前种子复现同一局面；「换种子重开」使用浏览器生成的随机 uint32。任何时候都可以重开：进行中的比赛被中止，重新读取并校验源码后开局，不热替换。
+- 每场完成输出一条 `match` JSON Line（无回放路径）；启动或重开失败输出 `error` 行，页面显示原因并保留上一场结果。Ctrl+C 停止服务。
+
+dev 会话不保存回放文件；需要文件时用 `arena run` 以相同种子复现。
 
 ## 批量比赛与输出
 

@@ -3,7 +3,15 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vu
 import { PLAYBACK_SPEEDS, usePlayback } from "@si-arena/player";
 import type { BrowserReplaySession } from "@si-arena/player/browser";
 
-const props = defineProps<{ session: BrowserReplaySession; fileName: string }>();
+const props = defineProps<{
+  session: BrowserReplaySession;
+  fileName: string;
+  /** Live dev sessions only: Memory committed around the executed input tick. */
+  memory?: (
+    tick: number,
+    playerId: string,
+  ) => Promise<{ before: unknown; after: unknown } | undefined>;
+}>();
 const source = shallowRef<BrowserReplaySession | null>(props.session);
 watch(
   () => props.session,
@@ -40,6 +48,32 @@ const logsTruncated = computed(() => own(view.value.record?.logsTruncated, playe
 const selectedObservation = computed(() =>
   observationOpen.value ? JSON.stringify(view.value.observation(playerId.value), null, 2) : "",
 );
+const memoryState = shallowRef<{ before: unknown; after: unknown } | null>(null);
+const memoryPending = ref(false);
+let memoryRequest = 0;
+watch(
+  [() => view.value.record?.tick, playerId],
+  async () => {
+    const request = ++memoryRequest;
+    const loader = props.memory;
+    const inputTick = view.value.record?.tick;
+    memoryState.value = null;
+    memoryPending.value = loader !== undefined && inputTick !== undefined;
+    if (!loader || inputTick === undefined) return;
+    try {
+      const value = await loader(inputTick, playerId.value);
+      if (request === memoryRequest) memoryState.value = value ?? null;
+    } catch {
+      if (request === memoryRequest) memoryState.value = null;
+    } finally {
+      if (request === memoryRequest) memoryPending.value = false;
+    }
+  },
+  { immediate: true },
+);
+function formatMemory(value: unknown): string {
+  return JSON.stringify(value, null, 2) ?? String(value);
+}
 const canvasLabel = computed(
   () =>
     `比赛地图，已完成 ${tick.value} tick。${view.value.players.map((p) => `${p.label} 得分 ${p.score} ${props.session.scoreUnit}，${p.alive ? "存活" : "淘汰"}`).join("；")}`,
@@ -328,6 +362,30 @@ function keyboard(event: KeyboardEvent) {
                   ? "未记录"
                   : `${(selectedResources.cpuUsedUs / 1000).toFixed(2)} ms`
               }}
+            </p>
+          </div>
+          <div
+            v-if="memory"
+            class="mt-4 min-w-0 border-t border-arena-border pt-3"
+            aria-label="Memory 提交"
+          >
+            <p class="text-xs font-semibold">Memory 提交</p>
+            <p v-if="!view.record" class="mt-2 text-xs leading-6 text-arena-muted">
+              前进一步后可查看 tick 0 的 Memory 提交。
+            </p>
+            <p v-else-if="memoryPending" class="mt-2 text-xs leading-6 text-arena-muted">加载中…</p>
+            <template v-else-if="memoryState">
+              <p class="mt-2 text-xs text-arena-muted">提交前</p>
+              <pre
+                class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-6 text-arena-text"
+                >{{ formatMemory(memoryState.before) }}</pre>
+              <p class="mt-2 text-xs text-arena-muted">提交后</p>
+              <pre
+                class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-6 text-arena-text"
+                >{{ formatMemory(memoryState.after) }}</pre>
+            </template>
+            <p v-else class="mt-2 text-xs leading-6 text-arena-muted">
+              该选手在此 tick 没有 Memory 记录。
             </p>
           </div>
           <details

@@ -6,6 +6,7 @@ import { readReplayFile } from "@si-arena/engine/node";
 import { checkCancelled, ENGINE_COMPATIBILITY, type LocalGameRegistration } from "./local-game";
 import { CLI_NAME, CLI_VERSION } from "./metadata";
 import { initializeGame } from "./init";
+import { serveDev } from "./dev";
 import { serveReplay } from "./viewer";
 
 const HELP = `SI Arena CLI
@@ -15,6 +16,7 @@ Usage:
   arena --registry ./arena.config.mjs run --bot ./bot.js [options]
   arena --registry ./arena.config.mjs replay ./replays/match.json.gz --verify [--logs]
   arena replay ./replays/match.json.gz  (standalone development package viewer)
+  arena dev --bot ./bot.js [--opponent <file>] [--seed <uint32>]  (standalone development package debug page)
 
 Options:
   --server <url>     Platform origin (HTTPS; loopback HTTP allowed)
@@ -71,7 +73,7 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
   if (values.version) return write(`${CLI_NAME} ${CLI_VERSION}`);
   if (values.help || positionals.length === 0) return write(HELP);
   const command = positionals[0];
-  if (command !== "run" && command !== "replay" && command !== "init")
+  if (command !== "run" && command !== "replay" && command !== "init" && command !== "dev")
     throw new Error(`Unknown command: ${command ?? "(missing)"}. Run arena --help.`);
   const allowed = new Set(
     command === "init"
@@ -81,7 +83,9 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
           "game",
           ...(command === "run"
             ? ["bot", "opponent", "matches", "seed", "out"]
-            : ["verify", "logs"]),
+            : command === "dev"
+              ? ["bot", "opponent", "seed"]
+              : ["verify", "logs"]),
         ],
   );
   const seen = new Set<string>();
@@ -118,6 +122,8 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
   }
   if (command === "run" && (positionals.length !== 1 || !values.bot))
     throw new Error("Usage: arena run --bot <file> [options]");
+  if (command === "dev" && (positionals.length !== 1 || !values.bot))
+    throw new Error("Usage: arena dev --bot <file> [options]");
   if (command === "replay" && (positionals.length !== 2 || (values.logs && !values.verify)))
     throw new Error("Usage: arena replay <file.json.gz> --verify [--logs]");
   if (command === "replay" && !values.verify) {
@@ -165,6 +171,19 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
     return;
   }
   const paths = [values.bot!, ...(values.opponent ?? [])].map((path) => resolve(cwd, path));
+  if (command === "dev") {
+    const directory = context.viewerDirectory;
+    if (!directory) throw new Error("The dev debug page requires a standalone development package");
+    await serveDev({
+      directory,
+      registration: game,
+      botPaths: paths,
+      seed: firstSeed,
+      write,
+      ...(context.signal ? { signal: context.signal } : {}),
+    });
+    return;
+  }
   const prepared = await game.prepare(paths, context.signal);
   output({
     type: "release",

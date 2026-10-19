@@ -6,5 +6,12 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   base: "./",
-  build: { rollupOptions: { input: resolve(import.meta.dirname, "devkit.html") } },
+  build: {
+    rollupOptions: {
+      input: {
+        devkit: resolve(import.meta.dirname, "devkit.html"),
+        dev: resolve(import.meta.dirname, "dev.html"),
+      },
+    },
+  },
 });

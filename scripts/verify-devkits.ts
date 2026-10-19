@@ -130,6 +130,43 @@ try {
     const match = run.find((value) => value.type === "match");
     assert.ok(match?.replay);
     assert.ok((match.logCount ?? 0) > 0);
+    const dev = service(["arena.mjs", "dev", "--bot", "./bot.js", "--seed", "7"], project);
+    services.push(dev);
+    const devUrl = await dev.ready;
+    assert.match(await (await fetch(devUrl)).text(), /本地调试/);
+    assert.equal((await fetch(new URL("/dev.html", devUrl))).status, 200);
+    const devStatus = async () =>
+      (await (await fetch(new URL("/api/session", devUrl))).json()) as {
+        current: { phase: string; run: number; seed: number };
+        lastCompleted: { matchId: string } | null;
+      };
+    const waitForDevRun = async (runNumber: number) => {
+      const deadline = Date.now() + 60_000;
+      for (;;) {
+        const status = await devStatus();
+        if (status.current.run === runNumber && status.current.phase === "completed") return status;
+        if (Date.now() > deadline) throw new Error(`Dev run ${runNumber} did not complete`);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    };
+    const devCompleted = await waitForDevRun(1);
+    assert.equal(devCompleted.current.seed, 7);
+    assert.ok(devCompleted.lastCompleted?.matchId);
+    const devReplay = (await (await fetch(new URL("/api/session/replay", devUrl))).json()) as {
+      matchId: string;
+    };
+    assert.equal(devReplay.matchId, devCompleted.lastCompleted!.matchId);
+    const devMemory = (await (
+      await fetch(new URL("/api/session/memory?tick=0", devUrl))
+    ).json()) as { players: Record<string, unknown> };
+    assert.ok(devMemory.players.bot);
+    assert.equal(
+      (await fetch(new URL("/api/session/restart", devUrl), { method: "POST" })).status,
+      200,
+    );
+    await waitForDevRun(2);
+    dev.child.kill("SIGTERM");
+    await once(dev.child, "exit");
     await rm(join(project, "bot.js"));
     await rm(join(project, "bots/official.js"));
     await rm(join(project, "node_modules", registration.packageName, "bots/official.js"));
