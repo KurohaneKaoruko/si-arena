@@ -11,10 +11,16 @@
     "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project worker"
   },
   "dependencies": {
+    "@si-arena/db": "workspace:*",
     "@si-arena/engine": "workspace:*",
     "@si-arena/game-paper": "workspace:*",
     "@si-arena/protocol": "workspace:*",
-    "@si-arena/sandbox": "workspace:*"
+    "@si-arena/sandbox": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:"
+  },
+  "devDependencies": {
+    "@types/pg": "catalog:"
   },
   "engines": {
     "node": ">=26"
