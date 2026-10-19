@@ -1,4 +1,4 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["**/node_modules/**", "docs/**"]
+  "ignorePatterns": ["**/node_modules/**", "docs/**", "packages/sandbox/runtime/**"]
 }

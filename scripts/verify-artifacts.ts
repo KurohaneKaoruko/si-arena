@@ -51,6 +51,7 @@ try {
     packs,
   ]);
   const entries: string[] = [];
+  const externalDependencies: Record<string, string> = {};
   const archives = (await readdir(packs)).filter((file) => file.endsWith(".tgz"));
   assert.ok(archives.length > 0, "No public workspace packages were packed");
   let cliDirectory: string | undefined;
@@ -67,6 +68,9 @@ try {
         !version.startsWith("workspace:"),
         "Packed dependencies must not retain workspace links",
       );
+    }
+    for (const [name, version] of Object.entries(manifest.dependencies ?? {})) {
+      if (!name.startsWith("@si-arena/")) externalDependencies[name] = version;
     }
     for (const [subpath, entry] of Object.entries(manifest.exports)) {
       assert.ok(
@@ -86,8 +90,15 @@ try {
   }
   await writeFile(
     join(temporary, "package.json"),
-    JSON.stringify({ name: "si-arena-artifact-consumer", private: true, type: "module" }),
+    JSON.stringify({
+      name: "si-arena-artifact-consumer",
+      private: true,
+      type: "module",
+      dependencies: externalDependencies,
+    }),
   );
+  // Install real declared runtime dependencies, without workspace links or lifecycle scripts.
+  runPnpm(["--dir", temporary, "install", "--ignore-scripts", "--no-frozen-lockfile"]);
   const imports = entries
     .map((id, index) => `import * as entry${index} from ${JSON.stringify(id)};`)
     .join("\n");
@@ -99,6 +110,8 @@ export { ${exports} };
 import { paperManifest } from "@si-arena/game-paper";
 import { paperRules } from "@si-arena/game-paper/rules";
 import type { PaperResult } from "@si-arena/game-paper/rules";
+import { SandboxPlayer } from "@si-arena/sandbox";
+import { resolveResourceLimits } from "@si-arena/protocol";
 let state = paperRules.init({
   seed: 2, config: paperManifest.config,
   players: [{ id: "alpha", slot: 0 }, { id: "beta", slot: 1 }],
@@ -111,6 +124,16 @@ for (let tick = 0; tick < 600; tick++) {
 if (result?.completedTicks !== 600 || result.players.some(p => p.rank !== 1 || p.score !== 9 || !p.alive)) {
   throw new Error("Standalone match returned an unexpected result");
 }
+const bot = await SandboxPlayer.create({
+  matchId: "artifact", playerId: "alpha", source: "export default ({Memory})=>{Memory.n=(Memory.n??0)+1;return {type:'idle'}}",
+  limits: resolveResourceLimits({cpuMs:100}), isolation: {kind:"local"},
+  parseAction: paperRules.parseAction, defaultAction: {type:"idle"},
+});
+try {
+  const first = await bot.execute(0, paperRules.observe(state, "alpha"));
+  const second = await bot.execute(1, {});
+  if (!first.ok || !second.ok || second.memory.n !== 2) throw new Error("Packed sandbox failed");
+} finally { await bot.close(); }
 `,
   );
   await writeFile(
@@ -123,6 +146,7 @@ if (result?.completedTicks !== 600 || result.players.some(p => p.rank !== 1 || p
         strict: true,
         skipLibCheck: false,
         types: [],
+        lib: ["ES2023", "DOM"],
         outDir: "out",
       },
       include: ["consumer.ts"],
@@ -160,7 +184,7 @@ if (result?.completedTicks !== 600 || result.players.some(p => p.rank !== 1 || p
     root,
   );
   console.log(
-    `Verified ${archives.length} packed packages and ${entries.length} public exports outside the workspace, strict NodeNext types, a 600-tick match, CLI and compiled API.`,
+    `Verified ${archives.length} packed packages and ${entries.length} public exports outside the workspace, strict NodeNext types, a 600-tick match, isolated sandbox, CLI and compiled API.`,
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

@@ -2,7 +2,9 @@
   "name": "@si-arena/sandbox",
   "version": "0.0.0",
   "files": [
-    "dist"
+    "dist",
+    "runtime",
+    "native"
   ],
   "type": "module",
   "exports": {
@@ -15,14 +17,22 @@
     "access": "public"
   },
   "scripts": {
+    "build:wasm": "node native/build.mjs",
     "build": "tsdown --config ../../tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsdown --config ../../tsdown.config.ts --watch",
     "prepack": "pnpm build",
-    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project sandbox"
+    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project sandbox",
+    "benchmark": "pnpm build && node native/benchmark.mjs"
   },
   "dependencies": {
-    "@si-arena/protocol": "workspace:*"
+    "@jitl/quickjs-wasmfile-release-sync": "catalog:",
+    "@si-arena/protocol": "workspace:*",
+    "acorn": "catalog:",
+    "quickjs-emscripten-core": "catalog:"
+  },
+  "devDependencies": {
+    "tsx": "catalog:"
   },
   "engines": {
     "node": ">=26"

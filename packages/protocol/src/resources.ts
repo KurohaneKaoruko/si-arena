@@ -76,6 +76,8 @@ export function resolveResourceLimits(overrides: ResourceLimitOverrides = {}): R
   for (const [key, value] of Object.entries(limits.logs))
     assertPositiveInteger(`logs.${key}`, value);
   if (limits.wallMs < limits.cpuMs) throw new RangeError("wallMs must cover cpuMs");
+  if (limits.errorBytes < 128)
+    throw new RangeError("errorBytes must fit a diagnostic envelope (at least 128 bytes)");
   if (limits.stackBytes >= limits.heapBytes)
     throw new RangeError("stackBytes must be below heapBytes");
   if (limits.memoryBytes >= limits.heapBytes)

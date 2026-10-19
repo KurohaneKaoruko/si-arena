@@ -26,6 +26,7 @@ test("invalid and contradictory resource configurations fail instead of silently
     expect(() => resolveUnknown({ cpuMs: value })).toThrow();
   }
   expect(() => resolveResourceLimits({ cpuMs: 501 })).toThrow(/wallMs/);
+  expect(() => resolveResourceLimits({ errorBytes: 64 })).toThrow(/diagnostic envelope/);
   expect(() => resolveResourceLimits({ heapBytes: 256 * 1024 * 1024 })).toThrow(
     /processMemoryBytes/,
   );
