@@ -1,0 +1,4 @@
+"@si-arena/protocol@0.1.0":
+  dir: packages/protocol
+  intents:
+    - khaki-onions-fly
