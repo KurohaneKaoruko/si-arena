@@ -360,14 +360,14 @@ function keyboard(event: KeyboardEvent) {
             <details v-if="selectedError.stack" class="mt-1.5">
               <summary class="cursor-pointer py-1.5 text-xs text-soft">错误堆栈</summary>
               <pre
-                class="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-6 text-soft"
+                class="max-h-48 overflow-auto overscroll-contain whitespace-pre-wrap break-all font-mono text-xs leading-6 text-soft"
                 >{{ selectedError.stack }}</pre>
             </details>
           </div>
           <div class="mt-3 text-xs leading-6 text-soft">
             <p>有效动作</p>
             <pre
-              class="mt-1 overflow-auto whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-ink"
+              class="mt-1 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-ink"
               >{{
                 selectedAction === undefined ? "无执行动作" : JSON.stringify(selectedAction)
               }}</pre>
@@ -392,11 +392,11 @@ function keyboard(event: KeyboardEvent) {
             <template v-else-if="memoryState">
               <p class="mt-1.5 text-xs text-faint">提交前</p>
               <pre
-                class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-ink"
+                class="mt-1 max-h-40 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-ink"
                 >{{ formatMemory(memoryState.before) }}</pre>
               <p class="mt-1.5 text-xs text-faint">提交后</p>
               <pre
-                class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-ink"
+                class="mt-1 max-h-40 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-ink"
                 >{{ formatMemory(memoryState.after) }}</pre>
             </template>
             <p v-else class="mt-1.5 text-xs leading-6 text-faint">
@@ -414,7 +414,7 @@ function keyboard(event: KeyboardEvent) {
             </summary>
             <pre
               v-if="observationOpen"
-              class="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-soft"
+              class="mt-2 max-h-60 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-soft"
               >{{ selectedObservation }}</pre>
           </details>
         </div>
@@ -449,7 +449,7 @@ function keyboard(event: KeyboardEvent) {
       </p>
       <div
         v-if="selectedLogs.length"
-        class="mt-3 max-h-72 space-y-2 overflow-auto rounded-control border border-line bg-subtle p-3.5"
+        class="mt-3 max-h-72 space-y-2 overflow-auto overscroll-contain rounded-control border border-line bg-subtle p-3.5"
         role="region"
         aria-label="当前 tick 玩家日志"
       >

@@ -36,6 +36,10 @@
   :root {
     color-scheme: light;
   }
+  /* 页面自身不再回弹：到顶或到底后继续滚动不产生橡皮筋效果 */
+  html {
+    overscroll-behavior-y: none;
+  }
   body {
     @apply m-0 bg-background font-sans text-ink antialiased;
     -webkit-font-smoothing: antialiased;
@@ -69,6 +73,7 @@
 /* 表单控件：用 @utility 定义，才能被其他规则 @apply 复用 */
 @utility input {
   @apply block min-h-10 w-full min-w-0 rounded-control border border-line bg-surface px-3 text-sm text-ink transition placeholder:text-faint hover:border-line-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/10 disabled:cursor-not-allowed disabled:bg-subtle disabled:opacity-60;
+  overscroll-behavior: contain;
 }
 
 @utility select {
@@ -102,6 +107,7 @@
   }
   .code-block {
     @apply overflow-x-auto rounded-control border border-line bg-subtle px-4 py-3 font-mono text-[13px] leading-6 text-soft;
+    overscroll-behavior: contain;
   }
   .skip-link {
     @apply fixed top-3 left-3 z-50 -translate-y-24 rounded-control bg-accent px-5 py-3 text-sm font-medium text-white shadow-pop focus:translate-y-0;

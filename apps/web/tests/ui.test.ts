@@ -1,5 +1,6 @@
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import AppButton from "../src/components/ui/AppButton.vue";
 import StateBlock from "../src/components/ui/StateBlock.vue";
 import ToastHost from "../src/components/ui/ToastHost.vue";
 import { useToast } from "../src/composables/useToast";
@@ -54,4 +55,25 @@ test("the state block renders loading, error and empty states with a retry actio
 
   const empty = mount(StateBlock, { props: { status: "empty", message: "还没有比赛" } });
   expect(empty.text()).toContain("还没有比赛");
+});
+
+test("a link without download stays a navigation so anchor targets still work", () => {
+  const anchor = mount(AppButton, {
+    props: { href: "#participate" },
+    slots: { default: "上传与参赛" },
+  });
+  expect(anchor.get("a").attributes("href")).toBe("#participate");
+  expect(anchor.get("a").attributes("download")).toBeUndefined();
+
+  const file = mount(AppButton, {
+    props: { href: "/api/games/paper/releases/paper%400.1.0/download", download: true },
+    slots: { default: "下载开发包 ZIP" },
+  });
+  expect(file.get("a").attributes("download")).toBe("");
+
+  const named = mount(AppButton, {
+    props: { href: "data:text/plain,bot", download: "bot.js" },
+    slots: { default: "下载 bot.js" },
+  });
+  expect(named.get("a").attributes("download")).toBe("bot.js");
 });

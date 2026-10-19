@@ -8,7 +8,12 @@ const props = withDefaults(
     size?: "sm" | "md" | "lg";
     to?: string | Record<string, unknown>;
     href?: string;
-    download?: string | boolean;
+    /**
+     * 仅下载型链接需要。类型含 Boolean 时 Vue 会把缺席属性转成 false，
+     * 因此这里按值区分：true 表示无文件名下载，字符串表示指定文件名，
+     * 缺席（false）表示普通导航链接。
+     */
+    download?: string | boolean | undefined;
     type?: "button" | "submit" | "reset";
     disabled?: boolean;
     loading?: boolean;
@@ -43,7 +48,12 @@ const classes = computed(() => [
 const element = computed(() => (props.to ? RouterLink : props.href ? "a" : "button"));
 const attributes = computed(() => {
   if (props.to) return { to: props.to };
-  if (props.href) return { href: props.href, download: props.download };
+  if (props.href) {
+    // 不带 download 属性的链接是普通导航（锚点跳转），不能被当成下载
+    if (props.download === true) return { href: props.href, download: "" };
+    if (typeof props.download === "string") return { href: props.href, download: props.download };
+    return { href: props.href };
+  }
   return {
     type: props.type,
     disabled: props.disabled || props.loading,

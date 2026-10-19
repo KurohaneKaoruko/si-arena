@@ -5,7 +5,9 @@ defineProps<{
 </script>
 
 <template>
-  <div class="overflow-x-auto rounded-card border border-line bg-surface shadow-card">
+  <div
+    class="overflow-x-auto overscroll-contain rounded-card border border-line bg-surface shadow-card"
+  >
     <table class="w-full min-w-[20rem] text-left text-sm">
       <caption class="sr-only">
         {{
