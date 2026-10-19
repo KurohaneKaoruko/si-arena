@@ -77,6 +77,20 @@ test("leaving the viewer cancels playback and hidden tabs pause it", async () =>
   expect(cancelAnimationFrame).toHaveBeenCalled();
 });
 
+test("keys pressed inside the select popup do not drive the replay", async () => {
+  const session = await loadRegisteredReplay(await replayFixture(), replayGames);
+  const wrapper = mount(ReplayViewer, { props: { session, fileName: "match.json.gz" } });
+  await wrapper.get("#log-level").trigger("click");
+  const listbox = wrapper.get('[role="listbox"]');
+  // Home / End / 空格是播放器的快捷键，在下拉框里按不能改播放位置、也不能启停
+  await listbox.trigger("keydown", { key: "End" });
+  expect(wrapper.get('[data-testid="tick-count"]').text()).toContain("已完成 0");
+  await listbox.trigger("keydown", { key: " " });
+  await flushPromises();
+  expect(wrapper.get('[data-testid="tick-count"]').text()).toContain("已完成 0");
+  expect(wrapper.text()).not.toContain("播放中");
+});
+
 test("file opening failures show an error without an old or partially verified match", async () => {
   const wrapper = mount(ReplayPage);
   expect(wrapper.text()).toContain("选择一场比赛");

@@ -2,12 +2,14 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { afterEach, expect, test, vi } from "vitest";
 import { useApiResource } from "../src/composables/useApiResource";
+import { useToast } from "../src/composables/useToast";
 import { clearSession, session, signIn } from "../src/auth/session";
 
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  useToast().dismiss();
   clearSession();
 });
 
@@ -52,6 +54,84 @@ test("logout clears private data and an aborted response cannot repopulate it", 
   wrapper.unmount();
 });
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
+
+test("the resource reports its states and keeps stale data when a refresh fails", async () => {
+  const fetch = vi
+    .fn()
+    .mockRejectedValueOnce(new TypeError("offline"))
+    .mockResolvedValueOnce(json("value"))
+    .mockResolvedValueOnce(json(""))
+    .mockRejectedValueOnce(new TypeError("offline"));
+  vi.stubGlobal("fetch", fetch);
+  let resource!: ReturnType<typeof useApiResource<string>>;
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        resource = useApiResource(
+          () => "/thing",
+          (value) => String(value),
+          {
+            isEmpty: (value) => value === "",
+          },
+        );
+        return () => h("p", resource.status.value);
+      },
+    }),
+  );
+  await flushPromises();
+  // 首次加载失败：没有数据可展示，报错
+  expect(resource.status.value).toBe("error");
+  expect(resource.error.value).not.toBe("");
+  expect(resource.data.value).toBeNull();
+  expect(resource.empty.value).toBe(false);
+
+  await resource.reload();
+  await flushPromises();
+  expect(resource.status.value).toBe("ready");
+  expect(resource.data.value).toBe("value");
+  expect(resource.error.value).toBe("");
+  expect(resource.empty.value).toBe(false);
+
+  await resource.reload();
+  await flushPromises();
+  expect(resource.empty.value).toBe(true);
+
+  // 刷新失败：旧数据继续保留，状态仍是就绪，失败单独记下来
+  await resource.reload();
+  await flushPromises();
+  expect(resource.status.value).toBe("ready");
+  expect(resource.data.value).toBe("");
+  expect(resource.refreshError.value).not.toBe("");
+  expect(resource.error.value).toBe("");
+  wrapper.unmount();
+});
+
+test("the same failure is reported to the user only once", async () => {
+  const fetch = vi.fn().mockRejectedValue(new TypeError("offline"));
+  vi.stubGlobal("fetch", fetch);
+  const toast = useToast();
+  let resource!: ReturnType<typeof useApiResource<string>>;
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        resource = useApiResource(
+          () => "/thing",
+          (value) => String(value),
+        );
+        return () => h("p", resource.status.value);
+      },
+    }),
+  );
+  await flushPromises();
+  expect(toast.current.value?.message).toBe("网络连接失败，请检查连接后重试。");
+  const reported = toast.current.value?.id;
+  expect(reported).toBeTypeOf("number");
+
+  await resource.reload();
+  await flushPromises();
+  expect(toast.current.value?.id).toBe(reported);
+  wrapper.unmount();
+});
 
 test("polls active matches, backs off on failures, pauses hidden tabs and stops at completion", async () => {
   vi.useFakeTimers();

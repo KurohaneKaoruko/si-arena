@@ -1,4 +1,5 @@
 import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { defineComponent, h } from "vue";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import AppButton from "../src/components/ui/AppButton.vue";
 import AppSelect from "../src/components/ui/AppSelect.vue";
@@ -77,6 +78,32 @@ test("a link without download stays a navigation so anchor targets still work", 
     slots: { default: "下载 bot.js" },
   });
   expect(named.get("a").attributes("download")).toBe("bot.js");
+
+  // 模板里的裸 download 属性会被解析成空串，这是线上真正用到的形态
+  const bare = mount(AppButton, {
+    props: { href: "/api/games/paper/releases/paper%400.1.0/download", download: "" },
+    slots: { default: "下载开发包 ZIP" },
+  });
+  expect(bare.get("a").attributes("download")).toBe("");
+});
+
+test("a disabled link cannot be focused or followed", () => {
+  const wrapper = mount(AppButton, {
+    props: { href: "/account", disabled: true },
+    slots: { default: "账号" },
+  });
+  expect(wrapper.find("a").exists()).toBe(false);
+  expect(wrapper.get("span").attributes("aria-disabled")).toBe("true");
+  expect(wrapper.get("span").attributes("tabindex")).toBe("-1");
+});
+
+test("the link variant is not given a button box", () => {
+  const wrapper = mount(AppButton, {
+    props: { variant: "link" },
+    slots: { default: "文字链接" },
+  });
+  expect(wrapper.get("button").classes()).not.toContain("px-3.5");
+  expect(wrapper.get("button").classes()).not.toContain("min-h-9");
 });
 
 test("the select opens, reports its combobox state and picks an option", async () => {
@@ -109,7 +136,7 @@ test("the select opens, reports its combobox state and picks an option", async (
   expect(wrapper.find('[role="listbox"]').exists()).toBe(false);
 });
 
-test("the select moves with the keyboard and skips disabled options", async () => {
+test("the select moves with the keyboard and never lands on a disabled option", async () => {
   const wrapper = mount(AppSelect, {
     props: {
       modelValue: "a",
@@ -123,12 +150,69 @@ test("the select moves with the keyboard and skips disabled options", async () =
   });
   await wrapper.get("button").trigger("keydown", { key: "ArrowDown" });
   expect(wrapper.find('[role="listbox"]').exists()).toBe(true);
-  // 跳过被禁用的第三项
+  const active = () => wrapper.get('[role="option"][data-active="true"]').attributes("data-value");
+
   await wrapper.get('[role="listbox"]').trigger("keydown", { key: "ArrowDown" });
+  expect(active()).toBe("b");
+  // 再往下必须跳过被禁用的第三项，绕回第一项
+  await wrapper.get('[role="listbox"]').trigger("keydown", { key: "ArrowDown" });
+  expect(active()).toBe("a");
+  // End 落在最后一个可用项上，而不是被禁用的末项
+  await wrapper.get('[role="listbox"]').trigger("keydown", { key: "End" });
+  expect(active()).toBe("b");
+
   await wrapper.get('[role="listbox"]').trigger("keydown", { key: "Enter" });
   expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual(["b"]);
 
   await wrapper.get("button").trigger("keydown", { key: "ArrowDown" });
   await wrapper.get('[role="listbox"]').trigger("keydown", { key: "Escape" });
   expect(wrapper.find('[role="listbox"]').exists()).toBe(false);
+});
+
+test("the select tells assistive technology which option is highlighted", async () => {
+  const wrapper = mount(AppSelect, {
+    props: {
+      modelValue: "a",
+      options: [
+        { value: "a", label: "第一项" },
+        { value: "b", label: "第二项" },
+      ],
+      label: "选项",
+    },
+  });
+  await wrapper.get("button").trigger("click");
+  const listbox = wrapper.get('[role="listbox"]');
+  expect(listbox.attributes("aria-activedescendant")).toBe(
+    wrapper.get('[role="option"][data-value="a"]').attributes("id"),
+  );
+  await listbox.trigger("keydown", { key: "ArrowDown" });
+  expect(wrapper.get('[role="listbox"]').attributes("aria-activedescendant")).toBe(
+    wrapper.get('[role="option"][data-value="b"]').attributes("id"),
+  );
+});
+
+test("the select keeps its own keys away from the page around it", async () => {
+  const onKeydown = vi.fn();
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        return () =>
+          h("div", { onKeydown }, [
+            h(AppSelect, {
+              modelValue: "a",
+              options: [
+                { value: "a", label: "第一项" },
+                { value: "b", label: "第二项" },
+              ],
+              label: "选项",
+            }),
+          ]);
+      },
+    }),
+  );
+  await wrapper.get("button").trigger("click");
+  await wrapper.get('[role="listbox"]').trigger("keydown", { key: "ArrowDown" });
+  await wrapper.get('[role="listbox"]').trigger("keydown", { key: "Home" });
+  await wrapper.get('[role="listbox"]').trigger("keydown", { key: " " });
+  expect(onKeydown).not.toHaveBeenCalled();
 });
