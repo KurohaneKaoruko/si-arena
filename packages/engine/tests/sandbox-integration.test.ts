@@ -7,6 +7,8 @@ import { MatchLogBudget, SandboxPlayer } from "@si-arena/sandbox";
 import { MemoryReplaySink, replayMatch, runMatch } from "../src";
 import { toyGame, players, type ToyAction, type ToyState } from "./helpers";
 
+type Cell = readonly [number, number];
+
 test("real QuickJS matches recover from player errors, preserve Memory and generate code-free replay", async () => {
   const limits = resolveResourceLimits({ cpuMs: 100 });
   const game = { ...toyGame, manifest: { ...toyGame.manifest, resolvedLimits: limits } };
@@ -89,6 +91,121 @@ test("the published official Paper bot plays under the normal release limits and
   // A full 600-tick match on slow shared CI runners needs well over the
   // default 5s test timeout.
 }, 60000);
+
+test("the official Paper bot keeps to the safe directions when the opponent head is inside its territory", async () => {
+  const source = await readFile(officialBotUrl, "utf8");
+  const limits = paperGame.manifest.resolvedLimits;
+  const width = 40;
+  // The bot owns a home block and reaches a sweep anchor through it, while
+  // the opponent head stands on the own border next to the bot head. The
+  // walk to the anchor used to step onto that head, which is a head collision
+  // and ends the match in a mutual elimination.
+  const home: Cell[] = [
+    [33, 13],
+    [34, 13],
+    [35, 13],
+    [33, 14],
+    [34, 14],
+    [35, 14],
+    [33, 15],
+    [34, 15],
+    [35, 15],
+  ];
+  const scenarios: { extra: Cell[]; head: Cell; enemy: Cell }[] = [
+    {
+      extra: [
+        [36, 14],
+        [37, 14],
+      ],
+      head: [37, 14],
+      enemy: [36, 14],
+    },
+    {
+      extra: [
+        [36, 15],
+        [35, 16],
+        [34, 16],
+        [36, 14],
+        [36, 13],
+        [35, 12],
+        [34, 12],
+        [36, 16],
+        [37, 16],
+        [33, 16],
+        [36, 12],
+        [32, 16],
+        [37, 15],
+      ],
+      head: [35, 12],
+      enemy: [35, 13],
+    },
+    {
+      extra: [
+        [34, 16],
+        [34, 17],
+        [35, 16],
+        [36, 16],
+        [34, 12],
+        [35, 13],
+        [33, 13],
+        [33, 14],
+        [33, 15],
+      ],
+      head: [34, 12],
+      enemy: [34, 13],
+    },
+  ];
+  const bot = await SandboxPlayer.create({
+    matchId: "paper-bot-safety",
+    playerId: "official",
+    source,
+    sdkSource: PAPER_SDK_SOURCE,
+    limits,
+    isolation: { kind: "local" },
+    parseAction: paperGame.rules.parseAction,
+    defaultAction: { type: "idle" },
+  });
+  const probe = await SandboxPlayer.create({
+    matchId: "paper-bot-safety",
+    playerId: "probe",
+    source: `export default ({observation,Memory,sdk})=>{Memory.safe=sdk.safeMoves(observation);return {type:'idle'}}`,
+    sdkSource: PAPER_SDK_SOURCE,
+    limits,
+    isolation: { kind: "local" },
+    parseAction: paperGame.rules.parseAction,
+    defaultAction: { type: "idle" },
+  });
+  try {
+    for (const [index, scenario] of scenarios.entries()) {
+      const state = paperGame.rules.init({
+        seed: 2,
+        players: [
+          { id: "a", slot: 0 },
+          { id: "b", slot: 1 },
+        ],
+        config: paperGame.manifest.config,
+      });
+      state.territory.fill(-1);
+      state.trails.fill(-1);
+      for (const [x, y] of [...home, ...scenario.extra]) state.territory[y * width + x] = 0;
+      state.players[0].position = { x: scenario.head[0], y: scenario.head[1] };
+      state.players[1].position = { x: scenario.enemy[0], y: scenario.enemy[1] };
+      state.trails[scenario.enemy[1] * width + scenario.enemy[0]] = 1;
+      const observation = paperGame.rules.observe(state, "a");
+      const action = await bot.execute(index, observation);
+      const safe = await probe.execute(index, observation);
+      expect(action.ok).toBe(true);
+      expect(safe.ok).toBe(true);
+      const directions = safe.memory.safe;
+      expect(Array.isArray(directions)).toBe(true);
+      if (action.action.type === "move")
+        expect(directions as string[]).toContain(action.action.direction);
+    }
+  } finally {
+    await bot.close();
+    await probe.close();
+  }
+}, 30000);
 
 test("Paper SDK executes inside the guest and offers a shortest legal route home", async () => {
   let state = paperGame.rules.init({
