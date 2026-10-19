@@ -26,6 +26,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - name: Build app image (server/worker)
-        run: docker build --target app .
+        run: docker build --target app -f deploy/Dockerfile .
       - name: Build web image (Caddy + SPA)
-        run: docker build --target web .
+        run: docker build --target web -f deploy/Dockerfile .

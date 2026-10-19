@@ -3,6 +3,7 @@
 # app/web 双 target：server 与 worker 共用 app（保留完整 workspace 布局，
 # 使启动脚本、drizzle 迁移与沙箱 WASM 的相对路径解析继续成立）；
 # web 基于 Caddy 托管 SPA 静态文件（Caddyfile 见 deploy/Caddyfile）。
+# 构建上下文是仓库根：docker build -f deploy/Dockerfile --target app .
 FROM node:26-slim AS build
 WORKDIR /app
 RUN npm install --global pnpm@12.14.0

@@ -1,7 +1,11 @@
-# 生产部署编排。用法（务必带 --env-file .env.prod）：
-#   docker compose --env-file .env.prod -f compose.prod.yaml up -d --build
-#   docker compose --env-file .env.prod -f compose.prod.yaml --profile tools run --rm seed-releases
+# 生产部署编排。用法（务必带 --env-file .env.prod，在仓库根目录执行）：
+#   docker compose --env-file .env.prod -f deploy/compose.prod.yaml up -d --build
+#   docker compose --env-file .env.prod -f deploy/compose.prod.yaml --profile tools run --rm seed-releases
 # 详细步骤见 docs/architecture/deployment.md。
+#
+# 相对路径基准：compose 把本文件所在目录（deploy/）当作项目目录，
+# 因此下面的构建上下文与挂载路径都相对 deploy/ 解析；构建上下文显式回到仓库根，
+# Dockerfile 由 context 下的 deploy/Dockerfile 指定。
 name: si-arena
 
 services:
@@ -23,7 +27,8 @@ services:
   # 一次性迁移服务：server/worker 等它成功完成后才启动。
   migrate:
     build:
-      context: .
+      context: ..
+      dockerfile: deploy/Dockerfile
       target: app
     command: pnpm --filter @si-arena/db db:migrate
     environment: &app-env
@@ -42,7 +47,8 @@ services:
 
   server:
     build:
-      context: .
+      context: ..
+      dockerfile: deploy/Dockerfile
       target: app
     command: pnpm --filter @si-arena/server start
     environment: *app-env
@@ -70,7 +76,8 @@ services:
 
   worker:
     build:
-      context: .
+      context: ..
+      dockerfile: deploy/Dockerfile
       target: app
     command: pnpm --filter @si-arena/worker start
     environment: *app-env
@@ -87,19 +94,21 @@ services:
   # 手动工具：把宿主 ./data/releases 的开发包发行拷入共享卷（上线或换发行后执行一次）。
   seed-releases:
     build:
-      context: .
+      context: ..
+      dockerfile: deploy/Dockerfile
       target: app
     entrypoint: ["sh", "-c", "cp -a /src/releases/. /data/releases/"]
     environment: *app-env
     volumes:
-      - ./data/releases:/src/releases:ro
+      - ../data/releases:/src/releases:ro
       - releases_data:/data/releases
     restart: "no"
     profiles: ["tools"]
 
   caddy:
     build:
-      context: .
+      context: ..
+      dockerfile: deploy/Dockerfile
       target: web
     environment:
       # 空值（本地试用）时回退到 :80，只用 HTTP、不申请证书。

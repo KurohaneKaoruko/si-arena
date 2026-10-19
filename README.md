@@ -67,7 +67,7 @@ API 提供 `/health`、`/api/games`、`/api/games/:gameId`，`/api/auth` 下的�
 
 提交时 git hooks 自动运行：pre-commit 用 lint-staged 对暂存文件执行 `oxlint --fix` 与 `oxfmt`，commit-msg 用 commitlint 校验 Conventional Commits 格式（如 `feat: ...`、`chore: ...`）。hooks 在 `pnpm install` 时由根 `prepare` 脚本安装。
 
-PostgreSQL 的本地启动命令为 `docker compose up -d db`，数据保存在命名 volume；数据库连接使用 .env 中的 DATABASE_URL。首次使用先运行 `pnpm db:migrate` 创建表结构；server 启动时会幂等初始化 `official` 官方账号，并为每个已注册游戏安装官方 bot 源码（排位分与统计保持不变）。游戏目录与规则页不依赖数据库连接，认证接口需要数据库。数据库集成测试需要 `ARENA_TEST_DATABASE_URL` 指向可创建临时库的连接，例如 `ARENA_TEST_DATABASE_URL=postgresql://si_arena:si_arena@127.0.0.1:5433/si_arena pnpm test --project server`；测试自建并清理独立数据库，未设置该变量时自动跳过。
+PostgreSQL 的本地启动命令为 `docker compose -f deploy/compose.yaml up -d db`，数据保存在命名 volume；数据库连接使用 .env 中的 DATABASE_URL。首次使用先运行 `pnpm db:migrate` 创建表结构；server 启动时会幂等初始化 `official` 官方账号，并为每个已注册游戏安装官方 bot 源码（排位分与统计保持不变）。游戏目录与规则页不依赖数据库连接，认证接口需要数据库。数据库集成测试需要 `ARENA_TEST_DATABASE_URL` 指向可创建临时库的连接，例如 `ARENA_TEST_DATABASE_URL=postgresql://si_arena:si_arena@127.0.0.1:5433/si_arena pnpm test --project server`；测试自建并清理独立数据库，未设置该变量时自动跳过。
 
 apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、player、cli 与 db（server 与 worker 共享的 Drizzle 表结构、连接和迁移）；games/paper 包含圈地的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
 
@@ -141,13 +141,13 @@ pnpm arena replay ./replays/实际文件名.json.gz
 
 ## 生产部署
 
-`Dockerfile` 提供 `app`（server/worker 共用）与 `web`（Caddy + SPA）两个镜像 target，`compose.prod.yaml` 编排 db、一次性迁移、server、worker 与 Caddy（自动 HTTPS）。首次上线：
+`deploy/Dockerfile` 提供 `app`（server/worker 共用）与 `web`（Caddy + SPA）两个镜像 target，`deploy/compose.prod.yaml` 编排 db、一次性迁移、server、worker 与 Caddy（自动 HTTPS）。首次上线（命令在仓库根目录执行）：
 
 ```sh
 cp .env.prod.example .env.prod   # 填写 POSTGRES_PASSWORD 与 CADDY_DOMAIN
-docker compose --env-file .env.prod -f compose.prod.yaml up -d --build
+docker compose --env-file .env.prod -f deploy/compose.prod.yaml up -d --build
 pnpm build:devkits
-docker compose --env-file .env.prod -f compose.prod.yaml --profile tools run --rm seed-releases
+docker compose --env-file .env.prod -f deploy/compose.prod.yaml --profile tools run --rm seed-releases
 ```
 
 前置条件、冒烟清单、备份与沙箱加固见 [部署与发布](docs/architecture/deployment.md)。CI（GitHub Actions）在 push/PR 运行 `pnpm check`、`pnpm test:artifacts` 与镜像构建。

@@ -4,7 +4,7 @@
 
 ## 部署形态
 
-单机 Linux 部署，全部组件由 `compose.prod.yaml` 编排：
+单机 Linux 部署，全部组件由 `deploy/compose.prod.yaml` 编排：
 
 | 组件    | 形态                                                                 |
 | ------- | -------------------------------------------------------------------- |
@@ -14,7 +14,7 @@
 | web     | `web` 镜像：Caddy 托管 SPA 静态文件，反代 `/api` 与 `/health`         |
 | Caddy   | 按 `CADDY_DOMAIN` 自动申请并续期 TLS；未设置域名时只监听 80           |
 
-镜像由根 `Dockerfile` 的两个 target 构建：
+镜像由 `deploy/Dockerfile` 的两个 target 构建（构建上下文仍是仓库根）：
 
 - `app`：`node:26-slim` + pnpm 12.14.0，包含完整 workspace 构建产物与依赖。保留仓库目录布局，使启动脚本、drizzle 迁移、`packages/sandbox/runtime/` 的 WASM 与 `games/paper` 的官方 bot 等按相对路径解析的资源全部成立。server 与 worker 共用该镜像，仅启动命令不同。
 - `web`：`caddy:2-alpine` + `apps/web/dist` 静态文件 + `deploy/Caddyfile`。
@@ -36,16 +36,16 @@
 cp .env.prod.example .env.prod   # 填写 POSTGRES_PASSWORD 与 CADDY_DOMAIN
 
 # 1. 构建镜像并启动数据库与迁移（server/worker 会等迁移完成后自启）
-docker compose --env-file .env.prod -f compose.prod.yaml up -d --build
+docker compose --env-file .env.prod -f deploy/compose.prod.yaml up -d --build
 
 # 2. 生成开发包发行并注入共享卷（本机生成后随仓库目录部署到服务器）
 pnpm build:devkits
-docker compose --env-file .env.prod -f compose.prod.yaml --profile tools run --rm seed-releases
+docker compose --env-file .env.prod -f deploy/compose.prod.yaml --profile tools run --rm seed-releases
 ```
 
 `seed-releases` 把宿主 `./data/releases` 拷入 `releases_data` 卷，供 server 的发行下载路由读取。发行目录不可变：更新开发包内容时先删 `data/releases/paper` 重建（保持 `paper@0.1.0` 不递增，见 [分发设计](distribution-and-development.md)），再重跑上面的 seed 命令。
 
-日常更新：`git pull && docker compose --env-file .env.prod -f compose.prod.yaml up -d --build`，迁移服务会在启动前自动应用新的数据库变更。
+日常更新：`git pull && docker compose --env-file .env.prod -f deploy/compose.prod.yaml up -d --build`，迁移服务会在启动前自动应用新的数据库变更。
 
 ## 冒烟清单
 
@@ -82,7 +82,7 @@ SI_ARENA_SERVER_URL=https://<域名> pnpm publish:packages [--otp <验证码>]
 
 ## 数据与备份
 
-- `postgres_data` 卷：用 `docker compose ... exec db pg_dump -U si_arena si_arena` 定期导出。
+- `postgres_data` 卷：用 `docker compose --env-file .env.prod -f deploy/compose.prod.yaml exec db pg_dump -U si_arena si_arena` 定期导出。
 - `replays_data` 卷：回放终稿为不可覆盖资产，随卷一起备份。
 - `releases_data` 卷内容可随时从仓库 `data/releases` 重新 seed，无需单独备份。
 - `caddy_data` 卷保存 TLS 证书，丢失后自动重新申请。

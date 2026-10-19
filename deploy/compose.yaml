@@ -1,3 +1,10 @@
+# 本地开发用的 PostgreSQL。生产编排见 deploy/compose.prod.yaml。
+# 用法（务必带 -f，在仓库根目录执行）：
+#   docker compose -f deploy/compose.yaml up -d db
+#
+# 项目名必须显式固定：compose 默认用所在目录名（deploy/）推导项目名，
+# 那样卷会变成 deploy_postgres_data，与历史卷 si-arena_postgres_data 脱节。
+name: si-arena
 services:
   db:
     image: postgres:18
