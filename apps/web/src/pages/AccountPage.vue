@@ -74,13 +74,20 @@ onUnmounted(() => current?.abort());
               :disabled="pending"
             />
           </AppField>
-          <AppField label="新密码" for-id="new-password" :error="passwordError" hint="6–24 个字符">
+          <AppField
+            v-slot="{ describedBy }"
+            label="新密码"
+            for-id="new-password"
+            :error="passwordError"
+            hint="6–24 个字符"
+          >
             <input
               id="new-password"
               v-model="newPassword"
               class="input"
               type="password"
               autocomplete="new-password"
+              :aria-describedby="describedBy"
               required
               :disabled="pending"
             />

@@ -28,7 +28,6 @@
   --radius-control: 0.25rem;
 
   --shadow-card: 0 1px 2px 0 rgb(24 24 27 / 0.04);
-  --shadow-card-hover: 0 2px 8px 0 rgb(24 24 27 / 0.06);
   --shadow-pop: 0 10px 32px -10px rgb(24 24 27 / 0.2);
 }
 
@@ -77,10 +76,6 @@
 }
 
 @layer components {
-  /* 面板：只靠发丝描边建立层次，不堆叠阴影 */
-  .panel {
-    @apply rounded-card border border-line bg-surface shadow-card;
-  }
   /* 元信息：版本、tick、ID、时间戳等 */
   .meta {
     @apply font-mono text-xs text-faint;

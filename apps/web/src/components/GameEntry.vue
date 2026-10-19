@@ -152,21 +152,21 @@ onUnmounted(() => {
           选择 UTF-8 编码的 .js 文件，最大 {{ Math.floor(game.resolvedLimits.codeBytes / 1024) }}
           KiB。上传会替换当前代码。
         </p>
-        <AppField class="mt-4" :error="fileError" for-id="strategy-file">
-          <label
-            for="strategy-file"
-            class="flex min-h-10 cursor-pointer items-center justify-center rounded-control border border-line bg-surface px-3.5 text-sm font-medium text-ink transition hover:border-line-strong hover:bg-subtle"
-          >
-            选择 .js 文件
-          </label>
+        <AppField class="mt-4" :error="fileError">
           <input
             id="strategy-file"
-            class="sr-only"
+            class="peer sr-only"
             type="file"
             accept=".js,.mjs,text/javascript,application/javascript"
             :disabled="!!busy"
             @change="selectFile"
           />
+          <label
+            for="strategy-file"
+            class="flex min-h-10 cursor-pointer items-center justify-center rounded-control border border-line bg-surface px-3.5 text-sm font-medium text-ink transition hover:border-line-strong hover:bg-subtle peer-focus-visible:border-accent peer-focus-visible:ring-4 peer-focus-visible:ring-accent/10"
+          >
+            选择 .js 文件
+          </label>
         </AppField>
         <p v-if="fileName" class="mt-2 break-all font-mono text-xs text-faint">
           待上传：{{ fileName }}

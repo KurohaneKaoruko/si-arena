@@ -2,13 +2,11 @@
 defineProps<{
   title: string;
   description?: string | undefined;
-  label?: string | undefined;
 }>();
 </script>
 
 <template>
   <header>
-    <p v-if="label" class="meta">{{ label }}</p>
     <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
       <div class="min-w-0">
         <h1

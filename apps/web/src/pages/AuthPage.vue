@@ -78,6 +78,7 @@ onUnmounted(() => current?.abort());
     </p>
     <form class="mt-8 space-y-5" @submit.prevent="submit">
       <AppField
+        v-slot="{ describedBy }"
         label="用户名"
         for-id="username"
         :error="usernameError"
@@ -89,11 +90,13 @@ onUnmounted(() => current?.abort());
           class="input"
           name="username"
           autocomplete="username"
+          :aria-describedby="describedBy"
           required
           :disabled="pending"
         />
       </AppField>
       <AppField
+        v-slot="{ describedBy }"
         label="密码"
         for-id="password"
         :error="passwordError"
@@ -106,6 +109,7 @@ onUnmounted(() => current?.abort());
           name="password"
           type="password"
           :autocomplete="register ? 'new-password' : 'current-password'"
+          :aria-describedby="describedBy"
           required
           :disabled="pending"
         />

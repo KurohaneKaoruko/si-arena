@@ -26,6 +26,9 @@ defineEmits<{ retry: [] }>();
         <div class="h-3 w-4/5 animate-pulse rounded-control bg-muted"></div>
         <div class="h-3 w-3/5 animate-pulse rounded-control bg-muted"></div>
       </div>
+      <div v-if="$slots.action" class="mt-4 flex justify-center">
+        <slot name="action" />
+      </div>
     </div>
     <div
       v-else-if="status === 'error'"

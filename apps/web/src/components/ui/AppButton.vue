@@ -4,20 +4,20 @@ import { RouterLink } from "vue-router";
 
 const props = withDefaults(
   defineProps<{
-    variant?: "primary" | "secondary" | "ghost" | "danger" | "link";
-    size?: "sm" | "md" | "lg";
-    to?: string | Record<string, unknown>;
-    href?: string;
+    variant?: "primary" | "secondary" | "ghost" | "link" | undefined;
+    size?: "sm" | "md" | "lg" | undefined;
+    to?: string | Record<string, unknown> | undefined;
+    href?: string | undefined;
     /**
      * 仅下载型链接需要。类型含 Boolean 时 Vue 会把缺席属性转成 false，
      * 因此这里按值区分：true 表示无文件名下载，字符串表示指定文件名，
      * 缺席（false）表示普通导航链接。
      */
     download?: string | boolean | undefined;
-    type?: "button" | "submit" | "reset";
-    disabled?: boolean;
-    loading?: boolean;
-    block?: boolean;
+    type?: "button" | "submit" | "reset" | undefined;
+    disabled?: boolean | undefined;
+    loading?: boolean | undefined;
+    block?: boolean | undefined;
   }>(),
   { variant: "secondary", size: "md", type: "button" },
 );
@@ -26,27 +26,43 @@ const variants = {
   primary: "bg-accent text-white shadow-sm hover:bg-accent-strong",
   secondary: "border border-line bg-surface text-ink hover:border-line-strong hover:bg-subtle",
   ghost: "text-soft hover:bg-muted hover:text-ink",
-  danger: "border border-danger/25 bg-danger-soft text-danger hover:bg-danger/10",
   link: "text-accent underline underline-offset-4 hover:text-accent-strong",
 } as const;
 
+// 盒模型与字号分开：Tailwind 同一层里的工具类按自身顺序决定优先级，
+// 文字型按钮不能和尺寸类共用 px / min-h，否则会被尺寸类盖掉。
 const sizes = {
-  sm: "min-h-8 rounded-control px-2.5 text-[13px]",
-  md: "min-h-9 rounded-control px-3.5 text-sm",
-  lg: "min-h-11 rounded-control px-5 text-[15px]",
+  sm: { box: "min-h-8 rounded-control px-2.5", text: "text-[13px]" },
+  md: { box: "min-h-9 rounded-control px-3.5", text: "text-sm" },
+  lg: { box: "min-h-11 rounded-control px-5", text: "text-[15px]" },
 } as const;
+
+const inert = computed(() => props.disabled || props.loading);
+const isLink = computed(() => Boolean(props.to || props.href));
 
 const classes = computed(() => [
   "inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap transition",
-  props.variant === "link" ? "min-h-0 px-0" : "",
+  props.variant === "link" ? "min-h-0 px-0" : sizes[props.size].box,
+  sizes[props.size].text,
   variants[props.variant],
-  sizes[props.size],
   props.block ? "w-full" : "",
-  props.disabled || props.loading ? "pointer-events-none opacity-50" : "",
+  inert.value ? "pointer-events-none opacity-50" : "",
 ]);
 
-const element = computed(() => (props.to ? RouterLink : props.href ? "a" : "button"));
+const element = computed(() => {
+  // 链接没法真正 disabled：改用不可聚焦、不可导航的 span。
+  if (inert.value && isLink.value) return "span";
+  return props.to ? RouterLink : props.href ? "a" : "button";
+});
 const attributes = computed(() => {
+  if (inert.value && isLink.value) {
+    return {
+      role: "link",
+      "aria-disabled": "true",
+      "aria-busy": props.loading || undefined,
+      tabindex: "-1",
+    };
+  }
   if (props.to) return { to: props.to };
   if (props.href) {
     // 不带 download 属性的链接是普通导航（锚点跳转），不能被当成下载
