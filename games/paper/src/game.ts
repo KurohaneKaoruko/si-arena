@@ -69,3 +69,8 @@ export const paperGame = {
 };
 
 export const officialBotUrl = new URL("../bots/official.js", import.meta.url);
+export const developmentFiles = {
+  prompt: new URL("../PROMPT.md", import.meta.url),
+  sdk: new URL("../SDK.md", import.meta.url),
+  template: new URL("../bots/template.js", import.meta.url),
+};

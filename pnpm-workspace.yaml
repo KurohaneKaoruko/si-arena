@@ -4,6 +4,7 @@ packages:
   - games/*
 
 catalog:
+  "fflate": "0.8.3"
   "quickjs-emscripten-core": "0.32.0"
   "@jitl/quickjs-wasmfile-release-sync": "0.32.0"
   "acorn": "8.19.0"

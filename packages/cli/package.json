@@ -28,7 +28,8 @@
   "dependencies": {
     "@si-arena/engine": "workspace:*",
     "@si-arena/protocol": "workspace:*",
-    "@si-arena/sandbox": "workspace:*"
+    "@si-arena/sandbox": "workspace:*",
+    "fflate": "catalog:"
   },
   "engines": {
     "node": ">=26"

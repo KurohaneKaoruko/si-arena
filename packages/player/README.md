@@ -50,4 +50,4 @@ pnpm test:artifacts
 
 调度、重演和 gzip 文件读取使用 Node 测试，Vue 交互使用 web 的 jsdom 项目。播放器测试的 DOM 类型仅配置在自身 `tsconfig.test.json`，不改变纯规则的 Node 测试环境。打包验证从仓库外导入公开入口并检查真实回放跳转。
 
-这是已保存回放的网页播放器；CLI 的 `arena replay --verify` 仍提供终端校验，`arena dev` 的实时本地调试服务和 Memory 会话尚未接入。
+独立开发包包含相同的播放器静态资源。包内 `pnpm arena replay <file>` 启动只监听 127.0.0.1 的静态服务，提供固定资源和指定回放，输出 URL 后在浏览器打开；不依赖平台 API，也不重新执行 bot。`--verify` 继续用于终端校验，`arena dev` 的实时运行与 Memory 会话是独立功能。

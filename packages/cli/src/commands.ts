@@ -5,14 +5,20 @@ import { parseArgs } from "node:util";
 import { readReplayFile } from "@si-arena/engine/node";
 import { checkCancelled, ENGINE_COMPATIBILITY, type LocalGameRegistration } from "./local-game";
 import { CLI_NAME, CLI_VERSION } from "./metadata";
+import { initializeGame } from "./init";
+import { serveReplay } from "./viewer";
 
 const HELP = `SI Arena CLI
 
 Usage:
+  arena init <gameId> <directory> [--server <url>] [--release <releaseId>]
   arena --registry ./arena.config.mjs run --bot ./bot.js [options]
   arena --registry ./arena.config.mjs replay ./replays/match.json.gz --verify [--logs]
+  arena replay ./replays/match.json.gz  (standalone development package viewer)
 
 Options:
+  --server <url>     Platform origin (HTTPS; loopback HTTP allowed)
+  --release <id>     Download a fixed historical release
   --registry <file>  Explicitly trust and load a local game registration module
   --game <id>        Select a registered game (optional with one game)
   --bot <file>       Player JavaScript source, executed only in QuickJS
@@ -34,6 +40,7 @@ export interface CliContext {
   games?: readonly LocalGameRegistration[];
   write?: (line: string) => void;
   signal?: AbortSignal;
+  viewerDirectory?: string;
 }
 
 /** Throws on invalid input/system failure; player tick errors remain ordinary match results. */
@@ -49,6 +56,8 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
       registry: { type: "string" },
+      server: { type: "string" },
+      release: { type: "string" },
       game: { type: "string" },
       bot: { type: "string" },
       opponent: { type: "string", multiple: true },
@@ -62,13 +71,19 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
   if (values.version) return write(`${CLI_NAME} ${CLI_VERSION}`);
   if (values.help || positionals.length === 0) return write(HELP);
   const command = positionals[0];
-  if (command !== "run" && command !== "replay")
+  if (command !== "run" && command !== "replay" && command !== "init")
     throw new Error(`Unknown command: ${command ?? "(missing)"}. Run arena --help.`);
-  const allowed = new Set([
-    "registry",
-    "game",
-    ...(command === "run" ? ["bot", "opponent", "matches", "seed", "out"] : ["verify", "logs"]),
-  ]);
+  const allowed = new Set(
+    command === "init"
+      ? ["server", "release"]
+      : [
+          "registry",
+          "game",
+          ...(command === "run"
+            ? ["bot", "opponent", "matches", "seed", "out"]
+            : ["verify", "logs"]),
+        ],
+  );
   const seen = new Set<string>();
   for (const token of tokens) {
     if (token.kind !== "option") continue;
@@ -77,10 +92,47 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
       throw new Error(`Duplicate option: --${token.name}`);
     seen.add(token.name);
   }
+  if (command === "init") {
+    if (positionals.length !== 3)
+      throw new Error(
+        "Usage: arena init <gameId> <directory> [--server <url>] [--release <releaseId>]",
+      );
+    const result = await initializeGame({
+      gameId: positionals[1]!,
+      directory: positionals[2]!,
+      cwd,
+      ...(values.server ? { server: values.server } : {}),
+      ...(values.release ? { release: values.release } : {}),
+      ...(context.signal ? { signal: context.signal } : {}),
+    });
+    output({
+      type: "initialized",
+      ...result,
+      next: [
+        "pnpm install --frozen-lockfile",
+        "pnpm arena run --bot ./bot.js",
+        "pnpm arena replay <replay.json.gz>",
+      ],
+    });
+    return;
+  }
   if (command === "run" && (positionals.length !== 1 || !values.bot))
     throw new Error("Usage: arena run --bot <file> [options]");
-  if (command === "replay" && (positionals.length !== 2 || !values.verify))
+  if (command === "replay" && (positionals.length !== 2 || (values.logs && !values.verify)))
     throw new Error("Usage: arena replay <file.json.gz> --verify [--logs]");
+  if (command === "replay" && !values.verify) {
+    if (!context.viewerDirectory)
+      throw new Error(
+        "Use --verify for terminal verification, or open the replay with a standalone development package",
+      );
+    await serveReplay({
+      directory: context.viewerDirectory,
+      replay: resolve(cwd, positionals[1]!),
+      write,
+      ...(context.signal ? { signal: context.signal } : {}),
+    });
+    return;
+  }
   const matches = integerOption(values.matches ?? "1", 1, 1000, "matches");
   const firstSeed = integerOption(values.seed ?? "42", 0, 0xffffffff, "seed");
   checkCancelled(context.signal);

@@ -22,9 +22,9 @@ pnpm dlx @si-arena/cli@latest init paper ./paper-bot
 
 `init <gameId> <directory>` 先通过 `GET /games/:gameId` 获取当前发行 ID，再通过 `GET /games/:gameId/releases/:releaseId` 获取不可变发行元数据，按该版本的下载地址获取并校验网页同款 ZIP，解压到目标目录，输出安装、启动命令。`--release <releaseId>` 跳过当前发行查询，直接选择指定历史软件发行。不能在读完旧发行元数据后再请求可变的 current 下载别名，避免发布切换时混用版本。
 
-CLI npm 包的构建配置包含平台公开 API 基址，`--server <url>` 可显式指定另一个 SI Arena 部署；仅接受 HTTPS，loopback 开发地址允许 HTTP。发行元数据给出压缩包字节数与 SHA-256，CLI 在解压前验证，内部 release.json 的发行、组件版本和 resolvedLimits 必须与元数据一致。校验值来自受信连接的元数据，不仅依赖 ZIP 内部自述。
+CLI npm 包通过构建环境变量 `SI_ARENA_SERVER_URL` 固定平台地址，本地构建默认 `http://127.0.0.1:3000`；`--server <url>` 可显式指定另一个部署，支持源站或以 `/api` 结尾的基址。仅接受 HTTPS，loopback 开发地址允许 HTTP。下载地址必须与所选服务同源，HTTP 重定向被拒绝。发行元数据给出压缩包字节数与 SHA-256，CLI 在解压前验证；内部 release.json 的摘要、发行、组件版本和 resolvedLimits 必须与外部元数据一致，每个发行文件还验证字节数与 SHA-256。校验值来自受信连接的元数据，不仅依赖 ZIP 内部自述。
 
-目标目录不存在时创建，已存在且非空时拒绝覆盖。解压只写入目标目录，拒绝越界路径和逃逸符号链接；失败时不留下被误认为完整安装的发行目录。用户无需平台账号，命令不上传代码、不发起线上匹配，不自动安装全局工具。
+目标目录不存在时创建，已存在且非空时拒绝覆盖，目标本身不能是符号链接。ZIP 最大 32MiB，解压最多 128MiB、2048 个文件加清单。只创建常规文件，不恢复符号链接属性，拒绝越界、重复、大小写冲突和 Windows 保留路径；所有内容校验后写入相邻临时目录，再原子移入目标。失败时清理临时内容，保留原有空目录和并发写入的用户文件。用户无需平台账号，命令不上传代码、不发起线上匹配，不自动安装全局工具。
 
 初始化只下载和生成项目，不自动安装依赖或执行玩家代码。用户进入目录后运行 `pnpm install`，再启动本地工具。npm 用于获取 CLI，与 monorepo 和开发包使用 pnpm 管理依赖不冲突。
 
@@ -47,19 +47,24 @@ CLI 通过 `defineLocalGame({ game, sdkSource, officialBotUrl })` 注册游戏�
 ```text
 paper-devkit/
   package.json
+  pnpm-workspace.yaml
   pnpm-lock.yaml
   README.md
   release.json
+  arena.mjs
+  PROMPT.md
+  SDK.md
   bot.js
   bots/official.js
   sdk/
-  dist/
-    cli/
-    engine/
-    sandbox/
-    game/
-    viewer/
-  wasm/
+  vendor/
+    si-arena-cli-<version>.tgz
+    si-arena-engine-<version>.tgz
+    si-arena-protocol-<version>.tgz
+    si-arena-sandbox-<version>.tgz
+    si-arena-player-<version>.tgz
+    si-arena-game-<gameId>-<version>.tgz
+  dist/viewer/
   LICENSES/
 ```
 
@@ -73,11 +78,13 @@ paper-devkit/
 
 pnpm 打包会转换 workspace 依赖声明，但不会自动把所有依赖实体都包含进 ZIP；产物脚本必须保证每个声明都可解析到已发布包、随包本地归档或已经打入的产物。[pnpm 文档](https://pnpm.io/workspaces)
 
-将项目自有运行代码打包成开发包内产物，保留必要第三方运行依赖，并复制 WASM、SDK 类型、viewer 静态资源与官方 JS。不得因树摇或资源路径改写遗漏动态加载文件。
+内部包通过 pnpm pack 形成随包本地归档，开发包的依赖与 pnpm-workspace.yaml overrides 将整条内部依赖链指向 vendor/，不要求内部包已经发布到 npm。归档保留公开 exports、类型、沙箱子进程、原生加载器与 WASM，安装后按原包布局解析；viewer 额外构建成共享 Vue 控件和 renderer 的静态产物。SDK 类型、运行源码、官方 JS 与许可证同时放入开发目录。不得因树摇或资源路径改写遗漏动态加载文件。
+
+仓库命令为 `pnpm build:devkits`，在完整构建后读取 `configs/devkits.ts` 的可信注册。构建入口拒绝不同步的根锁文件，用同一 catalog、供应链策略和已有解析生成独立锁文件，记录根锁文件 SHA-256；初始化不执行 pnpm，用户安装时使用开发包固定的锁文件。server 从 `DEVKITS_DIR`（默认根目录 `data/releases`）提供 `<gameId>/<release>/metadata.json` 和 `devkit.zip`。发布目录通过相邻候选目录原子移入，已有发行内容不同则失败，不覆盖历史产物。
 
 ## 发行清单
 
-`release.json` 记录：开发包格式版本、游戏 ID、规则发行标识、botProtocolVersion、引擎兼容标识、沙箱和 SDK 的精确软件版本、默认配置、游戏解析后的完整 `resolvedLimits`、Node/pnpm 要求，以及关键文件校验值。发布档案不可覆盖；外部发行元数据另外记录整个 ZIP 的大小和摘要。
+`release.json` 使用 `DevkitManifest`：`formatVersion: 1`，`game` 为完整 GameCatalogEntry（含发行、botProtocolVersion、配置和 resolvedLimits），`engineCompatibility`、`components` 精确版本映射、`runtime` 的 Node/pnpm 要求与构建精确版本、`sourceLockSha256`，以及 `files` 的相对路径到字节数和 SHA-256 映射。清单自身由外部 `manifestSha256` 保护。`GameReleaseMetadata` 保存同一发行描述，另有 `archive: { url, bytes, sha256 }` 和 `manifestSha256`。已发布档案不可覆盖；模板初始化时校验原始摘要，用户编辑 bot.js 后运行比赛不再要求它保持下载时的摘要。
 
 CLI 启动时检查 Node 主版本，初始化和本地执行均要求 Node.js 26 及以上。运行环境采用 Node.js 26 与 pnpm 12，包配置声明 `node: >=26`、`pnpm: >=12`。每次发行在清单和锁文件中记录构建所用精确版本及依赖，不在安装时漂移版本。构建入口读取根 package.json 的 packageManager 和锁文件，拒绝锁文件不同步的构建。
 

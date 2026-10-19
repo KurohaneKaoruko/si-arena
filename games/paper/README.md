@@ -9,6 +9,7 @@
 - `src/rules/`：初始化、观察、动作校验、同时结算、圈地与终局判定。
 - `src/renderer/`：规则页展示数据、配色、Canvas 地图绘制与玩家得分摘要，独立 export 入口。
 - `bots/`：官方 bot 源码目录。
+- `PROMPT.md`、`SDK.md` 与 `bots/template.js`：统一参赛提示词、接口说明和玩家模板，供网页及独立开发包共用。
 - `tests/`：契约、碰撞、圈地及确定性测试。
 
 ## 公开入口

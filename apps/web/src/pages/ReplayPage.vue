@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import {
   loadRegisteredReplay,
   readBrowserReplay,
@@ -7,6 +7,11 @@ import {
 } from "@si-arena/player/browser";
 import { replayGames } from "../games/replays";
 import ReplayViewer from "../components/ReplayViewer.vue";
+import { downloadReplay } from "../api/replay";
+
+const props = withDefaults(defineProps<{ initialReplayUrl?: string; exampleCommand?: string }>(), {
+  exampleCommand: "pnpm arena run --bot ./games/paper/bots/official.js --seed 42",
+});
 
 const session = shallowRef<BrowserReplaySession | null>(null);
 const pending = ref(false),
@@ -22,6 +27,9 @@ async function selectFile(event: Event) {
   const file = input.files?.[0];
   input.value = "";
   if (!file) return;
+  await load(file, file.name);
+}
+async function load(file: Blob | string, name: string) {
   loading?.abort();
   const controller = new AbortController();
   loading = controller;
@@ -29,9 +37,10 @@ async function selectFile(event: Event) {
   error.value = "";
   completed.value = 0;
   pending.value = true;
-  fileName.value = file.name;
+  fileName.value = name;
   try {
-    const raw = await readBrowserReplay(file, controller.signal);
+    const blob = typeof file === "string" ? await downloadReplay(file, controller.signal) : file;
+    const raw = await readBrowserReplay(blob, controller.signal);
     const loaded = await loadRegisteredReplay(raw, replayGames, {
       signal: controller.signal,
       onProgress: (ticks) => {
@@ -47,6 +56,9 @@ async function selectFile(event: Event) {
     if (loading === controller) pending.value = false;
   }
 }
+onMounted(() => {
+  if (props.initialReplayUrl) void load(props.initialReplayUrl, "本地比赛.json.gz");
+});
 function cancelLoad() {
   loading?.abort();
   pending.value = false;
@@ -122,7 +134,7 @@ onBeforeUnmount(() => loading?.abort());
       <p class="mt-7 text-sm text-arena-muted">还没有回放？在项目根目录运行：</p>
       <pre
         class="mx-auto mt-3 max-w-full overflow-x-auto rounded-lg bg-arena-background p-4 text-left text-sm text-arena-accent"
-      ><code>pnpm arena run --bot ./games/paper/bots/official.js --seed 42</code></pre>
+      ><code>{{ exampleCommand }}</code></pre>
     </div>
   </section>
 </template>

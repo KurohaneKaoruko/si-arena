@@ -110,9 +110,10 @@ server 与 worker 共用 `REPLAYS_DIR`（默认 `data/replays`），相对路径
 | `POST /auth/logout` | 撤销当前会话 |
 | `PUT /auth/password` | 验证旧密码后修改，撤销全部会话并要求重新登录 |
 | `GET /games` | 游戏目录和基本信息 |
-| `GET /games/:gameId` | 当前发行、玩法、提示词、SDK 与资源限额 |
+| `GET /games/:gameId` | 当前发行、基本玩法、配置与完整资源限额 |
+| `GET /games/:gameId/development` | 当前发行的 `{ prompt, sdk, officialBot, template }` 纯文本资料 |
 | `GET /games/:gameId/releases/:releaseId` | 指定不可变发行的元数据、代码协议版本、resolvedLimits、下载地址、压缩包字节数与 SHA-256 |
-| `GET /games/:gameId/download` | 当前独立开发包 |
+| `GET /games/:gameId/download` | 302 指向当前发行的固定 ZIP 下载地址，别名响应 no-store |
 | `GET /games/:gameId/releases/:releaseId/download` | 指定发行的开发包 |
 | `GET /games/:gameId/official-bot` | 当前官方 bot 源码 |
 | `GET /games/:gameId/me` | 当前用户的参赛信息、最新代码、botProtocolVersion 与 canMatch/不能参赛原因 |

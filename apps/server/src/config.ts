@@ -17,5 +17,9 @@ export function readServerConfig(env: NodeJS.ProcessEnv = process.env) {
       fileURLToPath(new URL("../../../", import.meta.url)),
       env.REPLAYS_DIR ?? "data/replays",
     ),
+    releasesDir: resolve(
+      fileURLToPath(new URL("../../../", import.meta.url)),
+      env.DEVKITS_DIR ?? "data/releases",
+    ),
   };
 }

@@ -13,4 +13,9 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   dts: { sourcemap: true },
+  define: {
+    BUILD_DEFAULT_SERVER_URL: JSON.stringify(
+      process.env.SI_ARENA_SERVER_URL ?? "http://127.0.0.1:3000",
+    ),
+  },
 });

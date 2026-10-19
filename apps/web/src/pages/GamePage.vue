@@ -3,6 +3,7 @@ import { parseGame } from "../api/contracts";
 import { session } from "../auth/session";
 import AccountGate from "../components/AccountGate.vue";
 import GameEntry from "../components/GameEntry.vue";
+import GameDevelopment from "../components/GameDevelopment.vue";
 import { computed } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { useApiResource } from "../composables/useApiResource";
@@ -36,6 +37,7 @@ const stats = computed(() =>
     <p class="mt-5 max-w-2xl leading-8 text-arena-muted">{{ game.description }}</p>
     <nav class="mt-7 flex flex-wrap gap-3" aria-label="游戏导航">
       <a class="button-primary" href="#participate">上传与参赛</a>
+      <a class="button-secondary" href="#development">开发资料</a>
       <RouterLink class="button-secondary" :to="`/games/${encodeURIComponent(game.id)}/leaderboard`"
         >排行榜</RouterLink
       >
@@ -57,6 +59,7 @@ const stats = computed(() =>
         </li>
       </ol>
     </section>
+    <GameDevelopment :key="`${game.id}:${game.release}`" :game="game" />
     <section
       id="participate"
       class="panel mt-8 scroll-mt-6 p-7 sm:p-9"

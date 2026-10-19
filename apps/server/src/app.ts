@@ -5,11 +5,18 @@ import { authRoutes } from "./auth/routes";
 import { gamesRoutes } from "./games/routes";
 import { matchesRoutes } from "./matches/routes";
 import { gameCatalog } from "./games";
+import { releaseRoutes } from "./games/releases";
 
 export function buildApp(
-  options: { logger?: boolean | { level: string }; db?: NodePgDatabase; replaysDir?: string } = {},
+  options: {
+    logger?: boolean | { level: string };
+    db?: NodePgDatabase;
+    replaysDir?: string;
+    releasesDir?: string;
+  } = {},
 ) {
   const app = Fastify({ logger: options.logger ?? false });
+  void app.register(releaseRoutes(options.releasesDir));
   app.setErrorHandler((error: FastifyError, request, reply) => {
     const status =
       typeof error.statusCode === "number" && error.statusCode >= 400 ? error.statusCode : 500;

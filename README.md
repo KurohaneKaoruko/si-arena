@@ -107,7 +107,7 @@ pnpm arena run --bot ./my-bot.js --opponent ./another-bot.js --matches 20 --seed
 pnpm arena replay ./replays/match-实际文件名.json.gz --verify --logs
 ```
 
-CLI 支持指定 bot、官方或本地对手、顺序批量比赛、gzip 回放及日志校验。输出 JSON Lines，包含发行、完整限额、结果和回放绝对路径。回放无需 bot 文件。根脚本通过可信配置注册游戏，CLI 自身不绑定圈地。命令与接入方式见 [CLI 说明](packages/cli/README.md)。下载初始化和实时本地调试服务尚未实现。
+CLI 支持按发行下载初始化、指定 bot、官方或本地对手、顺序批量比赛、gzip 回放及日志校验。输出 JSON Lines，包含发行、完整限额、结果和回放绝对路径。回放无需 bot 文件。根脚本通过可信配置注册游戏，CLI 自身不绑定圈地。命令与接入方式见 [CLI 说明](packages/cli/README.md)。`arena dev` 的实时本地调试服务单独开发。
 
 ## 网页参赛与回放
 
@@ -120,6 +120,23 @@ server 和 worker 必须使用同一个 `REPLAYS_DIR`；默认是仓库根目录
 运行 `pnpm dev:web`，打开 [http://127.0.0.1:5173/replays](http://127.0.0.1:5173/replays)，选择 CLI 生成的 `.json.gz` 文件。文件在浏览器内读取、校验和重演，不上传，不依赖 API 或数据库。支持圈地地图、倍速播放、单步、时间轴、错误跳转、按玩家和级别查看日志，以及动作、CPU 和执行前观察。播放器与游戏 renderer 显式注册，未注册或校验失败的发行不播放。使用与扩展方式见 [播放器说明](packages/player/README.md)。
 
 ## 玩家开发包
+
+游戏页提供统一提示词、SDK 说明、官方 bot 和最小模板，可以复制或下载。运行以下命令生成独立 ZIP，并从本地 API 初始化：
+
+```sh
+pnpm build:devkits
+pnpm exec arena init paper ./paper-bot --server http://127.0.0.1:3000
+cd paper-bot
+pnpm install --frozen-lockfile
+pnpm arena run --bot ./bot.js --seed 42
+pnpm arena replay ./replays/实际文件名.json.gz
+```
+
+`pnpm build:devkits` 先构建，再按 `configs/devkits.ts` 注册生成 `data/releases/<gameId>/<release>/devkit.zip` 和不可变元数据。server 使用相同的 `DEVKITS_DIR`，相对路径以仓库根目录为基准。构建校验根锁文件，固定内部包本地归档、第三方依赖、WASM、SDK、提示词、示例及共享回放界面；已存在发行的内容不可覆盖，修改发行内容时递增游戏 `release`。
+
+`arena init` 校验发行、ZIP 大小及 SHA-256、内部清单与逐文件摘要，拒绝非空目录与越界路径，不安装依赖或执行代码。安装后运行比赛和回放无需平台 API、数据库或账号。开发包的可视化回放命令输出 loopback URL，在浏览器打开即可，Ctrl+C 停止；`--verify --logs` 仍用于终端校验。
+
+对外 npm 入口为 `npx @si-arena/cli@latest init paper ./paper-bot`。构建 CLI 时通过 `SI_ARENA_SERVER_URL` 固定公开服务地址，`--server` 可覆盖；本地构建默认 `http://127.0.0.1:3000`。仓库构建与测试不发布 npm 包，首次正式使用 npx 前需将 CLI 及其公开依赖发布到 npm。
 
 统一 CLI 的下载、调试和回放协议见 [本地开发与调试](docs/designs/local-development.md) 与 [分发设计](docs/architecture/distribution-and-development.md)。npm 包统一属于 `@si-arena`，游戏开发包与平台服务通过发行清单保持版本一致。
 

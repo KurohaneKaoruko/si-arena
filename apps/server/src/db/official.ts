@@ -10,7 +10,7 @@ import { gameEntries, users } from "@si-arena/db";
  */
 export async function ensureOfficialAccounts(
   db: NodePgDatabase,
-  games: readonly RegisteredGame[],
+  games: readonly Pick<RegisteredGame, "entry" | "officialBotUrl">[],
 ): Promise<{ games: number }> {
   const sources = await Promise.all(
     games.map(async (game) => {

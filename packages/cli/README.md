@@ -4,6 +4,29 @@
 
 ## 在仓库运行
 
+下载初始化不需要本地注册模块：
+
+```sh
+pnpm exec arena init paper ./paper-bot --server http://127.0.0.1:3000
+# 指定历史发行，不读取 current 别名
+pnpm exec arena init paper ./paper-bot --release paper@0.0.0 --server http://127.0.0.1:3000
+```
+
+对外入口是 `npx @si-arena/cli@latest init paper ./paper-bot`（需要已发布的 npm 包）。CLI 构建使用 `SI_ARENA_SERVER_URL` 固定默认平台地址，本地默认 loopback。`--server` 允许 HTTPS 和 loopback HTTP，下载仅使用同源元数据中的固定发行地址，不跟随 HTTP 重定向。
+
+初始化先固定发行，下载最大 32MiB ZIP，校验外部字节数与 SHA-256、内部 release.json 摘要、组件版本/配置及逐文件摘要，最多解压 128MiB、2048 个文件加清单。只写常规文件，不恢复 ZIP 中的符号链接属性；拒绝越界、重复、大小写冲突和 Windows 保留路径。拒绝非空目标目录，校验后在相邻临时目录完整写入并原子移入，失败不留下半个项目。不会自动安装依赖、运行模块或创建线上比赛。
+
+进入生成目录后：
+
+```sh
+pnpm install --frozen-lockfile
+pnpm arena run --bot ./bot.js --seed 42
+pnpm arena replay ./replays/实际文件名.json.gz
+pnpm arena replay ./replays/实际文件名.json.gz --verify --logs
+```
+
+无 `--verify` 的开发包回放命令仅监听 127.0.0.1，输出 URL 并提供固定播放器资源和指定回放，Ctrl+C 停止。运行不依赖平台服务，网页共享同一播放器和 renderer。`arena dev` 的实时运行会话与 Memory 调试服务单独提供。
+
 从仓库根目录执行：
 
 ```sh
@@ -76,4 +99,4 @@ arena --registry ./arena.config.mjs replay ./replays/match.json.gz --verify
 
 其他工具可调用 `runCli(args, { games, cwd, write, signal })`，或注册对象的 `prepare`、`run`、`verify`。`prepare` 固定并验证源码，`run` 每次创建新比赛，`verify` 只读取回放。具体游戏类型保留在 `defineLocalGame` 闭包中，通用命令无需增加游戏分支。
 
-这里实现本地执行与终端回放校验。已保存回放可在网站 `/replays` 页面打开，文件在浏览器内读取，见 [播放器说明](../player/README.md)。CLI 的 `init` 下载、`dev` 实时调试服务尚未接入；完整开发包约定见 [分发设计](../../docs/architecture/distribution-and-development.md)。
+完整开发包约定见 [分发设计](../../docs/architecture/distribution-and-development.md)。本地和网站 `/replays` 共用浏览器播放器，见 [播放器说明](../player/README.md)。

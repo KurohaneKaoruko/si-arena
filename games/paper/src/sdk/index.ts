@@ -33,4 +33,9 @@ export interface PaperSdk {
   safeMoves(observation: PaperObservation): PaperDirection[];
   expansion(observation: PaperObservation): PaperDirection[];
 }
+export interface PaperTickInput {
+  observation: PaperObservation;
+  Memory: Record<string, import("@si-arena/protocol").JsonValue>;
+  sdk: PaperSdk;
+}
 export { PAPER_SDK_SOURCE } from "./source";

@@ -4,6 +4,8 @@
   "files": [
     "dist",
     "bots",
+    "PROMPT.md",
+    "SDK.md",
     "README.md"
   ],
   "type": "module",
