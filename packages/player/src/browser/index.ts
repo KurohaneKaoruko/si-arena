@@ -104,6 +104,9 @@ export async function readBrowserReplay(file: Blob, signal?: AbortSignal): Promi
       if (size > REPLAY_MAX_BYTES) throw new Error("回放解压后不能超过 64 MiB");
       chunks.push(result.value);
     }
+    // Let pending cancellation clicks land before the synchronous decode-and-parse pass.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    signal?.throwIfAborted();
     const bytes = new Uint8Array(size);
     let offset = 0;
     for (const chunk of chunks) {

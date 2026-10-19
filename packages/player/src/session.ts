@@ -49,6 +49,11 @@ export async function createReplaySession<
     manifest: cloneJson(suppliedGame.manifest),
     rules: { ...suppliedGame.rules },
   };
+  await options.yieldControl?.();
+  cancelled();
+  // Single defensive clone: the engine validates this snapshot in place
+  // (detached mode) and the session freezes it, so loading pays for one copy of
+  // an untrusted replay instead of two full transient clones.
   const value = cloneJson(raw, REPLAY_MAX_BYTES);
   const cache = new Map<number, { state: DeepReadonly<State>; bytes: number }>();
   const budget = options.cacheBytes ?? 32 * 1024 * 1024;
@@ -71,8 +76,10 @@ export async function createReplaySession<
     cache.set(state.tick, { state, bytes });
     cachedBytes += bytes;
   };
+  await options.yieldControl?.();
+  cancelled();
   await replayMatch(value, game, {
-    maxBytes: REPLAY_MAX_BYTES,
+    detached: true,
     async onTick({ state }) {
       cancelled();
       if (state.tick % 50 === 0) {
@@ -83,6 +90,8 @@ export async function createReplaySession<
       }
     },
   });
+  cancelled();
+  await options.yieldControl?.();
   cancelled();
   // The engine has checked every field of this detached JSON snapshot.
   const replay = freezeJson(value as Replay<State, Action>);

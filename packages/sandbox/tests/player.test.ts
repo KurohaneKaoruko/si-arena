@@ -1,9 +1,10 @@
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import {
   resolveResourceLimits,
   type JsonValue,
   type ResourceLimitOverrides,
 } from "@si-arena/protocol";
+import { ExecutorProcess } from "../src/process";
 import { MatchLogBudget, SandboxPlayer, SandboxSystemError, validateSource } from "../src/index";
 import type { SandboxOptions } from "../src/index";
 
@@ -333,6 +334,29 @@ test("killed executors return an error, rebuild with a new generation, and retai
   expect(recovered.executionId).not.toBe(before.executionId);
 });
 
+test("a transient rebuild failure is retried on later ticks instead of wedging the player", async () => {
+  const player = await create(
+    `export default ({Memory})=>{Memory.n=(Memory.n??0)+1;return {type:'move'}}`,
+  );
+  await player.execute(0, {});
+  process.kill(player.processId!, "SIGKILL");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const start = vi
+    .spyOn(ExecutorProcess, "start")
+    .mockRejectedValueOnce(new Error("simulated EMFILE"));
+  const failedTick = await player.execute(1, {});
+  expect(failedTick).toMatchObject({ ok: false, error: { type: "EXECUTOR_ERROR" } });
+  // The rebuild closes the dead process before spawning; wait for the mocked
+  // failure to settle so rebuildError is set before the next tick.
+  await vi.waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+  // The failed rebuild must not become a permanent system error: the next tick
+  // triggers a fresh attempt (real start restored) and play continues.
+  const retrying = await player.execute(2, {});
+  expect(retrying).toMatchObject({ ok: false, error: { type: "EXECUTOR_ERROR" } });
+  const recovered = await player.execute(3, {});
+  expect(recovered).toMatchObject({ ok: true, memory: { n: 2 } });
+});
+
 test("wall watchdog kills a delayed executor and allows later ticks to recover", async () => {
   const budget = limits({ cpuMs: 40, wallMs: 80 });
   const player = await create(
@@ -423,4 +447,51 @@ test("oversized source is rejected before creating an executor", async () => {
   await expect(create("x".repeat(1025), { limits: limits({ codeBytes: 1024 }) })).rejects.toThrow(
     "source",
   );
+});
+
+test("large valid sources stay playable within the default CPU budget", async () => {
+  // ~31KiB of statements parses for ~13ms with Acorn and compiles in QuickJS well
+  // below the 20ms budget; when the static check was billed per tick, tick 0 alone
+  // exceeded the budget and the source could never play.
+  const filler = Array.from({ length: 1500 }, (_, i) => `const filler${i}=${i};`).join("");
+  const player = await create(`${filler}export default ()=>({type:'move'})`, {
+    limits: limits({ cpuMs: 20, wallMs: 500 }),
+  });
+  expect((await player.execute(0, {})).ok).toBe(true);
+  expect((await player.execute(1, {})).ok).toBe(true);
+});
+
+test("steady-state ticks do not pay for static source checks", async () => {
+  // Re-parsing ~64KiB with Acorn on every tick kept steady-state CPU around 34ms;
+  // the QuickJS compile alone runs near 9ms, well under the 20ms assertion.
+  const filler = Array.from({ length: 3000 }, (_, i) => `const filler${i}=${i};`).join("");
+  const player = await create(`${filler}export default ()=>({type:'move'})`, {
+    limits: limits({ cpuMs: 100, wallMs: 1000 }),
+  });
+  expect((await player.execute(0, {})).ok).toBe(true);
+  const steady = await player.execute(1, {});
+  expect(steady.ok).toBe(true);
+  expect(steady.resources?.cpuUsedUs).toBeLessThan(20_000);
+});
+
+test("large valid sources pass isolated validation under production budgets", async () => {
+  // ~31KiB parses for ~13ms with Acorn; when the static check was billed inside
+  // the validation window, valid sources of this size were rejected as CPU_LIMIT.
+  const filler = Array.from({ length: 1500 }, (_, i) => `const filler${i}=${i};`).join("");
+  expect(
+    await validateSource({
+      source: `${filler}export default ()=>({type:'move'})`,
+      limits: limits({ cpuMs: 20, wallMs: 500 }),
+      isolation: { kind: "local" },
+    }),
+  ).toEqual({ ok: true });
+});
+
+test("sources rejected by the static check still fail the first tick as ENTRYPOINT_ERROR", async () => {
+  const player = await create(`import x from 'x';export default ()=>({type:'move'})`);
+  expect(await player.execute(0, {})).toMatchObject({
+    ok: false,
+    action: { type: "idle" },
+    error: { type: "ENTRYPOINT_ERROR" },
+  });
 });

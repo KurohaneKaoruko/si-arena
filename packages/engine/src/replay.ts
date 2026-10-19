@@ -32,6 +32,14 @@ import {
 
 export interface ReplayOptions<State, Action, Event> {
   maxBytes?: number;
+  /**
+   * Caller asserts raw is already a detached plain-JSON snapshot (for example the
+   * output of cloneJson or JSON.parse). The engine validates it in place instead
+   * of cloning, so loaders that keep their own copy pay for exactly one clone.
+   * maxBytes is not re-checked in detached mode: the caller's snapshot was
+   * already bounded when it was created.
+   */
+  detached?: boolean;
   onTick?(frame: TickFrame<State, Action, Event>): void | Promise<void>;
 }
 
@@ -48,7 +56,8 @@ export async function replayMatch<
 ): Promise<MatchSummary<State>> {
   try {
     game = snapshotGame(game);
-    const value = cloneJson(raw, options.maxBytes ?? 32 * 1024 * 1024);
+    const value =
+      options.detached === true ? raw : cloneJson(raw, options.maxBytes ?? 32 * 1024 * 1024);
     const replay = record(value, "replay", [
       "formatVersion",
       "matchId",

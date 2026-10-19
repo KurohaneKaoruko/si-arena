@@ -38,7 +38,6 @@ const LEVELS = new Set(["log", "info", "warn", "error", "debug"]);
 export class SandboxPlayer<Action extends JsonValue> {
   private executor: ExecutorProcess | undefined;
   private rebuilding: Promise<void> | undefined;
-  private rebuildError: Error | undefined;
   private committed: JsonObject = {};
   private busy = false;
   private closed = false;
@@ -129,7 +128,9 @@ export class SandboxPlayer<Action extends JsonValue> {
           }),
         ]);
       }
-      if (this.rebuildError) throw this.rebuildError;
+      // A failed rebuild leaves the executor unusable, so the next tick takes
+      // the restart path again: transient spawn failures cost one tick each and
+      // never wedge the player for the rest of the match.
       const executor = this.executor;
       if (!executor?.usable) {
         this.rebuild();
@@ -281,9 +282,9 @@ export class SandboxPlayer<Action extends JsonValue> {
         this.executor = undefined;
       }
     })()
-      .catch((error: unknown) => {
-        this.rebuildError =
-          error instanceof Error ? error : new SandboxSystemError("Cannot rebuild executor");
+      .catch(() => {
+        // Spawn failures are per-tick by design; the next execute retries via
+        // the unusable-executor path. Swallowing keeps close() rejection-free.
       })
       .finally(() => {
         this.rebuilding = undefined;

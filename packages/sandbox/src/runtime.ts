@@ -52,6 +52,8 @@ export interface RuntimeOutput {
   profile: Record<string, number>;
 }
 
+let validatedSource: string | null = null;
+
 export function runGuest(
   input: ExecuteTickInput,
   sdkSource: string,
@@ -59,6 +61,27 @@ export function runGuest(
   onLog: (log: PlayerLog) => void,
   onTruncated: () => void,
 ): RuntimeOutput {
+  // Static checks enforce platform policy, not player execution: they run once per
+  // process per source and stay outside the metered window so large valid sources
+  // cannot burn the cpuMs budget before their first tick.
+  if (input.source !== validatedSource) {
+    try {
+      checkSource(input.source);
+    } catch (error) {
+      if (error instanceof SyntaxError || error instanceof RangeError) {
+        return {
+          payload: JSON.stringify({
+            ok: false,
+            error: { type: "ENTRYPOINT_ERROR", message: "Invalid or unsupported player module" },
+          }),
+          cpuUsedUs: 0,
+          profile: {},
+        };
+      }
+      throw error;
+    }
+    validatedSource = input.source;
+  }
   return withRuntime(input.limits, (context, keep, unwrap, resourceFailure, mark) => {
     const emit = keep(
       context.newFunction("emitLog", (level, message) => {
@@ -99,7 +122,6 @@ export function runGuest(
       throw new Error("Trusted SDK failed to initialize");
     }
     try {
-      checkSource(input.source);
       const module = unwrap(context.evalCode(input.source, "player.js", { type: "module" }));
       const entry = keep(context.getProp(module, "default"));
       mark("sourceUs");
@@ -134,9 +156,25 @@ export function runGuest(
 }
 
 export function compileSource(source: string, limits: ResourceLimits): RuntimeOutput {
+  // Same policy-check placement as runGuest: unbilled, so large valid sources are
+  // never rejected because parsing burned the validation CPU budget.
+  try {
+    checkSource(source);
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof RangeError) {
+      return {
+        payload: JSON.stringify({
+          ok: false,
+          error: { type: "ENTRYPOINT_ERROR", message: "Invalid or unsupported player module" },
+        }),
+        cpuUsedUs: 0,
+        profile: {},
+      };
+    }
+    throw error;
+  }
   return withRuntime(limits, (context, _keep, unwrap) => {
     try {
-      checkSource(source);
       unwrap(context.evalCode(source, "player.js", { type: "module", compileOnly: true }));
       return '{"ok":true}';
     } catch {

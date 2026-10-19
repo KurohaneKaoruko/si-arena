@@ -114,3 +114,16 @@ test("small cache budgets evict checkpoints and retain the initial world", async
     /cache budget/,
   );
 });
+
+test("the caller's raw value stays unfrozen and detached from the loaded session", async () => {
+  const { game, replay } = await fixture();
+  const raw = JSON.parse(JSON.stringify(replay)) as typeof replay;
+  const session = await createReplaySession(raw, game);
+  expect(Object.isFrozen(raw)).toBe(false);
+  expect(Object.isFrozen(raw.ticks)).toBe(false);
+  // Mutating the caller's copy after loading cannot affect playback state.
+  raw.ticks.length = 0;
+  const ticks = session.replay.ticks.length;
+  expect(ticks).toBeGreaterThan(0);
+  expect(session.frame(ticks).state.tick).toBe(ticks);
+});

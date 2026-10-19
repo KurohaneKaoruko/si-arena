@@ -34,6 +34,22 @@ test("replay uses stored S0, regenerates events and never initializes or execute
   expect(events).toEqual([[{ type: "advance" }], [{ type: "advance" }], [{ type: "advance" }]]);
 });
 
+const freezeDeep = (node: unknown) => {
+  if (node === null || typeof node !== "object") return;
+  Object.freeze(node);
+  for (const value of Object.values(node)) freezeDeep(value);
+};
+
+test("detached replays are validated in place without copying or mutating the snapshot", async () => {
+  const { replay, summary } = await saved();
+  const detached = cloneJson(replay, 32 * 1024 * 1024);
+  expect(await replayMatch(detached, toyGame, { detached: true })).toEqual(summary);
+  // Validation must be read-only: even a fully frozen caller snapshot is accepted.
+  const frozen = structuredClone(detached);
+  freezeDeep(frozen);
+  await expect(replayMatch(frozen, toyGame, { detached: true })).resolves.toEqual(summary);
+});
+
 test.each([
   [
     "missing active action",

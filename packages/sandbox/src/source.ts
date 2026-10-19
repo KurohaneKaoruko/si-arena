@@ -1,6 +1,6 @@
 import { parse, type Node } from "acorn";
 
-/** Executed only in the isolated child, within the CPU/wall budget. */
+/** Executed only in the isolated child; platform policy, billed outside the player cpuMs budget. */
 export function checkSource(source: string): void {
   const ast = parse(source, { ecmaVersion: "latest", sourceType: "module" });
   walk(ast, 0);
