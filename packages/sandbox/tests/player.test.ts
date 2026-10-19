@@ -47,20 +47,26 @@ async function create(
 
 // The CPU thresholds in the performance tests below were calibrated on a fast
 // reference core; shared CI runners execute the same WASM work 2-3x slower.
-// Measure this machine's steady player cost and scale budgets and thresholds
-// by the same factor, keeping the regression signal (roughly a 2x cost step)
-// detectable on any hardware.
+// Measure this machine's steady guest speed with a spin of the reference size
+// and scale budgets and thresholds by the same factor, keeping the regression
+// signal (roughly a 2x cost step) detectable on any hardware. The calibration
+// workload must dwarf the thread CPU accounting granularity: billed cpuUsedUs
+// covers only guest work (~120us for a trivial tick), and Linux reports thread
+// CPU in scheduler ticks (1-4ms), so a tiny calibration reads as zero there.
 async function cpuSpeedFactor(): Promise<number> {
-  const player = await create("export default ()=>({type:'move'})", {
-    limits: limits({ cpuMs: 1000, wallMs: 10000 }),
-  });
+  const player = await create(
+    `let s=0;for(let i=0;i<200000;i++)s+=i;export default ()=>({type:'move'})`,
+    {
+      limits: limits({ cpuMs: 1000, wallMs: 10000 }),
+    },
+  );
   try {
     // The first tick pays one-time JIT warm-up; the second reflects steady cost.
     await player.execute(0, {});
     const steady = await player.execute(1, {});
     const baseline = steady.resources?.cpuUsedUs ?? 0;
     if (!steady.ok || baseline <= 0) throw new Error("CPU speed calibration failed");
-    return Math.max(1, baseline / 120);
+    return Math.max(1, baseline / 10_000);
   } finally {
     await player.close();
   }
