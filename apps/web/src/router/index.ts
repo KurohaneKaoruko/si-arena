@@ -4,6 +4,12 @@ export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: "/replays",
+      name: "replay",
+      component: () => import("../pages/ReplayPage.vue"),
+      meta: { title: "回放播放器" },
+    },
+    {
       path: "/",
       name: "games",
       component: () => import("../pages/GamesPage.vue"),

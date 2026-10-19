@@ -14,7 +14,13 @@ export interface GameRendererProps<State, Event> {
   progress: number;
 }
 
-export const PLAYBACK_SPEEDS = Object.freeze([0.5, 1, 2, 4, 8] as const);
+export { PLAYBACK_SPEEDS, usePlayback, type AnimationClock, type PlaybackSource } from "./playback";
+export {
+  createReplaySession,
+  REPLAY_MAX_BYTES,
+  type ReplayFrame,
+  type SessionOptions,
+} from "./session";
 
 export interface GamePresentation {
   id: string;

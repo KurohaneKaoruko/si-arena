@@ -79,7 +79,7 @@ apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox�
 
 ## 测试
 
-全仓使用 Vitest，根 `vitest.config.ts` 通过 `test.projects` 发现 apps、packages 与 games 下的项目配置。Node 模块使用 Node 环境；web 与 player 的 Vue 组件使用 jsdom 和 Vue 插件。新增模块沿用对应目录结构，添加自己的 `vitest.config.ts` 即可被发现，项目名须唯一。
+全仓使用 Vitest，根 `vitest.config.ts` 通过 `test.projects` 发现 apps、packages 与 games 下的项目配置。调度、规则和文件读取使用 Node 环境；web 的 Vue 组件使用 jsdom 和 Vue 插件。新增模块沿用对应目录结构，添加自己的 `vitest.config.ts` 即可被发现，项目名须唯一。
 
 `configs/vitest/shared.ts` 统一测试文件模式、mock 清理和 workspace 源码解析。测试使用 `tests/**/*.test.ts`，显式从 Vitest 导入 `test`、`expect` 等 API。源码路径统一维护在 `configs/typescript/test.json`，Vitest 与测试类型检查使用相同映射；生产包的 exports 仍指向 dist。新增游戏的标准根入口、game、rules、sdk、renderer 均可复用映射，引擎 node 子路径也显式映射到源码，自定义公开子路径需补充相应映射。
 
@@ -107,7 +107,11 @@ pnpm arena run --bot ./my-bot.js --opponent ./another-bot.js --matches 20 --seed
 pnpm arena replay ./replays/match-实际文件名.json.gz --verify --logs
 ```
 
-CLI 支持指定 bot、官方或本地对手、顺序批量比赛、gzip 回放及日志校验。输出 JSON Lines，包含发行、完整限额、结果和回放绝对路径。回放无需 bot 文件。根脚本通过可信配置注册游戏，CLI 自身不绑定圈地。命令与接入方式见 [CLI 说明](packages/cli/README.md)。下载初始化和可视化调试页面尚未实现。
+CLI 支持指定 bot、官方或本地对手、顺序批量比赛、gzip 回放及日志校验。输出 JSON Lines，包含发行、完整限额、结果和回放绝对路径。回放无需 bot 文件。根脚本通过可信配置注册游戏，CLI 自身不绑定圈地。命令与接入方式见 [CLI 说明](packages/cli/README.md)。下载初始化和实时本地调试服务尚未实现。
+
+## 网页回放
+
+运行 `pnpm dev:web`，打开 [http://127.0.0.1:5173/replays](http://127.0.0.1:5173/replays)，选择 CLI 生成的 `.json.gz` 文件。文件在浏览器内读取、校验和重演，不上传，不依赖 API 或数据库。支持圈地地图、倍速播放、单步、时间轴、错误跳转、按玩家和级别查看日志，以及动作、CPU 和执行前观察。播放器与游戏 renderer 显式注册，未注册或校验失败的发行不播放。使用与扩展方式见 [播放器说明](packages/player/README.md)。
 
 ## 玩家开发包
 

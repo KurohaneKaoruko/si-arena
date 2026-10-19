@@ -2,10 +2,10 @@
 
 `@si-arena/engine` 编排多人比赛、记录规范动作并验证确定性回放。运行依赖只有 protocol，不导入沙箱、具体游戏、数据库或 Vue。调用方通过工厂提供每位玩家的独立执行适配器。
 
-| 入口                    | 内容                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------- |
-| `@si-arena/engine`      | `runMatch`、`replayMatch`、`MemoryReplaySink`、`stateHash` 与公共契约；可被浏览器导入 |
-| `@si-arena/engine/node` | `ReplayFileSink` 与 `readReplayFile`；Node 文件与 gzip 操作                           |
+| 入口                    | 内容                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| `@si-arena/engine`      | `runMatch`、`replayMatch`、`MemoryReplaySink`、`parseGameState`、`stateHash` 与公共契约；可被浏览器导入 |
+| `@si-arena/engine/node` | `ReplayFileSink` 与 `readReplayFile`；Node 文件与 gzip 操作                                             |
 
 核心 SHA-256 使用 Web Crypto，浏览器需提供 `crypto.subtle` 的安全上下文；Node 要求 26 及以上。
 

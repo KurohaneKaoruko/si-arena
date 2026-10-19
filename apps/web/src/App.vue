@@ -20,6 +20,11 @@ import { RouterLink, RouterView } from "vue-router";
       </RouterLink>
       <nav aria-label="主导航">
         <RouterLink
+          class="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-arena-muted transition-colors hover:bg-arena-card hover:text-arena-text"
+          to="/replays"
+          >回放</RouterLink
+        >
+        <RouterLink
           class="inline-flex min-h-11 items-center rounded-lg px-4 text-sm text-arena-muted transition-colors hover:bg-arena-card hover:text-arena-text"
           to="/"
           >游戏大厅</RouterLink

@@ -424,6 +424,9 @@ importers:
 
   packages/player:
     dependencies:
+      '@si-arena/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../protocol

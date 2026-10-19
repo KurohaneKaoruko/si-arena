@@ -1,10 +1,8 @@
 import type { GameCatalogEntry } from "@si-arena/protocol";
 
-export const PAPER_PALETTE = Object.freeze({
-  neutral: "#162133",
-  grid: "#253348",
-  players: Object.freeze(["#a3e635", "#38bdf8"] as const),
-});
+export { PAPER_PALETTE } from "./palette";
+
+export { drawPaperBoard, paperPlayerSummaries } from "./board";
 
 export const paperPresentation = {
   id: "paper",

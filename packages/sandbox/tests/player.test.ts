@@ -334,9 +334,10 @@ test("killed executors return an error, rebuild with a new generation, and retai
 });
 
 test("wall watchdog kills a delayed executor and allows later ticks to recover", async () => {
+  const budget = limits({ cpuMs: 40, wallMs: 80 });
   const player = await create(
     `export default ({Memory})=>{Memory.n=(Memory.n??0)+1;return {type:'move'}}`,
-    { limits: limits({ cpuMs: 40, wallMs: 80 }) },
+    { limits: budget },
   );
   await player.execute(0, {});
   const pid = player.processId!;
@@ -347,8 +348,11 @@ test("wall watchdog kills a delayed executor and allows later ticks to recover",
     error: { type: "EXECUTION_TIMEOUT" },
     memory: { n: 1 },
   });
+  // Rebuilding is asynchronous and has its own startup budget, independent of this 80ms tick.
+  await expect.poll(() => player.processId, { timeout: budget.startupMs }).toBeDefined();
+  expect(player.processId).not.toBe(pid);
   expect(await player.execute(2, {})).toMatchObject({ ok: true, memory: { n: 2 } });
-});
+}, 10000);
 
 test("platform input and trusted parser failures are system errors", async () => {
   const player = await create(`export default ()=>({type:'move'})`, {

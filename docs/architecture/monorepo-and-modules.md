@@ -41,7 +41,7 @@ games/
 - `sandbox` 依赖协议，不依赖账号、排位、游戏画面或数据库。
 - `engine` 依赖协议，通过执行适配器调用沙箱，不依赖某个具体游戏。
 - 游戏规则和 SDK 依赖协议及必要纯函数，不依赖平台业务。
-- `player` 依赖协议和 Vue，不执行 bot，不导入服务端模块。
+- `player` 依赖协议、引擎的浏览器兼容核心和 Vue，不执行 bot，不导入沙箱或引擎的 Node 文件入口。通用入口提供校验会话与调度，`player/browser` 提供文件读取与可信 renderer 注册。
 - `worker` 组装引擎、沙箱、游戏与持久化适配器。
 - `cli` 对应 npm 包 `@si-arena/cli`，提供 `arena` 可执行入口，组装同样的引擎、沙箱和游戏，使用本地文件代替数据库；`init` 按游戏下载对应开发包。
 - `web` 组装通用播放器与已注册游戏 renderer。
@@ -60,7 +60,7 @@ games/
 
 整个 monorepo 使用 Vitest，不为各游戏引入不同测试框架。根 `vitest.config.ts` 只承担项目发现、统一报告与 V8 覆盖率；各 workspace 用 `vitest.config.ts` 声明唯一项目名、根目录与环境，并显式合并 `configs/vitest/shared.ts`。需要分离 renderer 与规则测试时，新增命名配置如 `vitest.renderer.config.ts`，根目录的通配发现无需逐个登记。
 
-纯规则、协议、引擎、沙箱、CLI、server 和 worker 使用 Node 环境。Vue 组件测试使用 jsdom 和 Vue 插件，不能将 DOM 全局环境注入纯规则测试。测试文件统一为 `tests/**/*.test.ts`，辅助文件同样使用 TypeScript；配置采用 runner loader，支持仓库约定的无后缀配置导入。
+纯规则、协议、引擎、沙箱、CLI、server 和 worker 使用 Node 环境。Vue 组件测试使用 jsdom 和 Vue 插件，不能将 DOM 全局环境注入纯规则测试。测试文件统一为 `tests/**/*.test.ts`，辅助文件同样使用 TypeScript；配置采用 runner loader，支持仓库约定的无后缀配置导入。按子目录分组的项目在 `mergeConfig` 合并后显式替换最终 `test.include`，避免数组拼接保留共享的宽泛模式，导致不同项目重复收集同一批测试。
 
 测试中的跨包引用仍使用公开包名与子路径，由 `configs/typescript/test.json` 的测试专用 paths 和 `configs/vitest/shared.ts` 的相同映射解析到 workspace 源码。生产 TypeScript 配置与 package exports 不启用测试映射。源码测试不依赖旧 dist；根入口和游戏 game/rules/sdk/renderer 标准子路径已有通配映射，engine/node 也有显式源码映射，新增自定义公开子路径需同步增加测试映射。
 

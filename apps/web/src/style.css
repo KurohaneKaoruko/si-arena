@@ -9,6 +9,7 @@
   --color-arena-text: #f8fafc;
   --color-arena-muted: #a8b8cc;
   --color-arena-accent: #a3e635;
+  --color-arena-danger: #fda4af;
 }
 
 @layer base {
@@ -42,6 +43,12 @@
   }
   .button-secondary {
     @apply inline-flex min-h-11 items-center justify-center rounded-lg border border-arena-border px-5 text-sm font-medium text-arena-text transition-colors hover:border-arena-accent hover:text-arena-accent;
+  }
+  .button-secondary:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+  .replay-input {
+    @apply min-h-11 min-w-0 rounded-lg border border-arena-border bg-arena-background px-3 text-sm text-arena-text;
   }
   .skip-link {
     @apply fixed top-3 left-3 z-50 -translate-y-24 rounded-lg bg-arena-accent px-5 py-3 font-medium text-arena-background focus:translate-y-0;

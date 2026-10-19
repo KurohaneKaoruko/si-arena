@@ -4,6 +4,7 @@
     "rootDir": "../..",
     "noEmit": true,
     "paths": {
+      "@si-arena/player/browser": ["../../packages/player/src/browser/index.ts"],
       "@si-arena/engine/node": ["../../packages/engine/src/node/index.ts"],
       "@si-arena/game-*/game": ["../../games/*/src/game.ts"],
       "@si-arena/game-*/sdk": ["../../games/*/src/sdk/index.ts"],
@@ -21,5 +22,5 @@
     "../../packages/*/vitest*.config.ts",
     "../../games/*/vitest*.config.ts"
   ],
-  "exclude": ["../../apps/web/tests/**"]
+  "exclude": ["../../apps/web/tests/**", "../../packages/player/tests/**"]
 }

@@ -12,6 +12,7 @@ interface Manifest {
   version: string;
   exports: Record<string, { import: string; types: string }>;
   dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
 }
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -69,7 +70,10 @@ try {
         "Packed dependencies must not retain workspace links",
       );
     }
-    for (const [name, version] of Object.entries(manifest.dependencies ?? {})) {
+    for (const [name, version] of Object.entries({
+      ...manifest.peerDependencies,
+      ...manifest.dependencies,
+    })) {
       if (!name.startsWith("@si-arena/")) externalDependencies[name] = version;
     }
     for (const [subpath, entry] of Object.entries(manifest.exports)) {
@@ -119,6 +123,7 @@ import { resolveResourceLimits } from "@si-arena/protocol";
 import { paperGame } from "@si-arena/game-paper/game";
 import type { PaperState, PaperAction } from "@si-arena/game-paper/sdk";
 import { MemoryReplaySink, runMatch, replayMatch } from "@si-arena/engine";
+import { createReplaySession } from "@si-arena/player";
 import { defineLocalGame } from "@si-arena/cli";
 import { PAPER_SDK_SOURCE, officialBotUrl } from "@si-arena/game-paper/game";
 const registration = defineLocalGame({game:paperGame,sdkSource:PAPER_SDK_SOURCE,officialBotUrl});
@@ -158,6 +163,8 @@ const played = await runMatch({
 });
 const replayed = await replayMatch(sink.replay,paperGame);
 if(played.result.reason!=="last-survivor" || replayed.finalStateHash!==played.finalStateHash)throw new Error("Packed engine/replay mismatch");
+const playback = await createReplaySession(sink.replay,paperGame);
+if(playback.frame(played.result.completedTicks).state.tick!==played.result.completedTicks || playback.frame(0).record!==null)throw new Error("Packed playback seek failed");
 `,
   );
   await writeFile(

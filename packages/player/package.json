@@ -2,13 +2,18 @@
   "name": "@si-arena/player",
   "version": "0.0.0",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser/index.d.ts",
+      "import": "./dist/browser/index.js"
     }
   },
   "publishConfig": {
@@ -16,12 +21,13 @@
   },
   "scripts": {
     "build": "tsdown --config ../../tsdown.config.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "dev": "tsdown --config ../../tsdown.config.ts --watch",
     "prepack": "pnpm build",
-    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project player"
+    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project player --project player-browser"
   },
   "dependencies": {
+    "@si-arena/engine": "workspace:*",
     "@si-arena/protocol": "workspace:*"
   },
   "devDependencies": {

@@ -76,4 +76,4 @@ arena --registry ./arena.config.mjs replay ./replays/match.json.gz --verify
 
 其他工具可调用 `runCli(args, { games, cwd, write, signal })`，或注册对象的 `prepare`、`run`、`verify`。`prepare` 固定并验证源码，`run` 每次创建新比赛，`verify` 只读取回放。具体游戏类型保留在 `defineLocalGame` 闭包中，通用命令无需增加游戏分支。
 
-这里实现本地执行与终端回放校验。`init` 下载、`dev` 可视化调试及浏览器播放器尚未接入；完整开发包约定见 [分发设计](../../docs/architecture/distribution-and-development.md)。
+这里实现本地执行与终端回放校验。已保存回放可在网站 `/replays` 页面打开，文件在浏览器内读取，见 [播放器说明](../player/README.md)。CLI 的 `init` 下载、`dev` 实时调试服务尚未接入；完整开发包约定见 [分发设计](../../docs/architecture/distribution-and-development.md)。
