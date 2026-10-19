@@ -2,6 +2,8 @@ import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { authRoutes } from "./auth/routes";
+import { gamesRoutes } from "./games/routes";
+import { matchesRoutes } from "./matches/routes";
 import { gameCatalog } from "./games";
 
 export function buildApp(
@@ -26,6 +28,10 @@ export function buildApp(
     if (!game) return reply.code(404).send({ code: "GAME_NOT_FOUND", message: "游戏不存在" });
     return game;
   });
-  if (options.db) void app.register(authRoutes(options.db), { prefix: "/api/auth" });
+  if (options.db) {
+    void app.register(authRoutes(options.db), { prefix: "/api/auth" });
+    void app.register(gamesRoutes(options.db));
+    void app.register(matchesRoutes(options.db));
+  }
   return app;
 }

@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
-import type { FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { sessions, users } from "../db/schema";
 import type { Executor } from "../db";
+import { sendError } from "../http/errors";
 import { createSessionToken, hashSessionToken, parseBearerAuthorization } from "./token";
 
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -58,4 +59,18 @@ export async function loadSession(
     official: row.official,
     passwordHash: row.passwordHash,
   };
+}
+
+/** Loads the session or replies with 401 and reports failure via null. */
+export async function requireSession(
+  db: Executor,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<SessionContext | null> {
+  const session = await loadSession(db, request);
+  if (session === null) {
+    sendError(reply, 401, "UNAUTHORIZED", "未登录或登录已过期");
+    return null;
+  }
+  return session;
 }

@@ -322,6 +322,9 @@ importers:
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@si-arena/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.4(@types/pg@8.23.1)(pg@8.23.1)

@@ -80,6 +80,18 @@ worker 用短事务锁定本机支持且有资源容量的任务，设置 `runni
 
 官方账号在 server 启动时幂等初始化：upsert `official` 用户（无密码、带官方标记），并为每个已注册游戏读取其官方 bot 源码，写入或更新 `game_entries` 的源码、字节数与协议版本；排位分与比赛统计不受初始化影响。官方 bot 源码超过当前发行 `codeBytes` 限制时启动失败并报告明确错误。
 
+### 游戏参赛与匹配 API 契约
+
+`GET /games/:gameId/me`（认证）返回 `{ "entry": { rating, matchesPlayed, wins, draws, losses }, "code": { source, sourceBytes, botProtocolVersion, updatedAt } | null, canMatch, cannotMatchReason }`；`cannotMatchReason` 取 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`，可为 null。
+
+`PUT /games/:gameId/me/code`（认证）请求体为 `text/plain` 的源码文本，请求字节上限为当前发行 `resolvedLimits.codeBytes`。请求体必须是合法 UTF-8 文本，解码失败或空请求体返回 400 `VALIDATION_ERROR`。服务端运行沙箱静态校验（受限 AST 检查 + 同版 QuickJS compileOnly），同时校验数每进程最多 2，饱和返回 429。成功覆盖最新源码并返回 `{ sourceBytes, botProtocolVersion, updatedAt }`，排位分与比赛统计保持不变；校验失败返回 400 `CODE_INVALID`，原代码不变；超限返回 413。
+
+`POST /games/:gameId/matches`（认证）必须携带 1–100 字符的 `Idempotency-Key` 请求头。相同用户与键的重复请求返回 200 和已有比赛；同键不同游戏返回 409 `IDEMPOTENCY_MISMATCH`。建局在单事务中选择对手、冻结游戏发行/配置/resolvedLimits/botProtocolVersion 与随机 uint32 种子，写入 `pending` 比赛与两名参与者（发起者 slot 0，用户名与官方标记快照）。对手选择：同游戏非本人、非官方、排位分差不超过 250 的选手中取绝对分差最小者（并列随机），存在其他候选时排除最近一场已完成比赛的对手；无普通候选时直接选官方账号（不受分差限制）。已有未完成主动比赛时返回 409 `MATCH_ALREADY_PENDING` 并携带 `matchId`；未上传代码、协议不兼容或超体积分别返回 409 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`。成功创建返回 201，响应为比赛详情。
+
+`GET /games/:gameId/leaderboard`（公开）分页参数 `page`（默认 1，钳制到 1–1,000,000）与 `limit`（默认 50，钳制到 1–100）；缺省或空参数取默认值，非法数值视为默认，越界数值被钳制，不会因极端参数报错。返回 `{ total, page, limit, players: [{ rank, userId, username, official, rating, matchesPlayed, wins, draws, losses }] }`，名次用窗口函数按内部精确分计算，精确分相同并列，展示顺序按稳定用户 ID。
+
+`GET /games/:gameId/me/matches`（认证）按创建时间倒序分页返回 `{ total, page, limit, matches }`（分页参数与钳制规则同排行榜），包含用户作为发起者或对手的比赛。`GET /matches/:matchId`（公开）返回 `{ id, gameId, status, createdAt, updatedAt, release, seed, initiatorId, participants, result?, failureReason? }`；`participants` 为创建时快照，`completed` 比赛附带 `result` 与结算后的 `rank`/`ratingBefore`/`ratingAfter`，`failed` 附带受控 `failureReason`；未知 ID 返回 404 `MATCH_NOT_FOUND`。
+
 ## API
 
 统一前缀为 `/api`，以下省略。

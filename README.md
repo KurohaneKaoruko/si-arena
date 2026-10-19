@@ -52,7 +52,7 @@ pnpm dev
 
 源码的相对 TypeScript 导入省略扩展名，例如 `import { buildApp } from "./app"`。TypeScript 使用 Bundler 模块解析并负责类型检查；Node 应用和共享包通过根 `tsdown.config.ts` 构建 ESM 与类型声明，保持各包既有 dist 路径，输出中的导入由构建器处理为 Node 可直接加载的形式。前端继续使用 Vite；Vue、CSS 等资源引用保留扩展名。
 
-API 提供 `/health`、`/api/games`、`/api/games/:gameId`，以及 `/api/auth` 下的注册、登录、当前会话、登出与密码修改接口。health 仅表示 HTTP 进程存活，不代表数据库或比赛执行服务就绪。worker 入口负责读取配置，不自动创建比赛。
+API 提供 `/health`、`/api/games`、`/api/games/:gameId`，`/api/auth` 下的注册、登录、当前会话、登出与密码修改接口，以及按游戏的参赛信息（`/me`）、代码上传（`PUT /me/code`，text/plain）、主动匹配（`POST /matches`，幂等键请求头）、排行榜与比赛详情查询。上传走沙箱静态校验（受限 AST + 同版 QuickJS compileOnly）。health 仅表示 HTTP 进程存活，不代表数据库或比赛执行服务就绪。worker 入口负责读取配置，不自动创建比赛。
 
 | 命令                                   | 用途                         |
 | -------------------------------------- | ---------------------------- |

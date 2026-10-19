@@ -15,6 +15,7 @@
   "dependencies": {
     "@si-arena/game-paper": "workspace:*",
     "@si-arena/protocol": "workspace:*",
+    "@si-arena/sandbox": "workspace:*",
     "drizzle-orm": "catalog:",
     "fastify": "catalog:",
     "pg": "catalog:"

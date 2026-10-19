@@ -5,3 +5,4 @@ export * from "./game";
 export * from "./execution";
 export * from "./replay";
 export * from "./auth";
+export * from "./match";

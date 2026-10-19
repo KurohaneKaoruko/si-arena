@@ -4,6 +4,7 @@ import {
   timingSafeEqual,
   type ScryptOptions,
 } from "node:crypto";
+import { createConcurrencyLimiter } from "../concurrency";
 
 const SCRYPT_OPTIONS: ScryptOptions = { N: 131072, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
 const SALT_BYTES = 16;
@@ -77,19 +78,7 @@ export interface HashLimiter {
   release(): void;
 }
 
-export function createHashLimiter(maxConcurrent: number): HashLimiter {
-  let active = 0;
-  return {
-    acquire: () => {
-      if (active >= maxConcurrent) return false;
-      active += 1;
-      return true;
-    },
-    release: () => {
-      active = Math.max(0, active - 1);
-    },
-  };
-}
+export const createHashLimiter = createConcurrencyLimiter;
 
 /** At most 2 password hashes run per process; excess requests fail fast instead of queueing. */
-export const passwordHashLimiter: HashLimiter = createHashLimiter(2);
+export const passwordHashLimiter: HashLimiter = createConcurrencyLimiter(2);
