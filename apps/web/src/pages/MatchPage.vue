@@ -175,7 +175,7 @@ function delta(before?: number, after?: number) {
             </h2>
             <span
               v-if="p.rank"
-              class="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-soft font-mono text-xs font-semibold text-accent"
+              class="inline-flex size-7 shrink-0 items-center justify-center rounded-control bg-accent-soft font-mono text-xs font-semibold text-accent"
               >#{{ p.rank }}</span
             >
           </div>

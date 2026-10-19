@@ -22,9 +22,9 @@ defineEmits<{ retry: [] }>();
       <span class="sr-only">正在加载…</span>
       <p v-if="message" class="text-sm text-soft">{{ message }}</p>
       <div class="space-y-2.5" :class="message ? 'mt-3' : ''" aria-hidden="true">
-        <div class="h-3 w-2/5 animate-pulse rounded-full bg-muted"></div>
-        <div class="h-3 w-4/5 animate-pulse rounded-full bg-muted"></div>
-        <div class="h-3 w-3/5 animate-pulse rounded-full bg-muted"></div>
+        <div class="h-3 w-2/5 animate-pulse rounded-control bg-muted"></div>
+        <div class="h-3 w-4/5 animate-pulse rounded-control bg-muted"></div>
+        <div class="h-3 w-3/5 animate-pulse rounded-control bg-muted"></div>
       </div>
     </div>
     <div

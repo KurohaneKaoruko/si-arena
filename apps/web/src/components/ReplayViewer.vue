@@ -4,6 +4,7 @@ import { PLAYBACK_SPEEDS, usePlayback } from "@si-arena/player";
 import type { BrowserReplaySession } from "@si-arena/player/browser";
 import AppBadge from "./ui/AppBadge.vue";
 import AppButton from "./ui/AppButton.vue";
+import AppSelect from "./ui/AppSelect.vue";
 
 const props = defineProps<{
   session: BrowserReplaySession;
@@ -47,6 +48,19 @@ const observationOpen = ref(false);
 function own<T>(map: Readonly<Record<string, T>> | undefined, id: string): T | undefined {
   return map && Object.hasOwn(map, id) ? map[id] : undefined;
 }
+const speedOptions = computed(() =>
+  PLAYBACK_SPEEDS.map((value) => ({ value: String(value), label: `${value}×` })),
+);
+const playerOptions = computed(() =>
+  participants.value.map((player) => ({
+    value: player.id,
+    label: `P${player.slot + 1} · ${player.name}`,
+  })),
+);
+const levelOptions = [
+  { value: "all", label: "全部" },
+  ...["log", "info", "warn", "error", "debug"].map((name) => ({ value: name, label: name })),
+];
 const selectedLogs = computed(() =>
   (own(view.value.record?.logs, playerId.value) ?? []).filter(
     (log) => level.value === "all" || level.value === log.level,
@@ -144,8 +158,8 @@ function toggle() {
 function seek(event: Event) {
   playback.seek(Number((event.target as HTMLInputElement).value));
 }
-function setSpeed(event: Event) {
-  playback.setSpeed(Number((event.target as HTMLSelectElement).value));
+function setSpeed(value: string) {
+  playback.setSpeed(Number(value));
 }
 function jumpError(direction: -1 | 1) {
   playback.jumpError(direction);
@@ -246,14 +260,17 @@ function keyboard(event: KeyboardEvent) {
               @click="playback.step(1)"
               >下一步</AppButton
             >
-            <label class="ml-auto flex items-center gap-2 text-sm text-soft"
-              >速度
-              <select class="select w-auto" aria-label="播放速度" :value="speed" @change="setSpeed">
-                <option v-for="value in PLAYBACK_SPEEDS" :key="value" :value="value">
-                  {{ value }}×
-                </option>
-              </select>
-            </label>
+            <span class="ml-auto flex items-center gap-2 text-sm text-soft">
+              速度
+              <AppSelect
+                class="w-20"
+                size="sm"
+                label="播放速度"
+                :model-value="String(speed)"
+                :options="speedOptions"
+                @update:model-value="setSpeed"
+              />
+            </span>
           </div>
           <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
             <label class="flex items-center gap-2 text-sm text-soft" for="replay-tick"
@@ -341,12 +358,15 @@ function keyboard(event: KeyboardEvent) {
                 : "初始世界 S0，还没有执行记录"
             }}
           </p>
-          <label class="mt-3 block text-xs text-soft" for="diagnostic-player">选手</label>
-          <select id="diagnostic-player" v-model="playerId" class="select mt-1 w-full">
-            <option v-for="player in participants" :key="player.id" :value="player.id">
-              P{{ player.slot + 1 }} · {{ player.name }}
-            </option>
-          </select>
+          <p class="mt-3 text-xs text-soft">选手</p>
+          <AppSelect
+            id="diagnostic-player"
+            class="mt-1 w-full"
+            label="选手"
+            :model-value="playerId"
+            :options="playerOptions"
+            @update:model-value="playerId = $event"
+          />
           <div
             v-if="selectedError"
             class="mt-3 min-w-0 rounded-control border border-danger/25 bg-danger-soft p-3"
@@ -431,18 +451,18 @@ function keyboard(event: KeyboardEvent) {
             view.record ? `INPUT TICK ${view.record.tick}` : "S0"
           }}</span>
         </h2>
-        <label class="flex items-center gap-2 text-xs text-soft" for="log-level"
-          >日志级别<select id="log-level" v-model="level" class="select w-auto">
-            <option value="all">全部</option>
-            <option
-              v-for="name in ['log', 'info', 'warn', 'error', 'debug']"
-              :key="name"
-              :value="name"
-            >
-              {{ name }}
-            </option>
-          </select></label
-        >
+        <span class="flex items-center gap-2 text-xs text-soft">
+          日志级别
+          <AppSelect
+            id="log-level"
+            class="w-28"
+            size="sm"
+            label="日志级别"
+            :model-value="level"
+            :options="levelOptions"
+            @update:model-value="level = $event"
+          />
+        </span>
       </div>
       <p v-if="logsTruncated" class="mt-3 text-sm text-warning">
         该 tick 的日志已达到预算，部分内容被截断。

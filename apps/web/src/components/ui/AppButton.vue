@@ -31,7 +31,7 @@ const variants = {
 } as const;
 
 const sizes = {
-  sm: "min-h-8 rounded-md px-2.5 text-[13px]",
+  sm: "min-h-8 rounded-control px-2.5 text-[13px]",
   md: "min-h-9 rounded-control px-3.5 text-sm",
   lg: "min-h-11 rounded-control px-5 text-[15px]",
 } as const;

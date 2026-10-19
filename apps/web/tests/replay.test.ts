@@ -33,13 +33,14 @@ test("timeline, keyboard and error navigation preserve S0/input tick semantics a
   expect(wrapper.find("img").exists()).toBe(false);
   expect(wrapper.find("script").exists()).toBe(false);
   expect(wrapper.text()).toContain("1.23 ms");
-  await wrapper.get("#log-level").setValue("warn");
+  await wrapper.get("#log-level").trigger("click");
+  await wrapper.get('[role="option"][data-value="warn"]').trigger("click");
   expect(wrapper.text()).toContain("watch the trail");
   expect(wrapper.text()).not.toContain("<img src=x onerror=alert(1)>");
   await wrapper.get('[aria-label="回到初始世界"]').trigger("click");
   const nextError = wrapper.findAll("button").find((button) => button.text() === "下一处错误")!;
   await nextError.trigger("click");
-  expect(wrapper.get("#diagnostic-player").element).toHaveProperty("value", "other");
+  expect(wrapper.get("#diagnostic-player").text()).toContain("Official");
   expect(wrapper.text()).toContain("test failure");
   await wrapper.get("canvas").trigger("keydown", { key: "End" });
   expect(wrapper.text()).toContain("终局排名");

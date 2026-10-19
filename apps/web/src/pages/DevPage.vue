@@ -206,7 +206,7 @@ onBeforeUnmount(() => {
           已完成 {{ current.completedTicks }} / {{ current.maxTicks }} tick
         </p>
         <div
-          class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+          class="mt-2 h-1.5 w-full overflow-hidden rounded-control bg-muted"
           role="progressbar"
           aria-label="比赛进度"
           :aria-valuenow="current.completedTicks"
@@ -214,7 +214,7 @@ onBeforeUnmount(() => {
           :aria-valuemax="current.maxTicks"
         >
           <div
-            class="h-full rounded-full bg-accent transition-[width] duration-500"
+            class="h-full rounded-control bg-accent transition-[width] duration-500"
             :style="{ width: `${progressPercent}%` }"
           />
         </div>

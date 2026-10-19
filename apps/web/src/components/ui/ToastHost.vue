@@ -33,7 +33,7 @@ const live = computed(() => (current.value?.tone === "danger" ? "assertive" : "p
         <p class="min-w-0 flex-1 text-sm leading-6 text-ink">{{ current.message }}</p>
         <button
           type="button"
-          class="-mt-0.5 -mr-1 shrink-0 rounded-md px-1.5 py-0.5 text-sm leading-5 text-faint transition hover:bg-muted hover:text-ink"
+          class="-mt-0.5 -mr-1 shrink-0 rounded-control px-1.5 py-0.5 text-sm leading-5 text-faint transition hover:bg-muted hover:text-ink"
           aria-label="关闭提示"
           @click="dismiss"
         >

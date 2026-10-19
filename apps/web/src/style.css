@@ -24,8 +24,8 @@
   --color-warning: #b45309;
   --color-warning-soft: #fffbeb;
 
-  --radius-card: 0.75rem;
-  --radius-control: 0.5rem;
+  --radius-card: 0.5rem;
+  --radius-control: 0.25rem;
 
   --shadow-card: 0 1px 2px 0 rgb(24 24 27 / 0.04);
   --shadow-card-hover: 0 2px 8px 0 rgb(24 24 27 / 0.06);
@@ -74,10 +74,6 @@
 @utility input {
   @apply block min-h-10 w-full min-w-0 rounded-control border border-line bg-surface px-3 text-sm text-ink transition placeholder:text-faint hover:border-line-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/10 disabled:cursor-not-allowed disabled:bg-subtle disabled:opacity-60;
   overscroll-behavior: contain;
-}
-
-@utility select {
-  @apply input cursor-pointer pr-8;
 }
 
 @layer components {

@@ -55,7 +55,7 @@ function change(value: number) {
           <td class="data-cell">
             <span
               v-if="p.rank <= 3"
-              class="inline-flex size-6 items-center justify-center rounded-full bg-accent-soft font-mono text-xs font-semibold text-accent"
+              class="inline-flex size-6 items-center justify-center rounded-control bg-accent-soft font-mono text-xs font-semibold text-accent"
               >{{ p.rank }}</span
             >
             <span v-else class="font-mono text-xs text-faint">{{ p.rank }}</span>

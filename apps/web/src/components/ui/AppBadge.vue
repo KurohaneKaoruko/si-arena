@@ -18,7 +18,7 @@ const tones = {
 
 <template>
   <span
-    class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
+    class="inline-flex items-center gap-1 rounded-control border px-2 py-0.5 text-xs font-medium"
     :class="[tones[tone], mono ? 'font-mono' : '']"
   >
     <slot />

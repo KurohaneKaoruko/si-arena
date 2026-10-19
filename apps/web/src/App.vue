@@ -55,7 +55,7 @@ function navClass(target: string, exact = false) {
       <div class="mx-auto flex h-14 w-full max-w-5xl items-center gap-3 px-5 sm:px-8">
         <RouterLink to="/" class="flex items-center gap-2" aria-label="SI Arena 首页">
           <span
-            class="flex size-7 items-center justify-center rounded-md bg-ink font-mono text-[11px] font-semibold text-white"
+            class="flex size-7 items-center justify-center rounded-control bg-ink font-mono text-[11px] font-semibold text-white"
             aria-hidden="true"
             >SI</span
           >
