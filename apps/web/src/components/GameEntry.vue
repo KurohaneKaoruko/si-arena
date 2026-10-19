@@ -131,7 +131,7 @@ onUnmounted(() => {
     <dl class="grid grid-cols-3 gap-4 border-b border-arena-border pb-6">
       <div>
         <dt class="text-sm text-arena-muted">排位分</dt>
-        <dd class="mt-2 font-mono text-2xl">{{ data.entry.rating.toFixed(1) }}</dd>
+        <dd class="mt-2 font-mono text-2xl">{{ data.entry.rating.toFixed(2) }}</dd>
       </div>
       <div>
         <dt class="text-sm text-arena-muted">已赛</dt>

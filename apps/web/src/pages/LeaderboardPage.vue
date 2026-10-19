@@ -52,7 +52,7 @@ function change(value: number) {
               {{ p.username
               }}<span v-if="p.official" class="ml-2 text-xs text-arena-accent">官方</span>
             </td>
-            <td class="p-4 font-mono text-arena-accent">{{ p.rating.toFixed(1) }}</td>
+            <td class="p-4 font-mono text-arena-accent">{{ p.rating.toFixed(2) }}</td>
             <td class="p-4 font-mono">{{ p.matchesPlayed }}</td>
             <td class="hidden whitespace-nowrap p-4 font-mono text-arena-muted sm:table-cell">
               {{ p.wins }} / {{ p.draws }} / {{ p.losses }}

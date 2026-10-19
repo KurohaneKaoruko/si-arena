@@ -87,7 +87,7 @@ onUnmounted(cancel);
 function delta(before?: number, after?: number) {
   if (before === undefined || after === undefined) return "";
   const value = after - before;
-  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`;
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
 }
 </script>
 <template>
@@ -145,7 +145,7 @@ function delta(before?: number, after?: number) {
           <p v-if="p.ratingAfter !== undefined" class="mt-4 text-sm text-arena-muted">
             排位分
             <span class="font-mono text-arena-text"
-              >{{ p.ratingBefore?.toFixed(1) }} → {{ p.ratingAfter.toFixed(1) }}</span
+              >{{ p.ratingBefore?.toFixed(2) }} → {{ p.ratingAfter.toFixed(2) }}</span
             ><span
               class="ml-2 font-mono"
               :class="
