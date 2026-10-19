@@ -1,0 +1,14 @@
+.git
+.zcode
+node_modules
+**/node_modules
+**/dist
+coverage
+data
+replays
+.changeset
+.env
+.env.*
+!.env.example
+*.log
+*.tgz

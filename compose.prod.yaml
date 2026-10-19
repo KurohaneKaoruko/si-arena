@@ -1,0 +1,123 @@
+# 生产部署编排。用法（务必带 --env-file .env.prod）：
+#   docker compose --env-file .env.prod -f compose.prod.yaml up -d --build
+#   docker compose --env-file .env.prod -f compose.prod.yaml --profile tools run --rm seed-releases
+# 详细步骤见 docs/architecture/deployment.md。
+name: si-arena
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: si_arena
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: si_arena
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U si_arena -d si_arena"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # 一次性迁移服务：server/worker 等它成功完成后才启动。
+  migrate:
+    build:
+      context: .
+      target: app
+    command: pnpm --filter @si-arena/db db:migrate
+    environment: &app-env
+      DATABASE_URL: postgresql://si_arena:${POSTGRES_PASSWORD}@db:5432/si_arena
+      API_HOST: 0.0.0.0
+      API_PORT: "3000"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      REPLAYS_DIR: /data/replays
+      DEVKITS_DIR: /data/releases
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      WORKER_ISOLATION: local
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  server:
+    build:
+      context: .
+      target: app
+    command: pnpm --filter @si-arena/server start
+    environment: *app-env
+    volumes:
+      - replays_data:/data/replays
+      - releases_data:/data/releases
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      target: app
+    command: pnpm --filter @si-arena/worker start
+    environment: *app-env
+    volumes:
+      # 回放终稿经硬链接发布，server 与 worker 必须共享同一卷。
+      - replays_data:/data/replays
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # 手动工具：把宿主 ./data/releases 的开发包发行拷入共享卷（上线或换发行后执行一次）。
+  seed-releases:
+    build:
+      context: .
+      target: app
+    entrypoint: ["sh", "-c", "cp -a /src/releases/. /data/releases/"]
+    environment: *app-env
+    volumes:
+      - ./data/releases:/src/releases:ro
+      - releases_data:/data/releases
+    restart: "no"
+    profiles: ["tools"]
+
+  caddy:
+    build:
+      context: .
+      target: web
+    environment:
+      # 空值（本地试用）时回退到 :80，只用 HTTP、不申请证书。
+      CADDY_DOMAIN: ${CADDY_DOMAIN:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  replays_data:
+  releases_data:
+  caddy_data:
+  caddy_config:

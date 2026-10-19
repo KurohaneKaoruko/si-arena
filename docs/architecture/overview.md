@@ -74,11 +74,11 @@ worker 持有权威世界和最近成功的 Memory，玩家执行进程不持有
 
 ## 部署与存储
 
-采用 Linux 单机部署，API、主 worker 和玩家执行子进程具有独立生命周期。PostgreSQL 为独立依赖，回放保存到受控数据目录，数据库保存文件引用及摘要。每个 worker 同时执行 2 场圈地比赛。
+采用 Linux 单机部署，API、主 worker 和玩家执行子进程具有独立生命周期。PostgreSQL 为独立依赖，回放保存到受控数据目录，数据库保存文件引用及摘要。每个 worker 同时执行 2 场圈地比赛。具体部署形态、镜像编排与上线步骤见 [部署与发布](deployment.md)。
 
 比赛创建时固定规则发行、实际配置和完整 resolvedLimits；worker 只领取本机已安装且资源容量可满足的发行。每位玩家的最新代码在开局时按该冻结协议再次检查。发行标识不等于代码兼容版本，兼容规则见 [游戏模块](monorepo-and-modules.md)。
 
-线上执行环境使用 Linux 与 cgroup v2，玩家执行子进程具有独立资源组、独立网络命名空间、只读运行文件系统、低权限用户和运行器的 seccomp 配置，不继承 API/数据库密钥。资源组的 `memory.max` 使用该游戏发行的 `resolvedLimits.processMemoryBytes`（平台默认 268435456，即 256MiB），同时设置 `memory.swap.max=0` 和 `pids.max=64`。隔离设施无法建立时拒绝启动比赛执行服务，不回退到无隔离执行。
+线上执行环境使用 Linux 与 cgroup v2，玩家执行子进程具有独立资源组、独立网络命名空间、只读运行文件系统、低权限用户和运行器的 seccomp 配置，不继承 API/数据库密钥。资源组的 `memory.max` 使用该游戏发行的 `resolvedLimits.processMemoryBytes`（平台默认 268435456，即 256MiB），同时设置 `memory.swap.max=0` 和 `pids.max=16`。隔离设施无法建立时拒绝启动比赛执行服务，不回退到无隔离执行。
 
 本地 CLI 复用相同执行代码，但不要求用户安装 PostgreSQL 或运行平台服务。可移植性与操作系统级隔离能力是两回事，不能把本地默认运行方式直接当作线上配置。
 

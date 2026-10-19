@@ -24,7 +24,8 @@
     "test:watch": "vitest --watch --configLoader runner",
     "test:coverage": "vitest run --configLoader runner --coverage",
     "test:artifacts": "pnpm build && node --import tsx scripts/verify-artifacts.ts && node --import tsx scripts/verify-devkits.ts",
-    "example:paper": "pnpm build:packages && pnpm --filter @si-arena/engine example:paper"
+    "example:paper": "pnpm build:packages && pnpm --filter @si-arena/engine example:paper",
+    "publish:packages": "node --import tsx scripts/publish.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "catalog:",

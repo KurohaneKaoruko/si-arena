@@ -13,6 +13,7 @@
 | [tick 执行与回放](execution-and-replay.md) | 动作提交、确定性、回放结构、播放器与兼容性 |
 | [数据模型与 API](data-model-and-api.md) | 最新代码、排位、任务、幂等结算、首版接口 |
 | [本地分发与开发流程](distribution-and-development.md) | 独立下载包、构建、CLI、验证与实施顺序 |
+| [部署与发布](deployment.md) | 生产 compose、镜像、上线步骤、npm 发布与备份 |
 
 ## 架构约束
 

@@ -1,0 +1,21 @@
+# 生产入口：托管 web 静态文件并把 /api、/health 反代到 server。
+# CADDY_DOMAIN 由 compose 提供：未设置或为空时默认 ":80"（本地试用）；设置域名后自动申请 TLS。
+{$CADDY_DOMAIN} {
+	root * /srv/web
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy server:3000
+	}
+	handle /health {
+		reverse_proxy server:3000
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+
+	header /assets/* Cache-Control "public, max-age=31536000, immutable"
+	header /index.html Cache-Control "no-cache"
+}
