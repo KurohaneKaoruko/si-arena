@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { GameCatalogEntry } from "@si-arena/protocol";
+import { parseGame } from "../api/contracts";
+import { session } from "../auth/session";
+import AccountGate from "../components/AccountGate.vue";
+import GameEntry from "../components/GameEntry.vue";
 import { computed } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { useApiResource } from "../composables/useApiResource";
@@ -7,7 +10,7 @@ import { gamePresentations } from "../games/index";
 
 const route = useRoute();
 const path = computed(() => `/api/games/${encodeURIComponent(String(route.params.gameId))}`);
-const { data: game, pending, error, reload } = useApiResource<GameCatalogEntry>(() => path.value);
+const { data: game, pending, error, reload } = useApiResource(() => path.value, parseGame);
 const presentation = computed(() => gamePresentations.get(String(route.params.gameId)));
 const stats = computed(() =>
   game.value && presentation.value ? presentation.value.getStats(game.value) : [],
@@ -31,6 +34,15 @@ const stats = computed(() =>
     </p>
     <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">{{ game.name }}</h1>
     <p class="mt-5 max-w-2xl leading-8 text-arena-muted">{{ game.description }}</p>
+    <nav class="mt-7 flex flex-wrap gap-3" aria-label="游戏导航">
+      <a class="button-primary" href="#participate">上传与参赛</a>
+      <RouterLink class="button-secondary" :to="`/games/${encodeURIComponent(game.id)}/leaderboard`"
+        >排行榜</RouterLink
+      >
+      <RouterLink class="button-secondary" :to="`/games/${encodeURIComponent(game.id)}/matches`"
+        >我的比赛</RouterLink
+      >
+    </nav>
     <dl class="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
       <div v-for="stat in stats" :key="stat.label" class="panel p-5">
         <dt class="text-sm text-arena-muted">{{ stat.label }}</dt>
@@ -44,6 +56,14 @@ const stats = computed(() =>
           {{ instruction }}
         </li>
       </ol>
+    </section>
+    <section
+      id="participate"
+      class="panel mt-8 scroll-mt-6 p-7 sm:p-9"
+      aria-labelledby="entry-title"
+    >
+      <h2 id="entry-title" class="mb-6 text-xl font-semibold">我的参赛策略</h2>
+      <AccountGate><GameEntry :key="`${game.id}:${session.user?.id}`" :game="game" /></AccountGate>
     </section>
   </article>
 </template>

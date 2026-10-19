@@ -1,4 +1,5 @@
-import { isAbsolute } from "node:path";
+import { isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ProcessIsolation } from "@si-arena/sandbox";
 
 export interface WorkerConfig {
@@ -31,7 +32,10 @@ export function readWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   return {
     databaseUrl,
     concurrency,
-    replaysDir: env.REPLAYS_DIR ?? "data/replays",
+    replaysDir: resolve(
+      fileURLToPath(new URL("../../../", import.meta.url)),
+      env.REPLAYS_DIR ?? "data/replays",
+    ),
     isolation,
   };
 }

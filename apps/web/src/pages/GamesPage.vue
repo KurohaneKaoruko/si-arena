@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import type { GameCatalogEntry } from "@si-arena/protocol";
+import { parseGames } from "../api/contracts";
 import { RouterLink } from "vue-router";
 import { useApiResource } from "../composables/useApiResource";
 
-const { data, pending, error, reload } = useApiResource<{ games: GameCatalogEntry[] }>(
-  () => "/api/games",
-);
+const { data, pending, error, reload } = useApiResource(() => "/api/games", parseGames);
 </script>
 
 <template>

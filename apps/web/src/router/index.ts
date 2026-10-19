@@ -4,6 +4,38 @@ export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: "/login",
+      component: () => import("../pages/AuthPage.vue"),
+      props: { mode: "login" },
+      meta: { title: "登录" },
+    },
+    {
+      path: "/register",
+      component: () => import("../pages/AuthPage.vue"),
+      props: { mode: "register" },
+      meta: { title: "注册" },
+    },
+    {
+      path: "/account",
+      component: () => import("../pages/AccountPage.vue"),
+      meta: { title: "账号设置" },
+    },
+    {
+      path: "/games/:gameId/leaderboard",
+      component: () => import("../pages/LeaderboardPage.vue"),
+      meta: { title: "排行榜" },
+    },
+    {
+      path: "/games/:gameId/matches",
+      component: () => import("../pages/HistoryPage.vue"),
+      meta: { title: "我的比赛" },
+    },
+    {
+      path: "/matches/:matchId",
+      component: () => import("../pages/MatchPage.vue"),
+      meta: { title: "比赛详情" },
+    },
+    {
       path: "/replays",
       name: "replay",
       component: () => import("../pages/ReplayPage.vue"),
@@ -28,7 +60,7 @@ export const router = createRouter({
       meta: { title: "页面不存在" },
     },
   ],
-  scrollBehavior: () => ({ top: 0 }),
+  scrollBehavior: (to) => (to.hash ? { el: to.hash } : { top: 0 }),
 });
 
 router.afterEach((to) => {

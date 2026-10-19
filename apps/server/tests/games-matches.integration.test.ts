@@ -1,4 +1,8 @@
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { gzipSync } from "node:zlib";
+import { createHash } from "node:crypto";
 import { migrationsFolder } from "@si-arena/db";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { and, eq, notInArray } from "drizzle-orm";
@@ -22,6 +26,7 @@ let app: ReturnType<typeof buildApp>;
 let database: ReturnType<typeof createDatabase>;
 let admin: Client;
 let testDbName = "";
+let replayDir = "";
 
 let ipCounter = 0;
 const uniqueIp = () => `10.77.${Math.floor(ipCounter / 250)}.${(ipCounter++ % 250) + 1}`;
@@ -88,13 +93,15 @@ beforeAll(async () => {
     migrationsFolder,
   });
   await ensureOfficialAccounts(database.db, registeredGames);
-  app = buildApp({ db: database.db });
+  replayDir = await mkdtemp(join(tmpdir(), "si-arena-api-replays-"));
+  app = buildApp({ db: database.db, replaysDir: replayDir });
 });
 
 afterAll(async () => {
   // Each step is isolated so a failure above never prevents the database cleanup.
   if (app) await app.close().catch(() => undefined);
   if (database) await database.close().catch(() => undefined);
+  if (replayDir) await rm(replayDir, { recursive: true, force: true });
   if (admin) {
     if (testDbName !== "") {
       await admin.query(`DROP DATABASE ${testDbName} WITH (FORCE)`).catch(() => undefined);
@@ -541,3 +548,59 @@ dbTest("uploading preserves rating and match statistics", async () => {
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatchObject({ rating: "1234.500000", matchesPlayed: 9, wins: 5 });
 });
+
+dbTest(
+  "replays are public only for completed matches and stream the exact gzip without content encoding",
+  async () => {
+    const user = await registerUser();
+    await uploadOfficialBot(user.token);
+    const created = await call("POST", "/api/games/paper/matches", {
+      token: user.token,
+      headers: { "idempotency-key": "download-replay" },
+    });
+    const id: string = created.json().id;
+    for (const status of ["pending", "running", "failed"] as const) {
+      await database.db.update(matches).set({ status }).where(eq(matches.id, id));
+      const unavailable = await call("GET", `/api/matches/${id}/replay`);
+      expect(unavailable.statusCode).toBe(409);
+      expect(unavailable.json().code).toBe("REPLAY_NOT_READY");
+    }
+    const bytes = gzipSync(JSON.stringify({ matchId: id }));
+    const ref = {
+      fileName: `${id}.json.gz`,
+      formatVersion: 1 as const,
+      bytes: bytes.length,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+    };
+    await database.db
+      .update(matches)
+      .set({ status: "completed", replayFile: ref })
+      .where(eq(matches.id, id));
+    expect((await call("GET", `/api/matches/${id}/replay`)).statusCode).toBe(404);
+    await writeFile(join(replayDir, ref.fileName), bytes);
+    const downloaded = await app.inject(`/api/matches/${id}/replay`);
+    expect(downloaded.statusCode).toBe(200);
+    expect(downloaded.rawPayload).toEqual(bytes);
+    expect(downloaded.headers["content-type"]).toBe("application/gzip");
+    expect(downloaded.headers["content-encoding"]).toBeUndefined();
+    expect(downloaded.headers["content-length"]).toBe(String(bytes.length));
+    expect(downloaded.headers["content-disposition"]).toContain(ref.fileName);
+    expect(downloaded.headers.etag).toBe(`"${ref.sha256}"`);
+    expect((await call("GET", "/api/matches/not-a-uuid/replay")).statusCode).toBe(404);
+    expect(
+      (await call("GET", "/api/matches/00000000-0000-4000-8000-000000000000/replay")).statusCode,
+    ).toBe(404);
+    await database.db
+      .update(matches)
+      .set({ replayFile: { ...ref, fileName: "../secret.json.gz" } })
+      .where(eq(matches.id, id));
+    expect((await call("GET", `/api/matches/${id}/replay`)).statusCode).toBe(500);
+    await database.db
+      .update(matches)
+      .set({ replayFile: { ...ref, bytes: ref.bytes + 1 } })
+      .where(eq(matches.id, id));
+    expect((await call("GET", `/api/matches/${id}/replay`)).statusCode).toBe(500);
+    await database.db.update(matches).set({ replayFile: null }).where(eq(matches.id, id));
+    expect((await call("GET", `/api/matches/${id}/replay`)).statusCode).toBe(503);
+  },
+);

@@ -7,7 +7,7 @@ import { registeredGames } from "./games";
 
 const config = readServerConfig();
 const { db, close } = createDatabase(config.databaseUrl);
-const app = buildApp({ logger: { level: config.logLevel }, db });
+const app = buildApp({ logger: { level: config.logLevel }, db, replaysDir: config.replaysDir });
 
 let stopped = false;
 async function shutdown(): Promise<void> {

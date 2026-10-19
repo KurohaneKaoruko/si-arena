@@ -7,7 +7,7 @@ import { matchesRoutes } from "./matches/routes";
 import { gameCatalog } from "./games";
 
 export function buildApp(
-  options: { logger?: boolean | { level: string }; db?: NodePgDatabase } = {},
+  options: { logger?: boolean | { level: string }; db?: NodePgDatabase; replaysDir?: string } = {},
 ) {
   const app = Fastify({ logger: options.logger ?? false });
   app.setErrorHandler((error: FastifyError, request, reply) => {
@@ -31,7 +31,7 @@ export function buildApp(
   if (options.db) {
     void app.register(authRoutes(options.db), { prefix: "/api/auth" });
     void app.register(gamesRoutes(options.db));
-    void app.register(matchesRoutes(options.db));
+    void app.register(matchesRoutes(options.db, options.replaysDir));
   }
   return app;
 }

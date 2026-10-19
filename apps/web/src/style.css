@@ -47,6 +47,15 @@
   .button-secondary:disabled {
     @apply cursor-not-allowed opacity-40;
   }
+  .button-primary {
+    @apply inline-flex min-h-11 items-center justify-center rounded-lg bg-arena-accent px-5 text-sm font-semibold text-arena-background transition-colors hover:bg-lime-300 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .field-input {
+    @apply block min-h-12 w-full min-w-0 rounded-lg border border-arena-border bg-arena-background px-3 text-base text-arena-text disabled:opacity-50;
+  }
+  .eyebrow {
+    @apply font-mono text-xs tracking-[0.2em] text-arena-accent;
+  }
   .replay-input {
     @apply min-h-11 min-w-0 rounded-lg border border-arena-border bg-arena-background px-3 text-sm text-arena-text;
   }

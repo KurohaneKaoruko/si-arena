@@ -11,6 +11,7 @@ import { sendError } from "../http/errors";
 import { parsePagination } from "../http/pagination";
 import { gameCatalog } from "../games";
 import { selectOpponent } from "./opponent";
+import { sendReplay } from "./replay";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Seat aliases for the recent-opponent lookup: any match this user took part in
@@ -82,7 +83,7 @@ async function findActiveMatchId(
   return rows[0]?.id ?? null;
 }
 
-export function matchesRoutes(db: NodePgDatabase): FastifyPluginAsync {
+export function matchesRoutes(db: NodePgDatabase, replaysDir?: string): FastifyPluginAsync {
   return async (app: FastifyInstance) => {
     app.post<{ Params: { gameId: string } }>(
       "/api/games/:gameId/matches",
@@ -303,6 +304,23 @@ export function matchesRoutes(db: NodePgDatabase): FastifyPluginAsync {
           .offset(offset);
         const summaries = await Promise.all(rows.map((row) => buildMatchDetail(db, row.match)));
         return { total: Number(totals[0]?.count ?? 0), page, limit, matches: summaries };
+      },
+    );
+
+    app.get<{ Params: { matchId: string } }>(
+      "/api/matches/:matchId/replay",
+      async (request, reply) => {
+        reply.header("Cache-Control", "no-store");
+        const matchId = request.params.matchId;
+        if (!UUID_PATTERN.test(matchId))
+          return sendError(reply, 404, "MATCH_NOT_FOUND", "比赛不存在");
+        const [row] = await db.select().from(matches).where(eq(matches.id, matchId)).limit(1);
+        if (!row) return sendError(reply, 404, "MATCH_NOT_FOUND", "比赛不存在");
+        if (row.status !== "completed")
+          return sendError(reply, 409, "REPLAY_NOT_READY", "比赛尚未完成，没有可用回放");
+        if (!row.replayFile || !replaysDir)
+          return sendError(reply, 503, "REPLAY_UNAVAILABLE", "回放暂时不可用，请稍后重试");
+        return sendReplay(reply, replaysDir, row.id, row.replayFile);
       },
     );
 
