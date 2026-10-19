@@ -22,7 +22,8 @@
     "prepare": "simple-git-hooks",
     "test:watch": "vitest --watch --configLoader runner",
     "test:coverage": "vitest run --configLoader runner --coverage",
-    "test:artifacts": "pnpm build && node --import tsx scripts/verify-artifacts.ts"
+    "test:artifacts": "pnpm build && node --import tsx scripts/verify-artifacts.ts",
+    "example:paper": "pnpm build:packages && pnpm --filter @si-arena/engine example:paper"
   },
   "devDependencies": {
     "@commitlint/cli": "catalog:",

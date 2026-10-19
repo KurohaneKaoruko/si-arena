@@ -73,13 +73,15 @@ apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox�
 
 `packages/sandbox` 提供可调用的独立进程执行器：QuickJS 每 tick 重建、线程 CPU/堆/栈限制、Memory 提交与失败回滚、本地日志，以及受限源码校验。使用方法、Linux 进程内存隔离和性能命令见 [沙箱包说明](packages/sandbox/README.md)。
 
+`packages/engine` 提供通用比赛编排、流式 gzip 回放和确定性重演校验，通过适配器调用沙箱。圈地包附带可信游戏定义、运行时 SDK 与官方示例 bot。在根目录运行 `pnpm example:paper --seed 42` 可完成一场本地比赛、保存回放并验证重演，输出结果和回放绝对路径。使用方法见 [引擎说明](packages/engine/README.md)。
+
 共享配置集中在 `configs/`：`typescript/base.json` 定义编译选项，`typescript/test.json` 定义测试源码映射和检查范围，`typescript/tooling.json` 检查工具配置与脚本，`vitest/shared.ts` 定义各测试项目共用的设置。根目录保留 `vitest.config.ts`、`tsdown.config.ts` 工具入口；各 workspace 保留自己的配置并引用共享设置。
 
 ## 测试
 
 全仓使用 Vitest，根 `vitest.config.ts` 通过 `test.projects` 发现 apps、packages 与 games 下的项目配置。Node 模块使用 Node 环境；web 与 player 的 Vue 组件使用 jsdom 和 Vue 插件。新增模块沿用对应目录结构，添加自己的 `vitest.config.ts` 即可被发现，项目名须唯一。
 
-`configs/vitest/shared.ts` 统一测试文件模式、mock 清理和 workspace 源码解析。测试使用 `tests/**/*.test.ts`，显式从 Vitest 导入 `test`、`expect` 等 API。源码路径统一维护在 `configs/typescript/test.json`，Vitest 与测试类型检查使用相同映射；生产包的 exports 仍指向 dist。新增游戏的标准根入口、rules、sdk、renderer 均可复用映射，自定义公开子路径需补充相应映射。
+`configs/vitest/shared.ts` 统一测试文件模式、mock 清理和 workspace 源码解析。测试使用 `tests/**/*.test.ts`，显式从 Vitest 导入 `test`、`expect` 等 API。源码路径统一维护在 `configs/typescript/test.json`，Vitest 与测试类型检查使用相同映射；生产包的 exports 仍指向 dist。新增游戏的标准根入口、game、rules、sdk、renderer 均可复用映射，引擎 node 子路径也显式映射到源码，自定义公开子路径需补充相应映射。
 
 `pnpm test` 无需预先构建。测试配置使用 Vite runner loader，以支持无后缀的 TypeScript 配置导入。Node 测试、辅助文件和项目配置纳入 `configs/typescript/test.json`；Vue 测试由 web 的 `tsconfig.test.json` 和 vue-tsc 检查。Vitest 执行成功不能替代类型检查，`pnpm typecheck` 会检查这些文件。
 

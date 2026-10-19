@@ -25,3 +25,12 @@ export interface PaperObservation extends PaperState {
   selfId: string;
   selfSlot: 0 | 1;
 }
+
+export interface PaperSdk {
+  readonly directions: readonly PaperDirection[];
+  homePath(observation: PaperObservation): PaperDirection[] | null;
+  threatDistance(observation: PaperObservation): number | null;
+  safeMoves(observation: PaperObservation): PaperDirection[];
+  expansion(observation: PaperObservation): PaperDirection[];
+}
+export { PAPER_SDK_SOURCE } from "./source";

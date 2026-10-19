@@ -402,6 +402,13 @@ importers:
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../protocol
+    devDependencies:
+      '@si-arena/game-paper':
+        specifier: workspace:*
+        version: link:../../games/paper
+      '@si-arena/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
 
   packages/player:
     dependencies:

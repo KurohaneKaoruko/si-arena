@@ -4,6 +4,8 @@
     "rootDir": "../..",
     "noEmit": true,
     "paths": {
+      "@si-arena/engine/node": ["../../packages/engine/src/node/index.ts"],
+      "@si-arena/game-*/game": ["../../games/*/src/game.ts"],
       "@si-arena/game-*/sdk": ["../../games/*/src/sdk/index.ts"],
       "@si-arena/game-*/rules": ["../../games/*/src/rules/index.ts"],
       "@si-arena/game-*/renderer": ["../../games/*/src/renderer/index.ts"],

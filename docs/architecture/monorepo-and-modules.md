@@ -62,7 +62,7 @@ games/
 
 纯规则、协议、引擎、沙箱、CLI、server 和 worker 使用 Node 环境。Vue 组件测试使用 jsdom 和 Vue 插件，不能将 DOM 全局环境注入纯规则测试。测试文件统一为 `tests/**/*.test.ts`，辅助文件同样使用 TypeScript；配置采用 runner loader，支持仓库约定的无后缀配置导入。
 
-测试中的跨包引用仍使用公开包名与子路径，由 `configs/typescript/test.json` 的测试专用 paths 和 `configs/vitest/shared.ts` 的相同映射解析到 workspace 源码。生产 TypeScript 配置与 package exports 不启用测试映射。源码测试不依赖旧 dist；根入口和游戏标准子路径已有通配映射，新增自定义公开子路径需同步增加测试映射。
+测试中的跨包引用仍使用公开包名与子路径，由 `configs/typescript/test.json` 的测试专用 paths 和 `configs/vitest/shared.ts` 的相同映射解析到 workspace 源码。生产 TypeScript 配置与 package exports 不启用测试映射。源码测试不依赖旧 dist；根入口和游戏 game/rules/sdk/renderer 标准子路径已有通配映射，engine/node 也有显式源码映射，新增自定义公开子路径需同步增加测试映射。
 
 TypeScript 的 paths、include、exclude 和 rootDir 按声明它们的配置文件位置解析；Vitest 的源码映射也以 `configs/typescript/test.json` 所在位置为基准，避免依赖运行命令时的工作目录。
 
@@ -117,6 +117,10 @@ manifest 的 `botProtocolVersion` 是从 1 开始的整数，标识玩家代码�
 首版不支持用户上传游戏模块，不提供远程热加载。游戏包的插件机制服务开发扩展，不给予玩家代码同等权限。
 
 ## 玩家 JS 入口
+
+比赛运行器使用 `GameDefinition` 组合可信 manifest、上述 rules、parseConfig、parseState 和 parseObservation。状态解析器接收冻结配置与参赛席位，检查世界中的玩家映射；观察解析器校验当前玩家及 tick，错误观察不得作为玩家失误处理。引擎不加入具体游戏分支。圈地通过 `@si-arena/game-paper/game` 导出定义、SDK 源码与官方 bot 的可信资源位置，根元数据入口仍不加载规则、renderer 或 bot。
+
+`@si-arena/engine` 通过工厂创建各玩家的执行适配器，不依赖 sandbox；适配器验证动作与 Memory，并在失败时保留旧 Memory。核心入口提供比赛与回放逻辑，可供浏览器使用；文件和 gzip 功能只从 `@si-arena/engine/node` 导出。回放使用 ReplaySink 流式追加完整 tick，候选文件生成后仍由 worker 按执行权和数据库事务发布、计分。接口与可运行示例见 [引擎说明](../../packages/engine/README.md)。
 
 玩家代码采用单文件 ESM，同步导出默认函数：
 

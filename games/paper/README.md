@@ -4,7 +4,8 @@
 
 - `src/manifest.ts`：游戏元数据、配置与解析后的默认资源预算。
 - `src/constants.ts`：固定地图配置与 tick 上限。
-- `src/sdk/`：玩家观察、状态和动作类型。
+- `src/sdk/`：玩家观察、状态、动作与 SDK 类型，以及可信运行时 SDK 源码。
+- `src/game.ts`：可信游戏定义、配置、世界与观察身份校验、官方 bot 资源位置。
 - `src/rules/`：初始化、观察、动作校验、同时结算、圈地与终局判定。
 - `src/renderer/`：浏览器展示资源，独立 export 入口。
 - `bots/`：官方 bot 源码目录。
@@ -18,6 +19,13 @@
 | `@si-arena/game-paper/sdk`      | `PaperAction`、`PaperDirection`、`PaperObservation`、`PaperPlayer`、`PaperState` |
 | `@si-arena/game-paper/rules`    | `paperRules`、`parsePaperAction`、`parsePaperState` 及事件、结果类型             |
 | `@si-arena/game-paper/renderer` | 页面展示数据与配色                                                               |
+| `@si-arena/game-paper/game`     | `paperGame`、`PAPER_SDK_SOURCE`、`officialBotUrl`                                |
+
+SDK 入口还导出 `PaperSdk` 与 `PAPER_SDK_SOURCE`，由运行器在双方沙箱内部初始化。SDK 提供 `homePath`（避开自身尾迹的 BFS 最短回城路线）、`threatDistance`（对手到己方尾迹的最短合法距离）、`safeMoves`（不越界、不自撞或撞入当前对手头部的方向）和 `expansion`（领地内起步的矩形扩张路线）。回城或威胁不可达时返回 null，已在领地内时回城路线为空。
+
+`bots/official.js` 使用同一 SDK、观察、Memory 与预算，规划矩形扩张，受威胁时优先回城，无安全移动时停留。运行器通过可信 officialBotUrl 读取文本后送入沙箱，不在宿主 import 执行 bot。game 入口不加载 Vue、Node 模块或 bot 源码。
+
+在根目录运行 `pnpm example:paper --seed 42` 可用真实沙箱运行官方 bot 与 idle 对手，保存回放并验证重演。
 
 `paperRules` 实现共享 `GameRules` 契约：
 

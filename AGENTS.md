@@ -42,6 +42,7 @@ SI Arena（`si-arena`，SI = Super Intelligence）是 AI 编程自由竞技游�
 - 公共依赖版本集中在 `pnpm-workspace.yaml` 的 catalog，使用 `catalog:` 引用；修改依赖同步维护 lockfile。
 - 游戏规则和 SDK 不依赖平台数据库、账号或排位。Node 规则入口不得加载 Vue/DOM，浏览器入口不得引入 Node、沙箱子进程或数据库代码。
 - 新增游戏通过独立游戏包和显式注册接入，不在平台核心中添加游戏 ID 分支或圈地专属判断。
+- 游戏通过可信 GameDefinition 提供 manifest、rules、parseConfig、parseState 和 parseObservation，按固定席位和 tick 校验世界及观察身份。引擎核心不导入 Node、沙箱或具体游戏；文件与 gzip 功能使用 `@si-arena/engine/node`，执行器由调用方注入。
 - 网页和本地工具共享 renderer、SDK、限额及发行信息，避免各自维护一套规则或默认值。
 
 ## 游戏、执行与回放约束

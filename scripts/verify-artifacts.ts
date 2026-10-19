@@ -88,6 +88,10 @@ try {
     await rename(packageDirectory, target);
     if (manifest.name === "@si-arena/cli") cliDirectory = target;
   }
+  const nodeTypes = JSON.parse(
+    await readFile(join(root, "node_modules/@types/node/package.json"), "utf8"),
+  ) as { version: string };
+  externalDependencies["@types/node"] = nodeTypes.version;
   await writeFile(
     join(temporary, "package.json"),
     JSON.stringify({
@@ -112,6 +116,9 @@ import { paperRules } from "@si-arena/game-paper/rules";
 import type { PaperResult } from "@si-arena/game-paper/rules";
 import { SandboxPlayer } from "@si-arena/sandbox";
 import { resolveResourceLimits } from "@si-arena/protocol";
+import { paperGame } from "@si-arena/game-paper/game";
+import type { PaperState, PaperAction } from "@si-arena/game-paper/sdk";
+import { MemoryReplaySink, runMatch, replayMatch } from "@si-arena/engine";
 let state = paperRules.init({
   seed: 2, config: paperManifest.config,
   players: [{ id: "alpha", slot: 0 }, { id: "beta", slot: 1 }],
@@ -134,6 +141,19 @@ try {
   const second = await bot.execute(1, {});
   if (!first.ok || !second.ok || second.memory.n !== 2) throw new Error("Packed sandbox failed");
 } finally { await bot.close(); }
+const sink = new MemoryReplaySink<PaperState,PaperAction>();
+const played = await runMatch({
+  matchId:"packed-engine", game:paperGame, seed:2, sink,
+  players:[{id:"alpha",slot:0,name:"Alpha",official:false},{id:"beta",slot:1,name:"Beta",official:true}],
+  async createExecutor(player,context) {
+    return SandboxPlayer.create({...context,playerId:player.id,
+      source:player.id==="alpha"?"export default ()=>({type:'move',direction:'left'})":"export default ()=>({type:'idle'})",
+      isolation:{kind:"local"},parseAction:paperRules.parseAction,defaultAction:{type:"idle"},
+    });
+  },
+});
+const replayed = await replayMatch(sink.replay,paperGame);
+if(played.result.reason!=="last-survivor" || replayed.finalStateHash!==played.finalStateHash)throw new Error("Packed engine/replay mismatch");
 `,
   );
   await writeFile(
@@ -145,7 +165,7 @@ try {
         moduleResolution: "NodeNext",
         strict: true,
         skipLibCheck: false,
-        types: [],
+        types: ["node"],
         lib: ["ES2023", "DOM"],
         outDir: "out",
       },
