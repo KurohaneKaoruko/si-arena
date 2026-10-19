@@ -1,14 +1,36 @@
-.git
-.zcode
-node_modules
+# 依赖与包管理器缓存：镜像内用 pnpm install --frozen-lockfile 重建，不带入宿主产物
 **/node_modules
+.pnpm-store
+
+# 构建产物：镜像内重新构建
 **/dist
-coverage
-data
-replays
-.changeset
+**/coverage
+*.tsbuildinfo
+*.tgz
+
+# 本地环境变量与凭据（示例文件保持可提交）
 .env
 .env.*
-!.env.example
+!.env*.example
+
+# 本地运行数据：发行缓存与回放文件由 compose 卷挂载，不进镜像
+/data
+/replays
+
+# 版本控制与发布元数据
+**/.git
+.changeset
+.github
+
+# 本地工具临时目录
+.zcode
+
+# 日志、补丁残留与编辑器文件
 *.log
-*.tgz
+*.orig
+*.rej
+.idea
+.vscode
+
+# 操作系统文件
+**/.DS_Store
