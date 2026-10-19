@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readFile, mkdtemp, rm, stat } from "node:fs/promises";
+import { readFile, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Client } from "pg";
 import {
@@ -19,11 +19,11 @@ import { paperCatalogEntry } from "@si-arena/game-paper";
 import { officialBotUrl, paperGame } from "@si-arena/game-paper/game";
 import { replayMatch } from "@si-arena/engine";
 import { readReplayFile } from "@si-arena/engine/node";
-import { claimNextMatch, failExpiredLeases } from "../src/claim";
+import { claimNextMatch, failExpiredLeases, renewLease } from "../src/claim";
 import { runClaimedMatch, type WorkerJobContext } from "../src/execute";
 import { claimableReleases } from "../src/games";
 import { ReplayStore } from "../src/replay-store";
-import { settleMatch } from "../src/settle";
+import { settleMatch, type SettleInput } from "../src/settle";
 
 /**
  * Requires a real PostgreSQL reachable through ARENA_TEST_DATABASE_URL (see README).
@@ -112,6 +112,33 @@ async function createPendingMatch(
 async function matchRow(matchId: string) {
   const rows = await database.db.select().from(matches).where(eq(matches.id, matchId)).limit(1);
   return rows[0]!;
+}
+
+/** Persistence fixture: settlement does not execute bots or interpret replay bytes. */
+async function stagedSettlement(): Promise<SettleInput> {
+  const first = await createUser();
+  const second = await createUser();
+  await createEntry(first.id);
+  await createEntry(second.id);
+  const pending = await createPendingMatch(first, second);
+  const claim = await claimNextMatch(database.db, claimableReleases());
+  expect(claim?.id).toBe(pending.id);
+  const candidatePath = store.candidatePath(pending.id, claim!.executionId);
+  await writeFile(candidatePath, "immutable settlement replay fixture");
+  return {
+    matchId: pending.id,
+    executionId: claim!.executionId,
+    candidatePath,
+    replayFile: await store.inspect(candidatePath, pending.id),
+    result: {
+      reason: "ticks-exhausted",
+      completedTicks: 1,
+      players: [
+        { id: first.id, rank: 1, score: 1 },
+        { id: second.id, rank: 2, score: 0 },
+      ],
+    },
+  };
 }
 
 beforeAll(async () => {
@@ -299,6 +326,126 @@ dbTest("settlement is refused without matching execution rights", async () => {
     .from(gameEntries)
     .where(eq(gameEntries.userId, first.id));
   expect(entries[0]!.matchesPlayed).toBe(0);
+});
+
+dbTest(
+  "settlement retries a published candidate after the database transaction rolls back",
+  async () => {
+    const input = await stagedSettlement();
+    await database.db.execute(sql`
+    CREATE FUNCTION reject_completion() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.status = 'completed' THEN
+        RAISE EXCEPTION 'simulated settlement failure';
+      END IF;
+      RETURN NEW;
+    END;
+    $$
+  `);
+    await database.db.execute(sql`
+    CREATE TRIGGER reject_completion BEFORE UPDATE ON matches
+    FOR EACH ROW EXECUTE FUNCTION reject_completion()
+  `);
+    try {
+      await expect(settleMatch(database.db, store, input)).rejects.toThrow();
+      const rolledBack = await matchRow(input.matchId);
+      expect(rolledBack.status).toBe("running");
+      expect(rolledBack.result).toBeNull();
+      expect(rolledBack.replayFile).toBeNull();
+      const seats = await database.db
+        .select()
+        .from(matchParticipants)
+        .where(eq(matchParticipants.matchId, input.matchId));
+      expect(seats.every((seat) => seat.rank === null && seat.ratingAfter === null)).toBe(true);
+      for (const player of input.result.players) {
+        const [entry] = await database.db
+          .select()
+          .from(gameEntries)
+          .where(eq(gameEntries.userId, player.id));
+        expect(entry).toMatchObject({
+          rating: "1000.000000",
+          matchesPlayed: 0,
+          wins: 0,
+          losses: 0,
+        });
+      }
+      expect(await sha256File(store.finalPath(input.matchId))).toBe(input.replayFile.sha256);
+    } finally {
+      await database.db.execute(sql`DROP TRIGGER reject_completion ON matches`);
+      await database.db.execute(sql`DROP FUNCTION reject_completion()`);
+    }
+
+    expect(await settleMatch(database.db, store, input)).toBe("completed");
+    expect(await settleMatch(database.db, store, input)).toBe("refused");
+    const completed = await matchRow(input.matchId);
+    expect(completed.status).toBe("completed");
+    expect(completed.replayFile).toEqual(input.replayFile);
+    for (const [index, player] of input.result.players.entries()) {
+      const [entry] = await database.db
+        .select()
+        .from(gameEntries)
+        .where(eq(gameEntries.userId, player.id));
+      expect(entry).toMatchObject({
+        rating: index === 0 ? "1016.000000" : "984.000000",
+        matchesPlayed: 1,
+        wins: index === 0 ? 1 : 0,
+        losses: index === 0 ? 0 : 1,
+      });
+    }
+    expect(await renewLease(database.db, input.matchId, input.executionId)).toBe(false);
+  },
+);
+
+dbTest("expired leases cannot be renewed or settled before the expiry sweep", async () => {
+  const input = await stagedSettlement();
+  expect(await renewLease(database.db, input.matchId, randomUUID())).toBe(false);
+  expect(await renewLease(database.db, input.matchId, input.executionId)).toBe(true);
+  const expiredAt = new Date(Date.now() - 10_000);
+  await database.db
+    .update(matches)
+    .set({ leaseExpiresAt: expiredAt })
+    .where(eq(matches.id, input.matchId));
+  const before = await matchRow(input.matchId);
+
+  expect(await renewLease(database.db, input.matchId, input.executionId)).toBe(false);
+  expect(await settleMatch(database.db, store, input)).toBe("refused");
+  const after = await matchRow(input.matchId);
+  expect(after.leaseExpiresAt).toEqual(expiredAt);
+  expect(after.updatedAt).toEqual(before.updatedAt);
+  expect(after.status).toBe("running");
+  await expect(stat(store.finalPath(input.matchId))).rejects.toMatchObject({ code: "ENOENT" });
+  for (const player of input.result.players) {
+    const [entry] = await database.db
+      .select()
+      .from(gameEntries)
+      .where(eq(gameEntries.userId, player.id));
+    expect(entry).toMatchObject({ rating: "1000.000000", matchesPlayed: 0 });
+  }
+  await failExpiredLeases(database.db);
+  expect((await matchRow(input.matchId)).failureReason).toBe("WORKER_LOST");
+});
+
+dbTest("a lease that expires while renewal waits for a row lock stays expired", async () => {
+  const input = await stagedSettlement();
+  await database.db
+    .update(matches)
+    .set({ leaseExpiresAt: sql`clock_timestamp() + interval '1 second'` })
+    .where(eq(matches.id, input.matchId));
+  let renewal: Promise<boolean> | undefined;
+  await database.db.transaction(async (tx) => {
+    await tx
+      .select({ id: matches.id })
+      .from(matches)
+      .where(eq(matches.id, input.matchId))
+      .for("update");
+    renewal = renewLease(database.db, input.matchId, input.executionId);
+    // The lock owner does not modify the row, so passing this test requires a
+    // fresh expiry check after locking, not just a statement-start predicate.
+    await tx.execute(sql`SELECT pg_sleep(1.1)`);
+  });
+  expect(await renewal).toBe(false);
+  await failExpiredLeases(database.db);
+  expect((await matchRow(input.matchId)).failureReason).toBe("WORKER_LOST");
 });
 
 dbTest("expired leases are failed by the sweep and claims skip unknown releases", async () => {

@@ -29,11 +29,11 @@ async function main(): Promise<void> {
   const active = new Set<string>();
   const jobs = new Set<Promise<void>>();
   let stopped = false;
+  let polling: Promise<void> | undefined;
   let lastSweepAt = 0;
   let lastCleanupAt = 0;
 
-  const poll = async () => {
-    if (stopped) return;
+  const dispatch = async () => {
     const now = Date.now();
     if (now - lastSweepAt >= EXPIRE_SWEEP_INTERVAL_MS) {
       lastSweepAt = now;
@@ -54,11 +54,14 @@ async function main(): Promise<void> {
       }
     }
     while (active.size < config.concurrency) {
+      if (stopped) break;
       const claim = await claimNextMatch(ctx.db, claimable).catch((error: unknown) => {
         log("claim-error", { message: String(error) });
         return null;
       });
-      if (claim === null) break;
+      // A claim finishing during shutdown stays running for the lease sweep;
+      // never start a new job after shutdown has begun.
+      if (claim === null || stopped) break;
       active.add(claim.id);
       log("match-claimed", { matchId: claim.id, gameId: claim.gameId, release: claim.release });
       const job = runClaimedMatch(ctx, claim, shutdown.signal)
@@ -74,9 +77,17 @@ async function main(): Promise<void> {
     }
   };
 
+  // One in-flight poll includes maintenance and claims. In particular, slow
+  // claims must reserve capacity before another timer can inspect active.size.
+  const poll = () => {
+    if (stopped) return Promise.resolve();
+    polling ??= dispatch().finally(() => {
+      polling = undefined;
+    });
+    return polling;
+  };
   const pollTimer = setInterval(() => void poll(), POLL_INTERVAL_MS);
   pollTimer.unref();
-  await poll();
 
   let shuttingDown = false;
   const requestShutdown = () => {
@@ -86,6 +97,7 @@ async function main(): Promise<void> {
     clearInterval(pollTimer);
     shutdown.abort();
     void (async () => {
+      await polling;
       await Promise.allSettled(jobs);
       await database.close().catch(() => undefined);
       log("shutdown-complete", { pendingJobs: jobs.size });
@@ -93,6 +105,9 @@ async function main(): Promise<void> {
   };
   process.once("SIGINT", requestShutdown);
   process.once("SIGTERM", requestShutdown);
+
+  await poll();
+  if (stopped) return;
 
   log("started", {
     runtime: SANDBOX_RUNTIME,

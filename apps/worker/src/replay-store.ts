@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { isNotNull } from "drizzle-orm";
-import { link, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { link, lstat, mkdir, open, readdir, rm, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { matches } from "@si-arena/db";
 import type { Executor, ReplayFileRef } from "@si-arena/db";
@@ -58,13 +58,37 @@ export class ReplayStore {
 
   /**
    * Links the candidate to its public name. Call inside the settlement
-   * transaction after execution rights are confirmed; an existing target rolls
-   * the transaction back instead of being overwritten.
+   * transaction after execution rights are confirmed. A prior link to the same
+   * immutable candidate is an idempotent retry; every other target is rejected.
    */
   async publish(candidatePath: string, matchId: string): Promise<void> {
     const target = this.finalPath(matchId);
     await mkdir(this.root, { recursive: true });
-    await link(candidatePath, target);
+    try {
+      await link(candidatePath, target);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      const [candidate, existing] = await Promise.all([
+        lstat(candidatePath, { bigint: true }),
+        lstat(target, { bigint: true }),
+      ]);
+      if (
+        !candidate.isFile() ||
+        !existing.isFile() ||
+        candidate.dev !== existing.dev ||
+        candidate.ino !== existing.ino
+      ) {
+        throw error;
+      }
+    }
+    if (process.platform !== "win32") {
+      const directory = await open(this.root, "r");
+      try {
+        await directory.sync();
+      } finally {
+        await directory.close();
+      }
+    }
   }
 
   /**

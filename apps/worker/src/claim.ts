@@ -1,4 +1,4 @@
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, gt, or, sql } from "drizzle-orm";
 import { matches } from "@si-arena/db";
 import type { Executor } from "@si-arena/db";
 import type { MatchFailureReason } from "@si-arena/protocol";
@@ -59,21 +59,26 @@ export async function renewLease(
   matchId: string,
   executionId: string,
 ): Promise<boolean> {
-  const rows = await db
-    .update(matches)
-    .set({
-      leaseExpiresAt: sql`now() + (${LEASE_MS} || ' milliseconds')::interval`,
-      updatedAt: sql`now()`,
-    })
-    .where(
-      and(
-        eq(matches.id, matchId),
-        eq(matches.executionId, executionId),
-        eq(matches.status, "running"),
-      ),
-    )
-    .returning({ id: matches.id });
-  return rows.length > 0;
+  return db.transaction(async (tx) => {
+    const owner = and(
+      eq(matches.id, matchId),
+      eq(matches.executionId, executionId),
+      eq(matches.status, "running"),
+    );
+    const locked = await tx.select({ id: matches.id }).from(matches).where(owner).for("update");
+    if (locked.length === 0) return false;
+    // Check after acquiring the lock, using the real database clock rather than
+    // transaction-start now(): waiting for a lock cannot revive an expired lease.
+    const rows = await tx
+      .update(matches)
+      .set({
+        leaseExpiresAt: sql`clock_timestamp() + (${LEASE_MS} || ' milliseconds')::interval`,
+        updatedAt: sql`clock_timestamp()`,
+      })
+      .where(and(owner, gt(matches.leaseExpiresAt, sql`clock_timestamp()`)))
+      .returning({ id: matches.id });
+    return rows.length > 0;
+  });
 }
 
 /**
