@@ -18,7 +18,7 @@ test("an unknown route can return to the lobby through the rendered navigation l
   await router.push("/missing");
   const wrapper = mount(App, { global: { plugins: [router] } });
   expect(wrapper.get("main").text()).toContain("这个赛场不存在");
-  const returnLink = wrapper.get("main a.button-secondary");
+  const returnLink = wrapper.get('main a[href="/"]');
   expect(returnLink.attributes("href")).toBe("/");
   await returnLink.trigger("click");
   await flushPromises();

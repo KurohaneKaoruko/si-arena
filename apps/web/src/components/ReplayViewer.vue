@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { PLAYBACK_SPEEDS, usePlayback } from "@si-arena/player";
 import type { BrowserReplaySession } from "@si-arena/player/browser";
+import AppBadge from "./ui/AppBadge.vue";
+import AppButton from "./ui/AppButton.vue";
 
 const props = defineProps<{
   session: BrowserReplaySession;
@@ -57,6 +59,9 @@ const logsTruncated = computed(() => own(view.value.record?.logsTruncated, playe
 const selectedObservation = computed(() =>
   observationOpen.value ? JSON.stringify(view.value.observation(playerId.value), null, 2) : "",
 );
+function tint(color: string): string {
+  return `color-mix(in srgb, ${color} 8%, white)`;
+}
 const memoryState = shallowRef<{ before: unknown; after: unknown } | null>(null);
 const memoryPending = ref(false);
 let memoryRequest = 0;
@@ -167,28 +172,25 @@ function keyboard(event: KeyboardEvent) {
 
 <template>
   <section class="min-w-0" aria-label="比赛回放" @keydown="keyboard">
-    <div class="mb-5 flex min-w-0 flex-wrap items-center justify-between gap-3">
+    <div class="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
       <div class="min-w-0">
-        <p class="truncate text-sm text-arena-muted" :title="fileName">{{ fileName }}</p>
-        <p class="mt-1 break-all font-mono text-xs text-arena-muted">
+        <p class="truncate text-sm font-medium text-ink" :title="fileName">{{ fileName }}</p>
+        <p class="mt-0.5 break-all font-mono text-xs text-faint">
           {{ session.replay.game.release }} · {{ session.replay.matchId }}
         </p>
       </div>
-      <span
-        class="rounded-full border border-arena-accent/30 bg-arena-accent/10 px-3 py-1 text-xs text-arena-accent"
-        >回放校验通过</span
-      >
+      <AppBadge tone="success">回放校验通过</AppBadge>
     </div>
     <div class="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
       <div class="min-w-0">
-        <div class="panel overflow-hidden">
+        <div class="overflow-hidden rounded-card border border-line bg-surface shadow-card">
           <div
-            class="flex flex-wrap items-center justify-between gap-2 border-b border-arena-border px-4 py-3"
+            class="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-subtle px-4 py-2.5"
           >
-            <span class="font-mono text-sm" data-testid="tick-count"
+            <span class="font-mono text-sm tracking-tight" data-testid="tick-count"
               >已完成 {{ tick }} / {{ session.totalTicks }} tick</span
             >
-            <span class="text-xs text-arena-muted">{{
+            <span class="text-xs text-soft">{{
               tick === session.totalTicks ? "比赛结束" : playing ? "播放中" : "已暂停"
             }}</span>
           </div>
@@ -202,13 +204,13 @@ function keyboard(event: KeyboardEvent) {
             aria-describedby="playback-help"
             >{{ canvasLabel }}</canvas
           >
-          <p v-if="canvasError" role="alert" class="p-4 text-arena-danger">{{ canvasError }}</p>
+          <p v-if="canvasError" role="alert" class="p-4 text-sm text-danger">{{ canvasError }}</p>
         </div>
-        <div class="panel mt-4 p-4">
+        <div class="mt-4 rounded-card border border-line bg-surface p-4 shadow-card">
           <label for="replay-timeline" class="sr-only">已完成 tick 时间轴</label>
           <input
             id="replay-timeline"
-            class="block min-h-11 w-full cursor-pointer accent-arena-accent"
+            class="block min-h-9 w-full cursor-pointer accent-accent"
             type="range"
             min="0"
             :max="session.totalTicks"
@@ -217,56 +219,48 @@ function keyboard(event: KeyboardEvent) {
             @input="seek"
           />
           <div class="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              class="button-secondary !px-3"
+            <AppButton
+              variant="secondary"
+              size="sm"
               aria-label="回到初始世界"
               :disabled="tick === 0"
               @click="playback.seek(0)"
+              >起点</AppButton
             >
-              起点
-            </button>
-            <button
-              type="button"
-              class="button-secondary !px-3"
+            <AppButton
+              variant="secondary"
+              size="sm"
               aria-label="后退一个 tick"
               :disabled="tick === 0"
               @click="playback.step(-1)"
+              >上一步</AppButton
             >
-              上一步
-            </button>
-            <button
-              type="button"
-              class="inline-flex min-h-11 items-center justify-center rounded-lg bg-arena-accent px-5 text-sm font-semibold text-arena-background hover:brightness-110"
-              :aria-pressed="playing"
-              @click="toggle"
-            >
-              {{ playing ? "暂停" : tick === session.totalTicks ? "重新播放" : "播放" }}
-            </button>
-            <button
-              type="button"
-              class="button-secondary !px-3"
+            <AppButton variant="primary" size="sm" :aria-pressed="playing" @click="toggle">{{
+              playing ? "暂停" : tick === session.totalTicks ? "重新播放" : "播放"
+            }}</AppButton>
+            <AppButton
+              variant="secondary"
+              size="sm"
               aria-label="前进一个 tick"
               :disabled="tick === session.totalTicks"
               @click="playback.step(1)"
+              >下一步</AppButton
             >
-              下一步
-            </button>
-            <label class="ml-auto flex items-center gap-2 text-sm text-arena-muted"
+            <label class="ml-auto flex items-center gap-2 text-sm text-soft"
               >速度
-              <select class="replay-input" aria-label="播放速度" :value="speed" @change="setSpeed">
+              <select class="select w-auto" aria-label="播放速度" :value="speed" @change="setSpeed">
                 <option v-for="value in PLAYBACK_SPEEDS" :key="value" :value="value">
                   {{ value }}×
                 </option>
               </select>
             </label>
           </div>
-          <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-arena-border pt-3">
-            <label class="flex items-center gap-2 text-sm text-arena-muted" for="replay-tick"
+          <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+            <label class="flex items-center gap-2 text-sm text-soft" for="replay-tick"
               >跳转 tick
               <input
                 id="replay-tick"
-                class="replay-input w-24"
+                class="input w-24"
                 type="number"
                 min="0"
                 :max="session.totalTicks"
@@ -274,36 +268,38 @@ function keyboard(event: KeyboardEvent) {
                 @change="seek"
               />
             </label>
-            <button
-              type="button"
-              class="button-secondary !px-3"
+            <AppButton
+              variant="secondary"
+              size="sm"
               :disabled="previousError === undefined"
               @click="jumpError(-1)"
+              >上一处错误</AppButton
             >
-              上一处错误
-            </button>
-            <button
-              type="button"
-              class="button-secondary !px-3"
+            <AppButton
+              variant="secondary"
+              size="sm"
               :disabled="nextError === undefined"
               @click="jumpError(1)"
+              >下一处错误</AppButton
             >
-              下一处错误
-            </button>
           </div>
-          <p id="playback-help" class="mt-3 text-xs leading-6 text-arena-muted">
+          <p id="playback-help" class="mt-3 text-xs leading-6 text-faint">
             聚焦地图：空格播放 / 暂停，← → 逐步查看，Home / End 跳转首尾。
           </p>
         </div>
       </div>
       <aside class="min-w-0 space-y-4" aria-label="选手与诊断">
-        <div class="panel p-4">
+        <div class="rounded-card border border-line bg-surface p-4 shadow-card">
           <h2 class="text-sm font-semibold">选手与得分</h2>
-          <div v-for="player in view.players" :key="player.id" class="mt-4 min-w-0">
+          <div v-for="player in view.players" :key="player.id" class="mt-3.5 min-w-0">
             <div class="flex min-w-0 items-start gap-3">
               <span
-                class="flex size-9 shrink-0 items-center justify-center rounded-lg border font-mono text-xs font-bold"
-                :style="{ color: player.color, borderColor: player.color }"
+                class="flex size-8 shrink-0 items-center justify-center rounded-control border font-mono text-xs font-bold"
+                :style="{
+                  color: player.color,
+                  borderColor: player.color,
+                  backgroundColor: tint(player.color),
+                }"
                 >{{ player.label }}</span
               >
               <div class="min-w-0 flex-1">
@@ -313,65 +309,65 @@ function keyboard(event: KeyboardEvent) {
                 >
                   {{ participants.find((p) => p.id === player.id)?.name }}
                 </p>
-                <p class="mt-1 text-xs text-arena-muted">
+                <p class="mt-0.5 text-xs text-faint">
                   {{ participants.find((p) => p.id === player.id)?.official ? "官方 · " : ""
                   }}{{ player.alive ? "存活" : "已淘汰" }}
                 </p>
               </div>
               <p class="shrink-0 text-right font-mono text-lg" :style="{ color: player.color }">
                 {{ player.score
-                }}<span class="ml-1 text-xs text-arena-muted">{{ session.scoreUnit }}</span>
+                }}<span class="ml-1 text-xs text-faint">{{ session.scoreUnit }}</span>
               </p>
             </div>
           </div>
-          <div v-if="tick === session.totalTicks" class="mt-5 border-t border-arena-border pt-4">
+          <div v-if="tick === session.totalTicks" class="mt-4 border-t border-line pt-3.5">
             <h3 class="text-sm font-semibold">终局排名</h3>
             <p
               v-for="result in session.replay.result.players"
               :key="result.id"
-              class="mt-2 break-words text-sm text-arena-muted"
+              class="mt-1.5 break-words text-sm text-soft"
             >
               第 {{ result.rank }} 名 · {{ participants.find((p) => p.id === result.id)?.name }} ·
               {{ result.score }} 分
             </p>
           </div>
         </div>
-        <div class="panel min-w-0 p-4">
+        <div class="rounded-card border border-line bg-surface p-4 shadow-card">
           <h2 class="text-sm font-semibold">Tick 诊断</h2>
-          <p class="mt-2 text-xs leading-6 text-arena-muted">
+          <p class="mt-1.5 text-xs leading-6 text-soft">
             {{
               view.record
                 ? `执行 tick ${view.record.tick} → 世界 S${tick}`
                 : "初始世界 S0，还没有执行记录"
             }}
           </p>
-          <label class="mt-3 block text-xs text-arena-muted" for="diagnostic-player">选手</label>
-          <select id="diagnostic-player" v-model="playerId" class="replay-input mt-1 w-full">
+          <label class="mt-3 block text-xs text-soft" for="diagnostic-player">选手</label>
+          <select id="diagnostic-player" v-model="playerId" class="select mt-1 w-full">
             <option v-for="player in participants" :key="player.id" :value="player.id">
               P{{ player.slot + 1 }} · {{ player.name }}
             </option>
           </select>
           <div
             v-if="selectedError"
-            class="mt-4 min-w-0 rounded-lg border border-arena-danger/40 bg-arena-danger/5 p-3"
+            class="mt-3 min-w-0 rounded-control border border-danger/25 bg-danger-soft p-3"
             role="note"
             aria-label="玩家执行错误"
           >
-            <p class="break-words font-mono text-xs font-semibold text-arena-danger">
+            <p class="break-words font-mono text-xs font-semibold text-danger">
               {{ selectedError.type }}
             </p>
-            <p class="mt-2 break-words text-sm text-arena-danger">{{ selectedError.message }}</p>
-            <details v-if="selectedError.stack" class="mt-2">
-              <summary class="cursor-pointer py-2 text-xs text-arena-muted">错误堆栈</summary>
+            <p class="mt-1.5 break-words text-sm text-danger">{{ selectedError.message }}</p>
+            <details v-if="selectedError.stack" class="mt-1.5">
+              <summary class="cursor-pointer py-1.5 text-xs text-soft">错误堆栈</summary>
               <pre
-                class="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs leading-6 text-arena-muted"
+                class="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-6 text-soft"
                 >{{ selectedError.stack }}</pre>
             </details>
           </div>
-          <div class="mt-4 text-xs leading-6 text-arena-muted">
+          <div class="mt-3 text-xs leading-6 text-soft">
             <p>有效动作</p>
             <pre
-              class="mt-1 overflow-auto whitespace-pre-wrap break-all font-mono text-arena-text"
+              class="mt-1 overflow-auto whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-ink"
               >{{
                 selectedAction === undefined ? "无执行动作" : JSON.stringify(selectedAction)
               }}</pre>
@@ -385,53 +381,58 @@ function keyboard(event: KeyboardEvent) {
           </div>
           <div
             v-if="memory"
-            class="mt-4 min-w-0 border-t border-arena-border pt-3"
+            class="mt-3 min-w-0 border-t border-line pt-3"
             aria-label="Memory 提交"
           >
             <p class="text-xs font-semibold">Memory 提交</p>
-            <p v-if="!view.record" class="mt-2 text-xs leading-6 text-arena-muted">
+            <p v-if="!view.record" class="mt-1.5 text-xs leading-6 text-faint">
               前进一步后可查看 tick 0 的 Memory 提交。
             </p>
-            <p v-else-if="memoryPending" class="mt-2 text-xs leading-6 text-arena-muted">加载中…</p>
+            <p v-else-if="memoryPending" class="mt-1.5 text-xs leading-6 text-faint">加载中…</p>
             <template v-else-if="memoryState">
-              <p class="mt-2 text-xs text-arena-muted">提交前</p>
+              <p class="mt-1.5 text-xs text-faint">提交前</p>
               <pre
-                class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-6 text-arena-text"
+                class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-ink"
                 >{{ formatMemory(memoryState.before) }}</pre>
-              <p class="mt-2 text-xs text-arena-muted">提交后</p>
+              <p class="mt-1.5 text-xs text-faint">提交后</p>
               <pre
-                class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-6 text-arena-text"
+                class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-ink"
                 >{{ formatMemory(memoryState.after) }}</pre>
             </template>
-            <p v-else class="mt-2 text-xs leading-6 text-arena-muted">
+            <p v-else class="mt-1.5 text-xs leading-6 text-faint">
               该选手在此 tick 没有 Memory 记录。
             </p>
           </div>
           <details
-            class="mt-3 min-w-0 border-t border-arena-border pt-2"
+            class="mt-2 min-w-0 border-t border-line pt-2"
             @toggle="observationOpen = ($event.target as HTMLDetailsElement).open"
           >
-            <summary class="min-h-11 cursor-pointer py-3 text-sm text-arena-muted">
+            <summary
+              class="flex min-h-9 cursor-pointer items-center text-sm text-soft transition hover:text-ink"
+            >
               查看执行前的观察
             </summary>
             <pre
               v-if="observationOpen"
-              class="max-h-60 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-6 text-arena-muted"
+              class="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-soft"
               >{{ selectedObservation }}</pre>
           </details>
         </div>
       </aside>
     </div>
-    <section class="panel mt-5 min-w-0 p-4 sm:p-5" aria-labelledby="logs-title">
+    <section
+      class="mt-5 min-w-0 rounded-card border border-line bg-surface p-4 shadow-card"
+      aria-labelledby="logs-title"
+    >
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 id="logs-title" class="text-sm font-semibold">
           玩家日志
-          <span class="ml-2 font-mono text-xs text-arena-muted">{{
+          <span class="ml-1.5 font-mono text-xs font-normal text-faint">{{
             view.record ? `INPUT TICK ${view.record.tick}` : "S0"
           }}</span>
         </h2>
-        <label class="flex items-center gap-2 text-xs text-arena-muted" for="log-level"
-          >日志级别<select id="log-level" v-model="level" class="replay-input">
+        <label class="flex items-center gap-2 text-xs text-soft" for="log-level"
+          >日志级别<select id="log-level" v-model="level" class="select w-auto">
             <option value="all">全部</option>
             <option
               v-for="name in ['log', 'info', 'warn', 'error', 'debug']"
@@ -443,12 +444,12 @@ function keyboard(event: KeyboardEvent) {
           </select></label
         >
       </div>
-      <p v-if="logsTruncated" class="mt-3 text-sm text-arena-danger">
+      <p v-if="logsTruncated" class="mt-3 text-sm text-warning">
         该 tick 的日志已达到预算，部分内容被截断。
       </p>
       <div
         v-if="selectedLogs.length"
-        class="mt-4 max-h-72 space-y-2 overflow-auto rounded-lg bg-arena-background p-4"
+        class="mt-3 max-h-72 space-y-2 overflow-auto rounded-control border border-line bg-subtle p-3.5"
         role="region"
         aria-label="当前 tick 玩家日志"
       >
@@ -457,14 +458,24 @@ function keyboard(event: KeyboardEvent) {
           :key="index"
           class="flex items-start gap-3 font-mono text-xs leading-6"
         >
-          <span class="shrink-0 uppercase text-arena-muted">{{ log.level }}</span>
+          <span
+            class="shrink-0 uppercase"
+            :class="
+              log.level === 'error'
+                ? 'text-danger'
+                : log.level === 'warn'
+                  ? 'text-warning'
+                  : 'text-faint'
+            "
+            >{{ log.level }}</span
+          >
           <pre
             class="min-w-0 whitespace-pre-wrap break-all"
-            :class="log.level === 'error' ? 'text-arena-danger' : 'text-arena-text'"
+            :class="log.level === 'error' ? 'text-danger' : 'text-ink'"
             >{{ log.message }}</pre>
         </div>
       </div>
-      <p v-else class="mt-4 text-sm leading-7 text-arena-muted">
+      <p v-else class="mt-3 text-sm leading-7 text-soft">
         {{
           view.record
             ? "该选手在当前 tick 没有符合筛选条件的日志。"

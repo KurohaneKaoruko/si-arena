@@ -3,7 +3,9 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { paperGame } from "@si-arena/game-paper/game";
 import GameEntry from "../src/components/GameEntry.vue";
+import ToastHost from "../src/components/ui/ToastHost.vue";
 import { clearSession, signIn } from "../src/auth/session";
+import { useToast } from "../src/composables/useToast";
 
 const user = { id: "player", username: "player", official: false };
 const game = paperGame.manifest;
@@ -23,9 +25,11 @@ const response = (body: unknown, status = 200) => new Response(JSON.stringify(bo
 beforeEach(() => {
   clearSession();
   localStorage.clear();
+  useToast().dismiss();
 });
 afterEach(() => {
   clearSession();
+  useToast().dismiss();
   vi.unstubAllGlobals();
 });
 async function setup(fetch: ReturnType<typeof vi.fn>) {
@@ -42,13 +46,14 @@ async function setup(fetch: ReturnType<typeof vi.fn>) {
   });
   await router.push("/");
   const wrapper = mount(GameEntry, { props: { game }, global: { plugins: [router] } });
+  const toast = mount(ToastHost);
   await flushPromises();
-  return { wrapper, router };
+  return { wrapper, router, toast };
 }
 
 test("a lost match response retries the same idempotency key and existing matches are reused", async () => {
   const fetch = vi.fn();
-  const { wrapper, router } = await setup(fetch);
+  const { wrapper, router, toast } = await setup(fetch);
   fetch
     .mockRejectedValueOnce(new TypeError("response lost"))
     .mockResolvedValueOnce(
@@ -57,7 +62,7 @@ test("a lost match response retries the same idempotency key and existing matche
   const button = wrapper.findAll("button").find((candidate) => candidate.text() === "发起匹配")!;
   await button.trigger("click");
   await flushPromises();
-  expect(wrapper.text()).toContain("网络连接失败");
+  expect(toast.text()).toContain("网络连接失败");
   await button.trigger("click");
   await flushPromises();
   const calls = fetch.mock.calls.filter((call) => String(call[0]).endsWith("/matches"));
@@ -69,11 +74,12 @@ test("a lost match response retries the same idempotency key and existing matche
   expect(keys[1]).toBe(keys[0]);
   expect(router.currentRoute.value.path).toBe("/matches/existing");
   wrapper.unmount();
+  toast.unmount();
 });
 
 test("uploading never creates a match, and a rejected upload preserves the current code", async () => {
   const fetch = vi.fn();
-  const { wrapper } = await setup(fetch);
+  const { wrapper, toast } = await setup(fetch);
   const input = wrapper.get("input[type=file]");
   const text = 'export default () => ({type:"idle"})';
   Object.defineProperty(input.element, "files", {
@@ -92,22 +98,23 @@ test("uploading never creates a match, and a rejected upload preserves the curre
   fetch.mockResolvedValueOnce(response({ code: "CODE_INVALID", message: "无效代码" }, 400));
   await button.trigger("click");
   await flushPromises();
-  expect(wrapper.text()).toContain("无效代码");
+  expect(toast.text()).toContain("无效代码");
   expect(wrapper.get("pre").text()).toBe(code.source);
   fetch
     .mockResolvedValueOnce(response(code))
     .mockResolvedValueOnce(response({ ...me, code: { ...code, source: text } }));
   await button.trigger("click");
   await flushPromises();
-  expect(wrapper.text()).toContain("最新代码已保存");
+  expect(toast.text()).toContain("最新代码已保存");
   expect(wrapper.get("pre").text()).toBe(text);
   expect(fetch.mock.calls.some((call) => String(call[0]).endsWith("/matches"))).toBe(false);
   wrapper.unmount();
+  toast.unmount();
 });
 
 test("invalid UTF-8 and oversized files never reach the upload endpoint", async () => {
   const fetch = vi.fn();
-  const { wrapper } = await setup(fetch);
+  const { wrapper, toast } = await setup(fetch);
   const input = wrapper.get("input[type=file]");
   Object.defineProperty(input.element, "files", {
     configurable: true,
@@ -125,4 +132,5 @@ test("invalid UTF-8 and oversized files never reach the upload endpoint", async 
   expect(wrapper.text()).toContain("文件超过");
   expect(fetch).toHaveBeenCalledTimes(2);
   wrapper.unmount();
+  toast.unmount();
 });

@@ -1,88 +1,100 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from "vue-router";
-import { onMounted, onUnmounted, ref } from "vue";
+import { RouterLink, RouterView, useRoute } from "vue-router";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { restoreSession, session, signOut, syncSession } from "./auth/session";
 import { errorMessage } from "./api/client";
+import { useToast } from "./composables/useToast";
+import ToastHost from "./components/ui/ToastHost.vue";
+import AppButton from "./components/ui/AppButton.vue";
+
+const route = useRoute();
+const toast = useToast();
 const leaving = ref(false);
-const error = ref("");
+
 onMounted(() => {
   void restoreSession();
   window.addEventListener("storage", syncSession);
 });
 onUnmounted(() => window.removeEventListener("storage", syncSession));
+
+watch(
+  () => session.error,
+  (message) => {
+    if (message) toast.error(message);
+  },
+);
+
 async function logout() {
+  if (leaving.value) return;
   leaving.value = true;
-  error.value = "";
   try {
     await signOut();
+    toast.success("已退出登录");
   } catch (failure) {
-    error.value = errorMessage(failure);
+    toast.error(errorMessage(failure));
   } finally {
     leaving.value = false;
   }
+}
+
+function navClass(target: string, exact = false) {
+  const active = exact ? route.path === target : route.path.startsWith(target);
+  return [
+    "relative inline-flex min-h-9 items-center rounded-control px-2.5 text-sm transition",
+    active
+      ? "font-medium text-ink after:absolute after:inset-x-2.5 after:-bottom-px after:h-px after:bg-ink"
+      : "text-soft hover:text-ink",
+  ];
 }
 </script>
 
 <template>
   <a class="skip-link" href="#main-content">跳到主要内容</a>
-  <div class="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-5 sm:px-8">
-    <header
-      class="flex min-h-24 flex-wrap items-center justify-between gap-x-5 gap-y-2 border-b border-arena-border py-4"
-    >
-      <RouterLink
-        to="/"
-        class="inline-flex min-h-11 items-center gap-3 font-semibold tracking-tight"
-        aria-label="SI Arena 首页"
-      >
-        <span
-          class="flex size-10 items-center justify-center rounded-xl border border-arena-accent/30 bg-arena-accent/10 font-mono text-sm text-arena-accent"
-          aria-hidden="true"
-          >SI</span
-        >
-        <span class="text-xl">SI Arena</span>
-      </RouterLink>
-      <nav class="flex flex-wrap items-center gap-1" aria-label="主导航">
-        <RouterLink
-          class="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-arena-muted transition-colors hover:bg-arena-card hover:text-arena-text"
-          to="/replays"
-          >回放</RouterLink
-        >
-        <RouterLink
-          class="inline-flex min-h-11 items-center rounded-lg px-4 text-sm text-arena-muted transition-colors hover:bg-arena-card hover:text-arena-text"
-          to="/"
-          >游戏大厅</RouterLink
-        >
-        <template v-if="session.user">
-          <RouterLink
-            class="inline-flex min-h-11 max-w-40 items-center rounded-lg px-3 text-sm text-arena-accent"
-            to="/account"
-            ><span class="truncate">{{ session.user.username }}</span></RouterLink
+  <div class="flex min-h-dvh w-full flex-col">
+    <header class="sticky top-0 z-40 border-b border-line bg-background/85 backdrop-blur-md">
+      <div class="mx-auto flex h-14 w-full max-w-5xl items-center gap-3 px-5 sm:px-8">
+        <RouterLink to="/" class="flex items-center gap-2" aria-label="SI Arena 首页">
+          <span
+            class="flex size-7 items-center justify-center rounded-md bg-ink font-mono text-[11px] font-semibold text-white"
+            aria-hidden="true"
+            >SI</span
           >
-          <button
-            class="min-h-11 px-3 text-sm text-arena-muted hover:text-arena-text disabled:opacity-40"
-            :disabled="leaving"
-            @click="logout"
+          <span class="hidden text-[15px] font-semibold tracking-tight sm:inline">SI Arena</span>
+        </RouterLink>
+        <nav
+          class="ml-auto flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="主导航"
+        >
+          <RouterLink :class="navClass('/', true)" to="/">游戏大厅</RouterLink>
+          <RouterLink :class="navClass('/replays')" to="/replays">回放</RouterLink>
+          <template v-if="session.user">
+            <RouterLink :class="navClass('/account')" class="max-w-32 truncate" to="/account">{{
+              session.user.username
+            }}</RouterLink>
+            <AppButton variant="ghost" size="sm" :loading="leaving" @click="logout">退出</AppButton>
+          </template>
+          <AppButton v-else-if="session.ready" variant="secondary" size="sm" to="/login"
+            >登录</AppButton
           >
-            {{ leaving ? "退出中…" : "退出" }}
-          </button>
-        </template>
-        <RouterLink v-else-if="session.ready" class="button-secondary" to="/login">登录</RouterLink>
-      </nav>
+        </nav>
+      </div>
     </header>
-    <div v-if="session.error || error" role="alert" class="mt-4 text-sm text-arena-danger">
-      <p>{{ error || session.error }}</p>
-      <button v-if="session.error" class="button-secondary mt-2" @click="restoreSession">
-        恢复登录
-      </button>
-    </div>
-    <main id="main-content" class="flex-1 py-14 sm:py-20" tabindex="-1">
-      <RouterView />
-    </main>
-    <footer
-      class="flex flex-wrap justify-between gap-3 border-t border-arena-border py-7 font-mono text-xs text-arena-muted"
+    <main
+      id="main-content"
+      class="mx-auto w-full max-w-5xl flex-1 px-5 py-10 sm:px-8 sm:py-14"
+      tabindex="-1"
     >
-      <span>SI / SUPER INTELLIGENCE</span>
-      <span>让策略代码上场。</span>
+      <RouterView v-slot="{ Component }">
+        <Transition name="page" mode="out-in">
+          <component :is="Component" />
+        </Transition>
+      </RouterView>
+    </main>
+    <footer class="border-t border-line">
+      <div class="mx-auto w-full max-w-5xl px-5 py-5 sm:px-8">
+        <span class="font-mono text-[11px] tracking-[0.18em] text-faint">SI ARENA</span>
+      </div>
     </footer>
   </div>
+  <ToastHost />
 </template>

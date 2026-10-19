@@ -6,43 +6,61 @@ import { parseHistory } from "../api/contracts";
 import AccountGate from "../components/AccountGate.vue";
 import MatchList from "../components/MatchList.vue";
 import PaginationControls from "../components/PaginationControls.vue";
+import PageHeader from "../components/ui/PageHeader.vue";
+import StateBlock from "../components/ui/StateBlock.vue";
 import { useApiResource } from "../composables/useApiResource";
+
 const route = useRoute();
 const router = useRouter();
 const gamePath = computed(() => `/games/${encodeURIComponent(String(route.params.gameId))}`);
 const page = computed(() => clampMatchPage(Number(route.query.page ?? 1)));
-const { data, pending, error, reload } = useApiResource(
+const { data, status, empty, error, pending, reload } = useApiResource(
   () => `/api${gamePath.value}/me/matches?page=${page.value}&limit=20`,
   parseHistory,
-  { authenticated: true },
+  { authenticated: true, isEmpty: (value) => value.matches.length === 0 },
 );
 function change(value: number) {
   void router.push({ query: { page: value } });
 }
 </script>
+
 <template>
-  <RouterLink class="mb-8 inline-flex min-h-11 items-center text-sm text-arena-muted" :to="gamePath"
-    >← 返回游戏</RouterLink
-  >
-  <p class="eyebrow">MATCH HISTORY</p>
-  <h1 class="mt-4 text-3xl font-semibold">我的比赛</h1>
-  <p class="mt-4 leading-7 text-arena-muted">包括你主动发起的比赛，以及其他玩家匹配到你的比赛。</p>
-  <div class="mt-8">
-    <AccountGate>
-      <p v-if="pending && !data" role="status" class="panel p-7 text-arena-muted">正在加载战绩…</p>
-      <div v-if="error" role="alert" class="panel p-7">
-        <p class="text-arena-danger">{{ error }}</p>
-        <button class="button-secondary mt-4" @click="reload">重新加载</button>
-      </div>
-      <MatchList v-if="data" :matches="data.matches" />
-      <PaginationControls
-        v-if="data"
-        :page="data.page"
-        :limit="data.limit"
-        :total="data.total"
-        :pending="pending"
-        @change="change"
-      />
-    </AccountGate>
+  <div>
+    <RouterLink
+      :to="gamePath"
+      class="inline-flex items-center gap-1 text-sm text-soft transition hover:text-ink"
+      >← 返回游戏</RouterLink
+    >
+    <PageHeader
+      class="mt-6"
+      title="我的比赛"
+      description="你主动发起的比赛，以及其他玩家匹配到你的比赛。"
+    />
+    <div class="mt-8">
+      <AccountGate>
+        <StateBlock v-if="status === 'loading'" status="loading" />
+        <StateBlock
+          v-else-if="status === 'error'"
+          status="error"
+          :message="error"
+          @retry="reload"
+        />
+        <StateBlock
+          v-else-if="empty"
+          status="empty"
+          message="还没有比赛。上传策略并主动发起第一场匹配。"
+        />
+        <template v-else-if="data">
+          <MatchList :matches="data.matches" />
+          <PaginationControls
+            :page="data.page"
+            :limit="data.limit"
+            :total="data.total"
+            :pending="pending"
+            @change="change"
+          />
+        </template>
+      </AccountGate>
+    </div>
   </div>
 </template>

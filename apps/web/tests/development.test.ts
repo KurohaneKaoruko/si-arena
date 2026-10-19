@@ -1,10 +1,16 @@
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { paperGame } from "@si-arena/game-paper/game";
 import GameDevelopment from "../src/components/GameDevelopment.vue";
+import ToastHost from "../src/components/ui/ToastHost.vue";
+import { useToast } from "../src/composables/useToast";
 
 enableAutoUnmount(afterEach);
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => useToast().dismiss());
+afterEach(() => {
+  useToast().dismiss();
+  vi.unstubAllGlobals();
+});
 const docs = {
   prompt: "统一提示词",
   sdk: "SDK 文档",
@@ -35,12 +41,13 @@ test("copies materials with feedback, escapes code and links only to the pinned 
       ),
   );
   const wrapper = mount(GameDevelopment, { props: { game: paperGame.manifest } });
+  const toast = mount(ToastHost);
   await flushPromises();
   const button = wrapper.findAll("button").find((candidate) => candidate.text() === "复制提示词")!;
   await button.trigger("click");
   await flushPromises();
   expect(writeText).toHaveBeenCalledWith(docs.prompt);
-  expect(wrapper.get("[role=status]").text()).toContain("已复制");
+  expect(toast.text()).toContain("已复制");
   expect(wrapper.find("img").exists()).toBe(false);
   expect(wrapper.text()).toContain(docs.officialBot);
   const download = wrapper.findAll("a").find((link) => link.text() === "下载开发包 ZIP")!;
@@ -63,6 +70,7 @@ test("materials remain usable when the archive is unavailable and clipboard fail
     ),
   );
   const wrapper = mount(GameDevelopment, { props: { game: paperGame.manifest } });
+  const toast = mount(ToastHost);
   await flushPromises();
   expect(wrapper.text()).toContain("下载包暂不可用");
   expect(wrapper.get("textarea").element.value).toBe(docs.prompt);
@@ -71,5 +79,5 @@ test("materials remain usable when the archive is unavailable and clipboard fail
     .find((button) => button.text() === "复制提示词")!
     .trigger("click");
   await flushPromises();
-  expect(wrapper.text()).toContain("请手动选择并复制");
+  expect(toast.text()).toContain("请手动选择并复制");
 });

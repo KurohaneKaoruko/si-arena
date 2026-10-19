@@ -3,6 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { loadRegisteredReplay, type BrowserReplaySession } from "@si-arena/player/browser";
 import { replayGames } from "../games/replays";
 import ReplayViewer from "../components/ReplayViewer.vue";
+import AppBadge from "../components/ui/AppBadge.vue";
+import AppButton from "../components/ui/AppButton.vue";
+import PageHeader from "../components/ui/PageHeader.vue";
 
 interface DevResultPlayer {
   id: string;
@@ -57,6 +60,11 @@ const progressPercent = computed(() => {
   if (!value || !value.maxTicks) return 0;
   return Math.min(100, Math.round((value.completedTicks / value.maxTicks) * 100));
 });
+const phaseBadge = {
+  running: "accent",
+  completed: "success",
+  error: "danger",
+} as const;
 
 function schedule(delay: number): void {
   if (disposed) return;
@@ -151,46 +159,32 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section aria-labelledby="dev-title">
-    <div class="flex flex-wrap items-end justify-between gap-6">
-      <div class="min-w-0">
-        <p class="mb-3 font-mono text-xs tracking-[0.2em] text-arena-accent">
-          LOCAL DEV / 实时调试
-        </p>
-        <h1 id="dev-title" class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-          改代码，开局，看细节。
-        </h1>
-        <p class="mt-4 max-w-2xl leading-7 text-arena-muted">
-          每局都在本地运行，整场完成后可逐步查看动作、日志、错误与 Memory
-          提交。修改代码后重新开局，不会热替换进行中的比赛。
-        </p>
-      </div>
-      <div class="flex shrink-0 flex-wrap gap-3">
-        <button type="button" class="button-secondary" :disabled="restarting" @click="restart()">
+  <section>
+    <PageHeader
+      title="实时调试"
+      description="每局都在本地运行，整场完成后可逐步查看动作、日志、错误与 Memory 提交。改代码后重新开局，不会热替换进行中的比赛。"
+    >
+      <template #actions>
+        <AppButton variant="secondary" :loading="restarting" @click="restart()">
           重新开局（同种子）
-        </button>
-        <button
-          type="button"
-          class="button-primary"
-          :disabled="restarting"
-          @click="restart(randomSeed())"
-        >
+        </AppButton>
+        <AppButton variant="primary" :loading="restarting" @click="restart(randomSeed())">
           换种子重开
-        </button>
-      </div>
-    </div>
+        </AppButton>
+      </template>
+    </PageHeader>
 
-    <div class="panel mt-8 p-6" aria-live="polite">
-      <div class="flex flex-wrap items-start justify-between gap-4">
+    <div class="mt-8 rounded-card border border-line bg-surface p-5 shadow-card" aria-live="polite">
+      <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
-          <p class="break-all font-mono text-xs text-arena-muted">
+          <p class="break-all font-mono text-xs text-faint">
             {{
               status
                 ? `${status.game.name} · ${status.game.release} · 第 ${status.current.run} 局 · 种子 ${status.current.seed}`
                 : "正在连接本地调试服务…"
             }}
           </p>
-          <h2 class="mt-2 text-lg font-semibold">
+          <h2 class="mt-1.5 text-[15px] font-semibold tracking-tight">
             {{
               phase === "running"
                 ? "比赛进行中，完成后自动载入播放器。"
@@ -202,29 +196,17 @@ onBeforeUnmount(() => {
             }}
           </h2>
         </div>
-        <span
-          v-if="phase"
-          class="shrink-0 rounded-full border px-3 py-1 text-xs"
-          :class="
-            phase === 'completed'
-              ? 'border-arena-accent/30 bg-arena-accent/10 text-arena-accent'
-              : phase === 'error'
-                ? 'border-arena-danger/40 bg-arena-danger/10 text-arena-danger'
-                : 'border-arena-border text-arena-muted'
-          "
-        >
+        <AppBadge v-if="phase" :tone="phaseBadge[phase]">
           {{ phase === "running" ? "RUNNING" : phase === "completed" ? "COMPLETED" : "ERROR" }}
-        </span>
+        </AppBadge>
       </div>
 
       <div v-if="phase === 'running' && current" class="mt-4">
-        <div class="flex flex-wrap items-center gap-2 text-sm text-arena-muted">
-          <span data-testid="dev-progress"
-            >已完成 {{ current.completedTicks }} / {{ current.maxTicks }} tick</span
-          >
-        </div>
+        <p class="font-mono text-sm text-soft" data-testid="dev-progress">
+          已完成 {{ current.completedTicks }} / {{ current.maxTicks }} tick
+        </p>
         <div
-          class="mt-2 h-2 w-full overflow-hidden rounded-full bg-arena-background"
+          class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted"
           role="progressbar"
           aria-label="比赛进度"
           :aria-valuenow="current.completedTicks"
@@ -232,7 +214,7 @@ onBeforeUnmount(() => {
           :aria-valuemax="current.maxTicks"
         >
           <div
-            class="h-full rounded-full bg-arena-accent"
+            class="h-full rounded-full bg-accent transition-[width] duration-500"
             :style="{ width: `${progressPercent}%` }"
           />
         </div>
@@ -241,37 +223,30 @@ onBeforeUnmount(() => {
       <p
         v-if="phase === 'error' && current?.message"
         role="alert"
-        class="mt-4 break-words rounded-lg border border-arena-danger/40 bg-arena-danger/5 p-3 text-sm text-arena-danger"
+        class="mt-4 break-words rounded-control border border-danger/25 bg-danger-soft p-3 text-sm text-danger"
       >
         {{ current.message }}
       </p>
-      <p v-if="phase === 'error' && status?.lastCompleted" class="mt-3 text-xs text-arena-muted">
+      <p v-if="phase === 'error' && status?.lastCompleted" class="mt-2 text-xs text-soft">
         下方仍显示第 {{ status.lastCompleted.run }} 局的结果，修复代码后可重新开局。
       </p>
 
-      <div v-if="ranking.length" class="mt-5 border-t border-arena-border pt-4">
+      <div v-if="ranking.length" class="mt-4 border-t border-line pt-3.5">
         <h3 class="text-sm font-semibold">
           {{ phase === "completed" ? "本局排名" : `第 ${status?.lastCompleted?.run} 局排名` }}
         </h3>
-        <p v-for="entry in ranking" :key="entry.id" class="mt-2 text-sm text-arena-muted">
+        <p v-for="entry in ranking" :key="entry.id" class="mt-1.5 text-sm text-soft">
           第 {{ entry.rank }} 名 · {{ entry.name }} · {{ entry.score }} 分
         </p>
       </div>
 
-      <div
-        v-if="players.length"
-        class="mt-5 flex flex-wrap gap-2 border-t border-arena-border pt-4"
-      >
-        <span
-          v-for="player in players"
-          :key="player.id"
-          class="rounded-full border border-arena-border px-3 py-1 text-xs text-arena-muted"
-        >
+      <div v-if="players.length" class="mt-4 flex flex-wrap gap-2 border-t border-line pt-3.5">
+        <AppBadge v-for="player in players" :key="player.id">
           {{ player.name }}{{ player.official ? " · 官方" : "" }}
-        </span>
+        </AppBadge>
       </div>
 
-      <p v-if="status?.memoryTruncated" class="mt-4 text-xs text-arena-danger">
+      <p v-if="status?.memoryTruncated" class="mt-4 text-xs text-warning">
         本地会话的 Memory 记录已达上限，之后的 tick 不再记录新的提交，对比可能停留在旧值。
       </p>
     </div>
@@ -279,7 +254,7 @@ onBeforeUnmount(() => {
     <p
       v-if="sessionError"
       role="alert"
-      class="panel mt-8 break-words border-arena-danger/50 p-6 text-arena-danger"
+      class="mt-8 break-words rounded-card border border-danger/25 bg-danger-soft p-5 text-sm text-danger"
     >
       {{ sessionError }}
     </p>

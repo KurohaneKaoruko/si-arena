@@ -4,8 +4,7 @@ import "./style.css";
 
 createApp({
   render: () =>
-    h("main", { class: "mx-auto min-h-dvh max-w-6xl px-5 py-10 sm:px-8" }, [
-      h("p", { class: "mb-10 font-mono text-sm text-arena-accent" }, "SI ARENA / LOCAL REPLAY"),
+    h("main", { class: "mx-auto min-h-dvh w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14" }, [
       h(ReplayPage, {
         initialReplayUrl: "/replay.json.gz",
         exampleCommand: "pnpm arena run --bot ./bot.js --seed 42",
