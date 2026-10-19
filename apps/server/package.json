@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --import tsx ../../scripts/wait-for-workspace-deps.ts && node --env-file-if-exists=../../.env --import tsx --watch src/main.ts",
+    "dev": "node --env-file-if-exists=../../.env --import tsx --watch ../../scripts/dev-entry.ts",
     "build": "tsdown --config ../../tsdown.config.ts",
     "start": "node --env-file-if-exists=../../.env dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
