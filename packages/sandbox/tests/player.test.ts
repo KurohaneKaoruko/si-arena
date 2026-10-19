@@ -211,6 +211,50 @@ test.each([
   expect(await player.execute(1, {})).toMatchObject({ ok: true, memory: { n: 1 } });
 });
 
+test("Function-constructor and indirect-eval import escapes load no modules and keep the executor alive", async () => {
+  const player = await create(`let settled = 0;
+    const attempts = [];
+    const attempt = (label, run) => {
+      try {
+        const value = run();
+        attempts.push(label + ':' + typeof value);
+        if (value && typeof value.then === 'function')
+          value.then(() => { settled++; }, () => { settled++; });
+      } catch (error) {
+        attempts.push(label + ':threw:' + (error && error.message ? error.message : String(error)));
+      }
+    };
+    attempt('newFunction-node', () => new Function('return import("node:fs")')());
+    attempt('newFunction-remote', () => new Function('return import("https://example.invalid/x.js")')());
+    attempt('newFunction-argument', () => new Function('m', 'return import(m)')('node:fs'));
+    attempt('indirectEval-node', () => (0, eval)('import("node:fs")'));
+    attempt('indirectEval-declaration', () => (0, eval)('import x from "node:fs"'));
+    const realm = new Function('return this')();
+    export default ({Memory}) => {
+      Memory.attempts = attempts;
+      Memory.settled = settled;
+      Memory.hostGlobals = [typeof process, typeof require, typeof global,
+        typeof realm.process, typeof realm.require, typeof realm.global, typeof realm.fetch];
+      return {type:'move'};
+    }`);
+  const pid = player.processId;
+  const result = await player.execute(0, {});
+  expect(result.ok).toBe(true);
+  expect(result.action).toEqual({ type: "move" });
+  const hostGlobals = result.memory.hostGlobals as string[];
+  expect(hostGlobals.every((value) => value === "undefined")).toBe(true);
+  // Every escape either throws a guest-catchable error or returns a promise that
+  // can never settle: the module loader is disabled and queued jobs never drain,
+  // so no continuation runs and no module is ever delivered.
+  expect(result.memory.settled).toBe(0);
+  const attempts = result.memory.attempts as string[];
+  for (const entry of attempts)
+    expect(entry).toMatch(/^(newFunction|indirectEval)-[^:]+:(object|threw:)/);
+  expect(attempts.some((entry) => entry.includes("threw"))).toBe(true);
+  expect(player.processId).toBe(pid);
+  expect(await player.execute(1, {})).toMatchObject({ ok: true, memory: { settled: 0 } });
+});
+
 test("one failing player cannot block another player's process", async () => {
   const a = await create(`export default ()=>{while(true){}}`, { limits: limits({ cpuMs: 30 }) });
   const b = await create(`export default ()=>({type:'move'})`);
@@ -397,6 +441,25 @@ test("platform input and trusted parser failures are system errors", async () =>
     sdkSource: "throw new Error('SDK initialization failed');export default {}",
   });
   await expect(brokenSdk.execute(0, {})).rejects.toBeInstanceOf(SandboxSystemError);
+});
+
+test("trusted SDK heap exhaustion is a system error while guest heap exhaustion stays a player error", async () => {
+  const budget = limits({ heapBytes: 2 * 1024 * 1024 });
+  const brokenSdk = await create(`export default ()=>({type:'move'})`, {
+    sdkSource: `const sink='x'.repeat(4*1024*1024);export default{}`,
+    limits: budget,
+  });
+  await expect(brokenSdk.execute(0, {})).rejects.toBeInstanceOf(SandboxSystemError);
+  const player = await create(
+    `export default ({observation,Memory})=>{Memory.n=1;if(observation.fail){try{new ArrayBuffer(8*1024*1024)}catch{}};return {type:'move'}}`,
+    { limits: budget },
+  );
+  expect(await player.execute(0, { fail: true })).toMatchObject({
+    ok: false,
+    error: { type: "HEAP_LIMIT" },
+    memory: {},
+  });
+  expect(await player.execute(1, {})).toMatchObject({ ok: true, memory: { n: 1 } });
 });
 
 test("host observations follow strict JSON policy without advancing a rejected tick or Memory", async () => {

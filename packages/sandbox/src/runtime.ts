@@ -82,7 +82,7 @@ export function runGuest(
     }
     validatedSource = input.source;
   }
-  return withRuntime(input.limits, (context, keep, unwrap, resourceFailure, mark) => {
+  return withRuntime(input.limits, (context, keep, unwrap, resourceFailure, mark, enterGuest) => {
     const emit = keep(
       context.newFunction("emitLog", (level, message) => {
         // Only primitives from our formatter cross the boundary, never guest objects.
@@ -121,6 +121,9 @@ export function runGuest(
     } catch {
       throw new Error("Trusted SDK failed to initialize");
     }
+    // Everything below evaluates untrusted player code: from here on, resource
+    // exhaustion is attributable to the player instead of the platform.
+    enterGuest();
     try {
       const module = unwrap(context.evalCode(input.source, "player.js", { type: "module" }));
       const entry = keep(context.getProp(module, "default"));
@@ -173,7 +176,10 @@ export function compileSource(source: string, limits: ResourceLimits): RuntimeOu
     }
     throw error;
   }
-  return withRuntime(limits, (context, _keep, unwrap) => {
+  return withRuntime(limits, (context, _keep, unwrap, _resourceFailure, _mark, enterGuest) => {
+    // Compiling untrusted player source is guest work: heap or CPU exhaustion
+    // here is attributable to the player's source.
+    enterGuest();
     try {
       unwrap(context.evalCode(source, "player.js", { type: "module", compileOnly: true }));
       return '{"ok":true}';
@@ -194,6 +200,7 @@ function withRuntime(
     unwrap: (result: ReturnType<QuickJSContext["evalCode"]>) => QuickJSHandle,
     resourceFailure: () => ExecutionError | undefined,
     mark: (phase: string) => void,
+    enterGuest: () => void,
   ) => string,
 ): RuntimeOutput {
   flags["_arena_reset_failure"]();
@@ -239,15 +246,22 @@ function withRuntime(
       if (result.error) throw new GuestFault(keep(result.error));
       return keep(result.value);
     };
+    let guest = false;
+    const enterGuest = () => {
+      guest = true;
+    };
     let payload: string;
     try {
-      payload = execute(context, keep, unwrap, failure, mark);
+      payload = execute(context, keep, unwrap, failure, mark, enterGuest);
     } catch (error) {
-      const resource = failure();
+      // Only guest (untrusted) work may be reported as a player resource error;
+      // trusted-phase failures (bootstrap, config, SDK evaluation) stay system
+      // failures even when a resource latch is set.
+      const resource = guest ? failure() : undefined;
       if (!resource) throw error;
       payload = JSON.stringify({ ok: false, error: resource });
     }
-    const resource = failure();
+    const resource = guest ? failure() : undefined;
     if (resource) payload = JSON.stringify({ ok: false, error: resource });
     return { payload, cpuUsedUs: cpu(), profile };
   } finally {
