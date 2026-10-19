@@ -3,6 +3,24 @@ packages:
   - packages/*
   - games/*
 
+# 公开包统一版本（lockstep）：发版经 `pnpm change` 记录意图、`pnpm version -r` 统一提升；
+# private 包不参与版本管理。详见 docs/architecture/deployment.md。
+versioning:
+  fixed:
+    - [
+        "@si-arena/protocol",
+        "@si-arena/sandbox",
+        "@si-arena/engine",
+        "@si-arena/player",
+        "@si-arena/game-paper",
+        "@si-arena/cli",
+      ]
+  ignore:
+    - "@si-arena/db"
+    - "@si-arena/server"
+    - "@si-arena/worker"
+    - "@si-arena/web"
+
 catalog:
   "fflate": "0.8.3"
   "quickjs-emscripten-core": "0.32.0"
