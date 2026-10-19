@@ -1,6 +1,16 @@
 {
   "name": "@si-arena/engine",
   "version": "0.1.0",
+  "license": "MIT",
+  "author": {
+    "name": "lovekeqing",
+    "email": "2911331070@qq.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lovezhangchuangxin/si-arena.git",
+    "directory": "packages/engine"
+  },
   "files": [
     "dist",
     "examples"
