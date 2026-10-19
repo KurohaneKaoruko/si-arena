@@ -4,12 +4,12 @@
 
 | 实体 | 主要字段与约束 |
 | --- | --- |
-| `users` | 用户 ID、唯一规范用户名、展示名、密码摘要与参数、官方标记；官方标记不可由普通用户修改 |
-| `sessions` | 会话 token 的 SHA-256 摘要、用户 ID、CSRF token、创建时间与到期时间 |
+| `users` | 用户 ID、唯一规范用户名（即展示名）、密码摘要与参数、官方标记；官方标记不可由普通用户修改 |
+| `sessions` | 会话 token 的 SHA-256 摘要、用户 ID、创建时间与到期时间 |
 | `auth_rate_limits` | 认证限流作用域、主体摘要、窗口开始时间与计数，窗口内原子递增 |
 | `game_entries` | `(game_id, user_id)` 唯一；最新源码、源码字节数、代码协议版本、更新时间、排位分、比赛数、胜平负计数 |
 | `matches` | 比赛 ID、游戏及冻结发行、发起者、幂等标识、状态、resolvedLimits、实际配置、种子、租约、执行标识、结果、回放引用、时间戳、失败原因 |
-| `match_participants` | `(match_id, user_id)` 唯一；固定席位、创建时展示名与官方标记、局内成绩、结算前后排位 |
+| `match_participants` | `(match_id, user_id)` 唯一；固定席位、创建时用户名与官方标记快照、局内成绩、结算前后排位 |
 
 首版游戏目录、规则说明和发行清单来自可信游戏包，不必额外建一套数据库 CMS。任务状态放在 `matches`，无需再建一张重复的任务业务表。
 
@@ -62,17 +62,23 @@ worker 用短事务锁定本机支持且有资源容量的任务，设置 `runni
 
 ## 注册、登录与会话
 
-用户通过用户名和密码注册登录，不接入 GitHub、邮箱验证码或其他外部身份服务。用户名为 3–24 位 ASCII 字母、数字或下划线，按小写规范化后唯一；显示名与登录名分开，显示名为 1–32 个 Unicode 码点。`official` 为保留用户名，官方账号由部署初始化创建，不接受普通登录。
+用户通过用户名和密码注册登录，不接入 GitHub、邮箱验证码或其他外部身份服务。用户名为 2–24 个 Unicode 码点（仅校验长度，不允许空字节），按小写规范化后作为唯一身份与展示名；`official` 为保留用户名，官方账号由部署初始化创建，不接受普通登录。密码为 6–24 个 Unicode 码点（仅校验长度，不允许空字节），按原输入处理，不 trim 或静默截断。
 
-密码为 12–128 个 Unicode 码点，按原输入处理，不 trim 或静默截断。采用 Node.js 异步 `crypto.scrypt`，参数为 `N=131072`、`r=8`、`p=1`、`maxmem=256MiB`，每个密码使用独立 16 字节随机盐，派生 64 字节摘要；库参数与摘要一起保存。比较使用定长的 timing-safe 比较，数据库不保存明文密码。参数采用 [OWASP 的 scrypt 配置](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)，接口使用 [Node.js crypto](https://nodejs.org/docs/latest-v24.x/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback)。API 每进程最多并行 2 个密码哈希任务，超出的认证请求返回 429，不进入无界等待队列。
+采用 Node.js 异步 `crypto.scrypt`，参数为 `N=131072`、`r=8`、`p=1`、`maxmem=256MiB`，每个密码使用独立 16 字节随机盐，派生 64 字节摘要；参数与摘要以 `scrypt$N=…$r=…$p=…$<salt>$<digest>` 自描述字符串一起保存。比较解出摘要后使用定长的 timing-safe 比较，数据库不保存明文密码。参数采用 [OWASP 的 scrypt 配置](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)，接口使用 [Node.js crypto](https://nodejs.org/docs/latest-v24.x/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback)。API 每进程最多并行 2 个密码哈希任务，超出的认证请求返回 429，不进入无界等待队列。
 
-登录成功创建 32 字节密码学随机会话 token，数据库仅存会话 token 的 SHA-256 摘要，同时保存独立生成的 32 字节随机 CSRF token，供当前会话查询和验证。会话绝对有效期为 7 天，不自动滑动续期；通过 HttpOnly、SameSite=Lax、Path=/ 的 cookie 传递，生产环境强制 Secure 和 HTTPS。本地开发使用 loopback HTTP 时关闭 Secure。登出使当前会话失效；修改密码要求旧密码并撤销该用户全部旧会话。
+登录成功创建 32 字节密码学随机会话 token，注册同时创建会话。token 以 `Authorization: Bearer <token>` 请求头传递并由客户端自行保存，数据库仅存 token 的 SHA-256 摘要。会话绝对有效期为 7 天，不自动滑动续期。登出删除当前会话行，立即失效；修改密码要求旧密码并撤销该用户全部旧会话。认证响应和自己的源码响应设置 `Cache-Control: no-store`，不启用 CORS，不开放跨源凭证访问。
 
-密码验证在事务外异步执行，创建会话前在短事务内锁定用户行并确认密码摘要仍与验证时一致，避免并发改密后旧凭证重新生成会话。不存在的用户也执行一次同参数的固定伪密码摘要校验，避免通过明显的哈希耗时差异探测账号。认证响应和自己的源码响应设置 `Cache-Control: no-store`，不开放跨源凭证访问。
-
-修改类接口要求同源 Origin；已登录请求同时校验与会话绑定的 CSRF token。登录失败统一返回凭证错误，不区分用户不存在与密码错误。注册和登录请求 JSON 上限 4KiB。按 IP 对登录限流为每 5 分钟 10 次、注册为每小时 3 次，返回 429 时附带 Retry-After。计数保存在 PostgreSQL，API 多进程共享；相应 `auth_rate_limits` 记录使用作用域、主体摘要、时间窗口与计数作为键值，定期清理过期窗口。
+密码验证在事务外异步执行，创建会话前在短事务内锁定用户行并确认密码摘要仍与验证时一致，避免并发改密后旧凭证重新生成会话。不存在的用户与无密码的官方账号也执行一次同参数的固定伪摘要校验，避免通过明显的哈希耗时差异探测账号。登录失败统一返回凭证错误，不区分用户不存在与密码错误。注册和登录请求 JSON 上限 4KiB。按 IP 对登录限流为每 5 分钟 10 次、注册为每小时 3 次，返回 429 时附带 Retry-After。计数保存在 PostgreSQL，API 多进程共享；相应 `auth_rate_limits` 记录使用作用域（`login`、`register`）、主体摘要（IP 的 SHA-256）、时间窗口与计数作为键值，定期清理过期窗口。
 
 首版提供注册、登录、登出和知道旧密码时的密码修改，不提供邮箱找回密码功能。
+
+### 认证 API 契约
+
+成功响应：`POST /auth/register` 返回 201、`POST /auth/login` 返回 200，响应体为 `{ "user": { "id", "username", "official" }, "token" }`；`GET /auth/me` 返回 200，响应体为 `{ "user": … }`；`POST /auth/logout` 与 `PUT /auth/password` 返回 204。请求体：注册与登录为 `{ "username", "password" }`，密码修改为 `{ "oldPassword", "newPassword" }`；`username` 指输入原样，服务端规范化后返回 `user.username`。
+
+错误体统一为 `{ "code", "message" }`：`VALIDATION_ERROR`（400，凭证长度不合法或请求格式不正确）、`INVALID_CREDENTIALS`（401，登录失败或旧密码错误）、`UNAUTHORIZED`（401，无有效会话）、`USERNAME_TAKEN`（409，规范化用户名冲突）、`RATE_LIMITED`（429，限流或哈希饱和，附 Retry-After）、`BODY_TOO_LARGE`（413，请求体超过 4KiB）。
+
+官方账号在 server 启动时幂等初始化：upsert `official` 用户（无密码、带官方标记），并为每个已注册游戏读取其官方 bot 源码，写入或更新 `game_entries` 的源码、字节数与协议版本；排位分与比赛统计不受初始化影响。官方 bot 源码超过当前发行 `codeBytes` 限制时启动失败并报告明确错误。
 
 ## API
 
@@ -81,9 +87,9 @@ worker 用短事务锁定本机支持且有资源容量的任务，设置 `runni
 | 方法与路径 | 行为 |
 | --- | --- |
 | `POST /auth/register` | 用户名和密码注册，并创建会话 |
-| `POST /auth/login` | 登录并创建会话，返回当前用户与 CSRF token |
-| `GET /auth/me` | 当前用户及当前会话的 CSRF token；无有效会话时返回 401 |
-| `POST /auth/logout` | 撤销当前会话并清除 cookie |
+| `POST /auth/login` | 登录并创建会话，返回当前用户与 token |
+| `GET /auth/me` | 当前用户；无有效会话时返回 401 |
+| `POST /auth/logout` | 撤销当前会话 |
 | `PUT /auth/password` | 验证旧密码后修改，撤销全部会话并要求重新登录 |
 | `GET /games` | 游戏目录和基本信息 |
 | `GET /games/:gameId` | 当前发行、玩法、提示词、SDK 与资源限额 |
