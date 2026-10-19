@@ -48,6 +48,10 @@ try {
 
 `observation` 由调用方针对当前世界和玩家生成。`execute(tick, observation, defaultAction)` 的第三个参数可传入当前 tick 由规则计算的默认动作，省略时使用创建选手时的默认动作。`parseAction` 和默认动作属于可信游戏实现，不能由玩家代码提供。
 
+CLI 与 worker 共用 `createSandboxExecutor(options)`：参数与 `SandboxPlayer.create` 相同，但不传 `defaultAction`；每次 `execute(tick, observation, defaultAction)` 显式传入当前默认动作，首次执行才启动子进程。返回的 `close()` 可重复调用，并等待正在进行的启动完成后释放子进程；关闭后拒绝执行。启动失败保持为系统失败。
+
+宿主侧的 JSON 校验、复制和 UTF-8 截断统一复用 `@si-arena/protocol`，拒绝隐藏属性、访问器、符号键、稀疏数组与隐式转换。无效观察属于系统错误，不推进 tick 或改变 Memory。QuickJS 内部保留独立的受控序列化器。
+
 每场双方必须共享同一个 `MatchLogBudget`，以限制整场日志总量。本地启用 `captureLogs`，服务端使用默认的关闭配置：服务端 console 为空实现，不遍历或格式化参数。日志、截断标记和错误可以由引擎直接加入回放记录。
 
 `sdkSource` 可注入可信、自包含的 ESM，通过 `export default` 提供 SDK；默认导出空对象。SDK 与玩家都在 QuickJS 内初始化，不向玩家传递宿主函数或业务对象。SDK 初始化、观察注入、玩家顶层代码、入口、日志格式化与序列化均计入 tick CPU 用量。

@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import {
+  cloneJson,
   resolveResourceLimits,
+  toJsonValue,
+  truncateUtf8,
   type ExecuteTickInput,
   type ExecutionError,
   type ExecutionErrorType,
@@ -10,7 +13,7 @@ import {
   type PlayerLog,
   type ResourceLimits,
 } from "@si-arena/protocol";
-import { cloneJson, encodeJson, isRecord, truncateUtf8 } from "./json";
+import { isRecord } from "./json";
 import { ExecutorProcess, ExecutorStopped } from "./process";
 import {
   MatchLogBudget,
@@ -91,7 +94,7 @@ export class SandboxPlayer<Action extends JsonValue> {
     let observed: JsonValue;
     let fallback: Action;
     try {
-      observed = JSON.parse(encodeJson(observation, this.limits.observationBytes)) as JsonValue;
+      observed = toJsonValue(observation, this.limits.observationBytes);
       fallback = cloneJson(defaultAction, this.limits.actionBytes);
     } catch {
       throw new SandboxSystemError("Observation is invalid or exceeds release budget");
@@ -227,7 +230,7 @@ export class SandboxPlayer<Action extends JsonValue> {
       let memory: JsonObject;
       let action: JsonValue;
       try {
-        memory = JSON.parse(encodeJson(output.memory, this.limits.memoryBytes)) as JsonObject;
+        memory = toJsonValue(output.memory, this.limits.memoryBytes) as JsonObject;
       } catch {
         return {
           ...failed({ type: "MEMORY_INVALID", message: "Candidate Memory failed validation" }),
@@ -235,7 +238,7 @@ export class SandboxPlayer<Action extends JsonValue> {
         };
       }
       try {
-        action = JSON.parse(encodeJson(output.action, this.limits.actionBytes)) as JsonValue;
+        action = toJsonValue(output.action, this.limits.actionBytes);
       } catch {
         return {
           ...failed({ type: "INVALID_ACTION", message: "Action failed JSON validation" }),

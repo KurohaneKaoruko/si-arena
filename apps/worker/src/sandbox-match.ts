@@ -3,7 +3,7 @@ import type { GameResult, ResourceLimits } from "@si-arena/protocol";
 import type { GameDefinition, MatchSummary, ReplayPlayer } from "@si-arena/engine";
 import { runMatch } from "@si-arena/engine";
 import { ReplayFileSink } from "@si-arena/engine/node";
-import { MatchLogBudget, SandboxPlayer, type ProcessIsolation } from "@si-arena/sandbox";
+import { createSandboxExecutor, MatchLogBudget, type ProcessIsolation } from "@si-arena/sandbox";
 import { cloneJson } from "@si-arena/protocol";
 
 const MAX_REPLAY_BYTES = 64 * 1024 * 1024;
@@ -65,35 +65,16 @@ export function defineSandboxGame<
           sink,
           ...(request.signal ? { signal: request.signal } : {}),
           async createExecutor(player, context) {
-            let pending: Promise<SandboxPlayer<Action>> | undefined;
-            let closed = false;
-            // The actual per-tick fallback comes from the engine's world snapshot.
-            return {
-              async execute(tick, observation, defaultAction) {
-                if (closed) throw new Error("Worker executor is closed");
-                pending ??= SandboxPlayer.create({
-                  ...context,
-                  playerId: player.id,
-                  source: request.sources[player.slot]!,
-                  sdkSource: options.sdkSource,
-                  limits: cloneJson(request.limits),
-                  isolation: request.isolation,
-                  parseAction: game.rules.parseAction,
-                  defaultAction,
-                  logBudget,
-                });
-                const executor = await pending;
-                if (closed) {
-                  await executor.close();
-                  throw new Error("Worker executor is closed");
-                }
-                return executor.execute(tick, observation, defaultAction);
-              },
-              async close() {
-                closed = true;
-                await (await pending)?.close();
-              },
-            };
+            return createSandboxExecutor({
+              ...context,
+              playerId: player.id,
+              source: request.sources[player.slot]!,
+              sdkSource: options.sdkSource,
+              limits: cloneJson(request.limits),
+              isolation: request.isolation,
+              parseAction: game.rules.parseAction,
+              logBudget,
+            });
           },
         });
       } catch (error) {

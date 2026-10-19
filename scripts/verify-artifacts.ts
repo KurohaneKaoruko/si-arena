@@ -122,7 +122,7 @@ export { ${exports} };
 import { paperManifest } from "@si-arena/game-paper";
 import { paperRules } from "@si-arena/game-paper/rules";
 import type { PaperResult } from "@si-arena/game-paper/rules";
-import { SandboxPlayer } from "@si-arena/sandbox";
+import { SandboxPlayer, createSandboxExecutor } from "@si-arena/sandbox";
 import { resolveResourceLimits } from "@si-arena/protocol";
 import { paperGame } from "@si-arena/game-paper/game";
 import type { PaperState, PaperAction } from "@si-arena/game-paper/sdk";
@@ -159,9 +159,9 @@ const played = await runMatch({
   matchId:"packed-engine", game:paperGame, seed:2, sink,
   players:[{id:"alpha",slot:0,name:"Alpha",official:false},{id:"beta",slot:1,name:"Beta",official:true}],
   async createExecutor(player,context) {
-    return SandboxPlayer.create({...context,playerId:player.id,
+    return createSandboxExecutor({...context,playerId:player.id,
       source:player.id==="alpha"?"export default ()=>({type:'move',direction:'left'})":"export default ()=>({type:'idle'})",
-      isolation:{kind:"local"},parseAction:paperRules.parseAction,defaultAction:{type:"idle"},
+      isolation:{kind:"local"},parseAction:paperRules.parseAction,
     });
   },
 });

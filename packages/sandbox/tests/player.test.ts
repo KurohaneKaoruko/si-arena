@@ -399,6 +399,27 @@ test("platform input and trusted parser failures are system errors", async () =>
   await expect(brokenSdk.execute(0, {})).rejects.toBeInstanceOf(SandboxSystemError);
 });
 
+test("host observations follow strict JSON policy without advancing a rejected tick or Memory", async () => {
+  const player = await create(
+    `export default ({Memory})=>{Memory.n=(Memory.n??0)+1;return {type:'move'}}`,
+  );
+  expect(await player.execute(0, {})).toMatchObject({ ok: true, memory: { n: 1 } });
+  const getter = vi.fn(() => {
+    throw new Error("Getter must not run");
+  });
+  for (const observation of [
+    Object.defineProperty({}, "hidden", { value: 1 }),
+    Object.defineProperty({}, "hidden", { get: getter }),
+    Object.defineProperty({}, Symbol("hidden"), { value: 1 }),
+    Object.defineProperty([1], "hidden", { value: 1 }),
+  ]) {
+    await expect(player.execute(1, observation)).rejects.toBeInstanceOf(SandboxSystemError);
+    expect(player.memory).toEqual({ n: 1 });
+  }
+  expect(getter).not.toHaveBeenCalled();
+  expect(await player.execute(1, {})).toMatchObject({ ok: true, memory: { n: 2 } });
+});
+
 test("expensive native regex work is bounded and the following tick can recover", async () => {
   const player = await create(
     `export default ({observation})=>{if(observation.fail) /^(a+)+$/.test('a'.repeat(40)+'b');return {type:'move'}}`,

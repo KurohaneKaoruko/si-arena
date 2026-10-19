@@ -123,6 +123,8 @@ manifest 的 `botProtocolVersion` 是从 1 开始的整数，标识玩家代码�
 
 `@si-arena/engine` 通过工厂创建各玩家的执行适配器，不依赖 sandbox；适配器验证动作与 Memory，并在失败时保留旧 Memory。核心入口提供比赛与回放逻辑，可供浏览器使用；文件和 gzip 功能只从 `@si-arena/engine/node` 导出。回放使用 ReplaySink 流式追加完整 tick，候选文件生成后仍由 worker 按执行权和数据库事务发布、计分。接口与可运行示例见 [引擎说明](../../packages/engine/README.md)。
 
+CLI 与 worker 通过 sandbox 的 `createSandboxExecutor` 共用延迟启动与关闭逻辑，分别传入各自的源码、限额、日志开关和隔离配置。sandbox 通过结构兼容的接口适配引擎，不引入对 engine 或具体游戏的依赖。
+
 玩家代码采用单文件 ESM，同步导出默认函数：
 
 ```js

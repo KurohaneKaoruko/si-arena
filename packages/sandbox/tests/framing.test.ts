@@ -3,7 +3,6 @@ import { expect, test } from "vitest";
 import { FramedChannel } from "../src/framing";
 import { SandboxSystemError } from "../src/types";
 import { isolateProcess } from "../src/isolation";
-import { encodeJson } from "../src/json";
 
 test("IPC accepts split headers and bodies, preserving frame order", () => {
   const stream = new PassThrough();
@@ -48,26 +47,6 @@ test("oversized declared frames are rejected before buffering or parsing payload
   expect(failure).toBeInstanceOf(RangeError);
   expect(() => channel.send({})).toThrow("closed");
   channel.close();
-});
-
-test("host JSON validation rejects getters and cycles, preserving literal prototype keys", () => {
-  expect(() =>
-    encodeJson(
-      {
-        get x() {
-          throw new Error("getter executed");
-        },
-      },
-      64,
-    ),
-  ).toThrow("Accessors");
-  const cycle: { self?: unknown } = {};
-  cycle.self = cycle;
-  expect(() => encodeJson(cycle, 64)).toThrow("JSON");
-  expect(encodeJson(JSON.parse('{"__proto__":{"x":1}}'), 64)).toBe('{"__proto__":{"x":1}}');
-  const sparse: unknown[] = [];
-  sparse.length = 100000000;
-  expect(() => encodeJson(sparse, 64)).toThrow();
 });
 
 test("production isolation never silently falls back to local execution", async () => {

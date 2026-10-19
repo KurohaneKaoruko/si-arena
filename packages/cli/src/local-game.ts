@@ -21,7 +21,7 @@ import {
   type ReplayTick,
 } from "@si-arena/engine";
 import { ReplayFileSink } from "@si-arena/engine/node";
-import { MatchLogBudget, SandboxPlayer, validateSource } from "@si-arena/sandbox";
+import { createSandboxExecutor, MatchLogBudget, validateSource } from "@si-arena/sandbox";
 
 export type LocalDiagnostic = { tick: number; playerId: string } & (
   | { kind: "log"; log: PlayerLog }
@@ -118,35 +118,16 @@ export function defineLocalGame<
             ...(matchSignal ? { signal: matchSignal } : {}),
             onTick: ({ record }) => stats.add(record),
             async createExecutor(player, context) {
-              let pending: Promise<SandboxPlayer<Action>> | undefined;
-              let closed = false;
-              // The actual per-tick fallback comes from the engine's world snapshot.
-              return {
-                async execute(tick, observation, defaultAction) {
-                  if (closed) throw new Error("Local executor is closed");
-                  pending ??= SandboxPlayer.create({
-                    ...context,
-                    playerId: player.id,
-                    source: sources[player.slot]!,
-                    sdkSource,
-                    limits: cloneJson(manifest.resolvedLimits),
-                    isolation: { kind: "local" },
-                    parseAction: game.rules.parseAction,
-                    defaultAction,
-                    logBudget,
-                  });
-                  const executor = await pending;
-                  if (closed) {
-                    await executor.close();
-                    throw new Error("Local executor is closed");
-                  }
-                  return executor.execute(tick, observation, defaultAction);
-                },
-                async close() {
-                  closed = true;
-                  await (await pending)?.close();
-                },
-              };
+              return createSandboxExecutor({
+                ...context,
+                playerId: player.id,
+                source: sources[player.slot]!,
+                sdkSource,
+                limits: cloneJson(manifest.resolvedLimits),
+                isolation: { kind: "local" },
+                parseAction: game.rules.parseAction,
+                logBudget,
+              });
             },
           });
           return {

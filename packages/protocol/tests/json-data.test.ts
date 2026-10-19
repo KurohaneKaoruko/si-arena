@@ -46,3 +46,30 @@ test("JSON cloning preserves prototype keys, expands shared references, and chec
     expect(utf8Bytes(text)).toBe(Buffer.byteLength(text));
   expect(() => stringifyJson("🌟", { maxBytes: 5 })).toThrow();
 });
+
+test("strict JSON rejects hidden properties and accessors without evaluating them", () => {
+  let called = false;
+  const getter = () => {
+    called = true;
+    throw new Error("Getter must not run");
+  };
+  for (const value of [
+    Object.defineProperty({ x: 1 }, "hidden", { value: 2 }),
+    Object.defineProperty({ x: 1 }, "hidden", { get: getter }),
+    Object.defineProperty({ x: 1 }, Symbol("hidden"), { value: 2 }),
+    Object.defineProperty([1], "hidden", { value: 2 }),
+  ]) {
+    expect(() => stringifyJson(value)).toThrow();
+    expect(() => cloneJson(value)).toThrow();
+  }
+  expect(called).toBe(false);
+});
+
+test("bounded JSON encoding rejects huge sparse arrays and preserves literal prototype keys", () => {
+  const sparse: unknown[] = [];
+  sparse.length = 100_000_000;
+  expect(() => stringifyJson(sparse, { maxBytes: 64 })).toThrow();
+  expect(stringifyJson(JSON.parse('{"__proto__":{"x":1}}'), { maxBytes: 64 })).toBe(
+    '{"__proto__":{"x":1}}',
+  );
+});
