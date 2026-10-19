@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink, RouterView, useRoute } from "vue-router";
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { restoreSession, session, signOut, syncSession } from "./auth/session";
 import { errorMessage } from "./api/client";
 import { useToast } from "./composables/useToast";
@@ -17,13 +17,9 @@ onMounted(() => {
 });
 onUnmounted(() => window.removeEventListener("storage", syncSession));
 
-watch(
-  () => session.error,
-  (message) => {
-    if (message) toast.error(message);
-  },
-);
-
+function retrySession() {
+  void restoreSession();
+}
 async function logout() {
   if (leaving.value) return;
   leaving.value = true;
@@ -79,6 +75,14 @@ function navClass(target: string, exact = false) {
         </nav>
       </div>
     </header>
+    <div v-if="session.error" role="alert" class="border-b border-danger/25 bg-danger-soft">
+      <div
+        class="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-2.5 sm:px-8"
+      >
+        <p class="text-sm text-danger">{{ session.error }}</p>
+        <AppButton size="sm" variant="secondary" @click="retrySession">恢复登录</AppButton>
+      </div>
+    </div>
     <main
       id="main-content"
       class="mx-auto w-full max-w-5xl flex-1 px-5 py-10 sm:px-8 sm:py-14"

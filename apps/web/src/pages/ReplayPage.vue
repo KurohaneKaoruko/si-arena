@@ -8,6 +8,7 @@ import {
 import { replayGames } from "../games/replays";
 import ReplayViewer from "../components/ReplayViewer.vue";
 import { downloadReplay } from "../api/replay";
+import AppButton from "../components/ui/AppButton.vue";
 import PageHeader from "../components/ui/PageHeader.vue";
 import StateBlock from "../components/ui/StateBlock.vue";
 
@@ -20,6 +21,7 @@ const pending = ref(false),
   error = ref(""),
   fileName = ref(""),
   completed = ref(0);
+const fileInput = ref<HTMLInputElement | null>(null);
 let loading: AbortController | undefined;
 const progress = computed(() =>
   completed.value ? `已检查 ${completed.value} tick…` : "正在解压并校验回放…",
@@ -65,6 +67,10 @@ function cancelLoad() {
   loading?.abort();
   pending.value = false;
 }
+/** 错误态的“重新选择文件”要把系统文件选择器重新叫出来。 */
+function reselectFile() {
+  fileInput.value?.click();
+}
 onBeforeUnmount(() => loading?.abort());
 </script>
 
@@ -75,24 +81,36 @@ onBeforeUnmount(() => loading?.abort());
       description="打开本地比赛回放，重看圈地路线，定位日志与错误。文件只在浏览器中读取。"
     >
       <template #actions>
+        <input
+          id="replay-file"
+          ref="fileInput"
+          class="peer sr-only"
+          type="file"
+          accept=".gz,.json.gz,application/gzip"
+          @change="selectFile"
+        />
         <label
-          class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-control border border-line bg-surface px-3.5 text-sm font-medium text-ink transition hover:border-line-strong hover:bg-subtle"
+          for="replay-file"
+          class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-control border border-line bg-surface px-3.5 text-sm font-medium text-ink transition hover:border-line-strong hover:bg-subtle peer-focus-visible:border-accent peer-focus-visible:ring-4 peer-focus-visible:ring-accent/10"
         >
           打开回放文件
-          <input
-            class="absolute size-px opacity-0"
-            type="file"
-            accept=".gz,.json.gz,application/gzip"
-            aria-label="打开回放文件"
-            @change="selectFile"
-          />
         </label>
       </template>
     </PageHeader>
 
     <div class="mt-8">
-      <StateBlock v-if="pending" status="loading" :message="progress" />
-      <StateBlock v-else-if="error" status="error" :message="error" action-label="重新选择文件" />
+      <StateBlock v-if="pending" status="loading" :message="progress">
+        <template #action>
+          <AppButton size="sm" variant="secondary" @click="cancelLoad">取消加载</AppButton>
+        </template>
+      </StateBlock>
+      <StateBlock
+        v-else-if="error"
+        status="error"
+        :message="error"
+        action-label="重新选择文件"
+        @retry="reselectFile"
+      />
       <ReplayViewer
         v-else-if="session"
         :key="session.replay.matchId"

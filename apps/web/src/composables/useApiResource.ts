@@ -17,7 +17,10 @@ export type ResourceStatus = "loading" | "ready" | "error";
 export interface ApiResource<T> {
   data: ShallowRef<T | null>;
   pending: Ref<boolean>;
+  /** 首次加载失败：此时没有可展示的数据。 */
   error: Ref<string>;
+  /** 已有数据时的刷新失败：内容仍然可用，页面可以保留内容并提示重试。 */
+  refreshError: Ref<string>;
   /** 统一三态：加载中、就绪、失败。 */
   status: ComputedRef<ResourceStatus>;
   /** 成功结果是否为空，用于统一空状态。 */
@@ -44,6 +47,7 @@ export function useApiResource<T>(
   const data = shallowRef<T | null>(null);
   const pending = ref(false);
   const error = ref("");
+  const refreshError = ref("");
   let current: AbortController | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let failures = 0;
@@ -78,6 +82,7 @@ export function useApiResource<T>(
       });
       if (!request.signal.aborted) {
         data.value = result;
+        refreshError.value = "";
         failures = 0;
         notified = "";
         if (options.pollWhen?.(result)) schedule(1000);
@@ -85,7 +90,9 @@ export function useApiResource<T>(
     } catch (failure) {
       if (!request.signal.aborted) {
         const message = errorMessage(failure);
-        error.value = message;
+        // 已经有数据时把失败记成刷新失败，内容继续保留，页面负责提示重试。
+        if (data.value !== null) refreshError.value = message;
+        else error.value = message;
         if (options.notify !== false && message !== notified) {
           notified = message;
           toast.error(message);
@@ -111,6 +118,7 @@ export function useApiResource<T>(
     () => {
       data.value = null;
       error.value = "";
+      refreshError.value = "";
       failures = 0;
       void reload();
     },
@@ -127,9 +135,11 @@ export function useApiResource<T>(
     document.removeEventListener("visibilitychange", visibility);
   });
   const status = computed<ResourceStatus>(() => {
+    // 失败只在没有数据时出现；有数据时的失败走 refreshError，内容继续保留。
+    if (error.value) return "error";
     if (data.value !== null) return "ready";
-    return error.value ? "error" : "loading";
+    return "loading";
   });
   const empty = computed(() => data.value !== null && (options.isEmpty?.(data.value) ?? false));
-  return { data, pending, error, status, empty, reload };
+  return { data, pending, error, refreshError, status, empty, reload };
 }

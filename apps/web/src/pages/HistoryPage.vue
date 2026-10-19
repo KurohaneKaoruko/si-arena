@@ -17,7 +17,8 @@ const page = computed(() => clampMatchPage(Number(route.query.page ?? 1)));
 const { data, status, empty, error, pending, reload } = useApiResource(
   () => `/api${gamePath.value}/me/matches?page=${page.value}&limit=20`,
   parseHistory,
-  { authenticated: true, isEmpty: (value) => value.matches.length === 0 },
+  // 以总数判断是否真的没有比赛：越界页码返回的会是空列表，但仍然有比赛。
+  { authenticated: true, isEmpty: (value) => value.total === 0 },
 );
 function change(value: number) {
   void router.push({ query: { page: value } });
@@ -51,7 +52,13 @@ function change(value: number) {
           message="还没有比赛。上传策略并主动发起第一场匹配。"
         />
         <template v-else-if="data">
-          <MatchList :matches="data.matches" />
+          <MatchList v-if="data.matches.length" :matches="data.matches" />
+          <div
+            v-else
+            class="rounded-card border border-line bg-surface px-5 py-4 text-sm leading-6 text-soft"
+          >
+            本页没有比赛。
+          </div>
           <PaginationControls
             :page="data.page"
             :limit="data.limit"

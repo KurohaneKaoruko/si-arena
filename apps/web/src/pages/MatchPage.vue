@@ -18,7 +18,7 @@ import StateBlock from "../components/ui/StateBlock.vue";
 
 const route = useRoute();
 const id = computed(() => String(route.params.matchId));
-const { data, status, error, reload } = useApiResource(
+const { data, status, error, refreshError, reload } = useApiResource(
   () => `/api/matches/${encodeURIComponent(id.value)}`,
   parseMatch,
   {
@@ -126,6 +126,15 @@ function delta(before?: number, after?: number) {
 
     <template v-if="data">
       <div
+        v-if="refreshError"
+        role="alert"
+        class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-card border border-danger/25 bg-danger-soft px-4 py-3"
+      >
+        <p class="text-sm text-danger">刷新失败：{{ refreshError }}</p>
+        <AppButton size="sm" variant="secondary" @click="reload">重新加载</AppButton>
+      </div>
+
+      <div
         v-if="data.status === 'pending' || data.status === 'running'"
         role="status"
         class="rounded-card border border-line bg-surface p-5"
@@ -224,7 +233,11 @@ function delta(before?: number, after?: number) {
           <StateBlock
             status="loading"
             :message="ticks ? `已检查 ${ticks} tick…` : '正在下载并校验回放…'"
-          />
+          >
+            <template #action>
+              <AppButton size="sm" variant="secondary" @click="cancel">取消加载</AppButton>
+            </template>
+          </StateBlock>
         </div>
         <div v-else-if="!replay" class="mt-4">
           <StateBlock
