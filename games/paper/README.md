@@ -14,7 +14,7 @@
 
 ## 公开入口
 
-网站 `/replays` 已注册圈地的可信规则发行与 renderer，可直接打开 CLI 产生的 gzip 回放。renderer 的 `drawPaperBoard` 接收已验证的世界与 Canvas 上下文，绘制领地、尾迹和带编号的选手；`paperPlayerSummaries` 按席位生成面积、颜色与存活摘要。绘制不修改世界，也不调用规则 step。
+网站 `/replays` 已注册圈地的可信规则发行与 renderer，可直接打开 CLI 产生的 gzip 回放。renderer 的 `drawPaperBoard` 接收已验证的世界与 Canvas 上下文，绘制领地、尾迹和带编号的选手；可选的动画输入在同一画面补完 tick 间隔内的头部插值、圈地闪烁、切断与淘汰标记，以及出错玩家的常显警示徽标，`prefers-reduced-motion` 时退化为静态标记；`paperPlayerSummaries` 按席位生成面积、颜色与存活摘要。绘制不修改世界，也不调用规则 step。
 
 | 入口                            | 内容                                                                             |
 | ------------------------------- | -------------------------------------------------------------------------------- |

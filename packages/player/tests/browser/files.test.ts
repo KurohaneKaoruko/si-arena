@@ -1,7 +1,13 @@
 import { gzipSync } from "node:zlib";
 import { expect, test } from "vitest";
-import { defineReplayGame, loadRegisteredReplay, readBrowserReplay } from "../../src/browser";
-import { fixture } from "../fixture";
+import {
+  defineReplayGame,
+  loadRegisteredReplay,
+  readBrowserReplay,
+  type ReplayDrawOptions,
+} from "../../src/browser";
+import type { ReplayFrame } from "../../src/session";
+import { fixture, type Action, type State } from "../fixture";
 
 const blob = (raw: Uint8Array) => new Blob([new Uint8Array(raw)]);
 test("browser gzip reader handles real replay files and rejects corruption/invalid UTF-8", async () => {
@@ -60,4 +66,47 @@ test("trusted registry matches the exact release and never imports file-supplied
       [entry],
     ),
   ).rejects.toThrow();
+});
+test("view.draw forwards the replay frame and draw options verbatim", async () => {
+  const { game, replay } = await fixture(4);
+  const calls: Array<
+    [
+      CanvasRenderingContext2D,
+      ReplayFrame<State, Action, { tick: number }>,
+      number,
+      number,
+      ReplayDrawOptions,
+    ]
+  > = [];
+  const entry = defineReplayGame({
+    game,
+    aspectRatio: 2,
+    scoreUnit: "分",
+    draw(...args) {
+      calls.push(args);
+    },
+    summarize(state) {
+      return state.players.map((p) => ({
+        id: p.id,
+        label: p.id,
+        score: state.counter,
+        alive: true,
+        color: "#ffffff",
+      }));
+    },
+  });
+  const session = await loadRegisteredReplay(replay, [entry]);
+  const context = {} as CanvasRenderingContext2D;
+  const options = { progress: 0.25, reducedMotion: true };
+  session.view(2).draw(context, 320, 160, options);
+  expect(calls).toHaveLength(1);
+  const [drawContext, frame, width, height, drawOptions] = calls[0]!;
+  expect(drawContext).toBe(context);
+  expect(width).toBe(320);
+  expect(height).toBe(160);
+  expect(drawOptions).toBe(options);
+  expect(frame.state.tick).toBe(2);
+  expect(frame.previousState.tick).toBe(1);
+  expect(frame.events).toEqual([{ tick: 1 }]);
+  expect(frame.record?.tick).toBe(1);
 });

@@ -14,11 +14,22 @@ export interface ReplayPlayerSummary {
   score: number;
   alive: boolean;
 }
+export interface ReplayDrawOptions {
+  /** Fraction of the current tick's animation window, 0..1; 1 draws the settled world. */
+  progress: number;
+  /** Host-detected prefers-reduced-motion; renderers replace transient animations with static marks. */
+  reducedMotion: boolean;
+}
 export interface ReplayView {
   completedTicks: number;
   record: DeepReadonly<Replay<unknown, unknown>["ticks"][number]> | null;
   players: readonly ReplayPlayerSummary[];
-  draw(context: CanvasRenderingContext2D, width: number, height: number): void;
+  draw(
+    context: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    options: ReplayDrawOptions,
+  ): void;
   observation(playerId: string): unknown;
 }
 export interface BrowserReplaySession {
@@ -49,6 +60,7 @@ export function defineReplayGame<
     frame: ReplayFrame<State, Action, Event>,
     width: number,
     height: number,
+    options: ReplayDrawOptions,
   ): void;
   summarize(state: DeepReadonly<State>): readonly ReplayPlayerSummary[];
 }): ReplayGameRegistration {
@@ -72,7 +84,8 @@ export function defineReplayGame<
             completedTicks,
             record: frame.record,
             players: options.summarize(frame.state),
-            draw: (context, width, height) => options.draw(context, frame, width, height),
+            draw: (context, width, height, drawOptions) =>
+              options.draw(context, frame, width, height, drawOptions),
             observation: (id) => session.observation(completedTicks, id),
           };
         },

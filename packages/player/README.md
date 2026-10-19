@@ -26,19 +26,21 @@ S0 与跳转重演的每步结果都通过引擎公开的 `parseGameState` 解�
 
 ## Vue 调度
 
-`usePlayback(source, clock)` 提供 tick、播放状态、速度、跳转与错误导航。`clock` 注入 request/cancel 函数，网页使用 requestAnimationFrame。基准速度为每秒 10 tick；调度仅改变显示位置，不改变规则。慢帧最多累计 250ms 的推进量，避免恢复标签页时跳过整场。当前圈地图按 tick 离散绘制。
+`usePlayback(source, clock, options)` 提供 tick、播放状态、速度、动画进度、跳转与错误导航。`clock` 注入 request/cancel 函数，网页使用 requestAnimationFrame。基准速度为每秒 10 tick；调度仅改变显示位置，不改变规则。慢帧最多累计 250ms 的推进量，避免恢复标签页时跳过整场。
+
+`progress` 是当前 tick 动画窗口的完成度（0–1，1 为稳态），随播放速度缩放。只有播放中的自然前进跨界会开启新动画窗口；跳转、单步、错误跳转、更换回放与播到终点都直接进入稳态，不重放被跳过的瞬态动画。暂停冻结当前进度，恢复后继续同一窗口。`options.onFrame` 在播放中的每个时钟回调末尾触发一次，宿主用它连续重绘画布。
 
 ## 浏览器入口
 
 `@si-arena/player/browser` 导出：
 
 - `readBrowserReplay(file, signal)`：gzip/严格 UTF-8/JSON 读取，压缩文件最多 32MiB，解压 JSON 最多 64MiB；取消或失败关闭读取流。
-- `defineReplayGame({ game, aspectRatio, scoreUnit, draw, summarize })`：将一个可信规则发行与画面、玩家摘要结合，保留泛型到闭包中。
+- `defineReplayGame({ game, aspectRatio, scoreUnit, draw, summarize })`：将一个可信规则发行与画面、玩家摘要结合，保留泛型到闭包中。draw 收到完整回放帧（当前世界、前一世界、当 tick 事件与执行记录）和 `ReplayDrawOptions { progress, reducedMotion }`；宿主负责检测系统的减少动态效果偏好并传入 `reducedMotion`，renderer 据此把瞬态动画退化为静态标记。
 - `loadRegisteredReplay(raw, registrations, options)`：按游戏 ID 与完整发行标识查找唯一可信注册，再调用完整校验；不读取回放指定的模块位置，不下载或执行代码。
 
 浏览器入口需要支持 DecompressionStream 的现代浏览器与安全上下文中的 Web Crypto。Canvas 绘制函数只在已有 Canvas 上执行；服务端导入元数据或纯规则不会触及 DOM。
 
-通用入口 `@si-arena/player` 导出会话和 Vue composable，可在无 DOM 环境使用注入时钟验证。网页的通用控件位于 `apps/web/src/components/ReplayViewer.vue`，可信游戏注册位于 `apps/web/src/games/replays.ts`。圈地包的 renderer 绘制领地、尾迹与带 P1/P2 编号的棋子，不依赖平台账号或数据库。
+通用入口 `@si-arena/player` 导出会话和 Vue composable，可在无 DOM 环境使用注入时钟验证。网页的通用控件位于 `apps/web/src/components/ReplayViewer.vue`，可信游戏注册位于 `apps/web/src/games/replays.ts`。圈地包的 renderer 绘制领地、尾迹与带 P1/P2 编号的棋子，按事件绘制移动插值、圈地、切断、淘汰的瞬态动画并为当 tick 出错的玩家显示头部徽标，不依赖平台账号或数据库。
 
 ## 验证
 

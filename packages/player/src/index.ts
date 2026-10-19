@@ -1,4 +1,4 @@
-import type { DeepReadonly, GameCatalogEntry } from "@si-arena/protocol";
+import type { GameCatalogEntry } from "@si-arena/protocol";
 
 export interface PlaybackState {
   tick: number;
@@ -7,14 +7,13 @@ export interface PlaybackState {
   speed: number;
 }
 
-export interface GameRendererProps<State, Event> {
-  state: DeepReadonly<State>;
-  previousState: DeepReadonly<State>;
-  events: DeepReadonly<Event[]>;
-  progress: number;
-}
-
-export { PLAYBACK_SPEEDS, usePlayback, type AnimationClock, type PlaybackSource } from "./playback";
+export {
+  PLAYBACK_SPEEDS,
+  usePlayback,
+  type AnimationClock,
+  type PlaybackOptions,
+  type PlaybackSource,
+} from "./playback";
 export {
   createReplaySession,
   REPLAY_MAX_BYTES,

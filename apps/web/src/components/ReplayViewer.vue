@@ -19,10 +19,19 @@ watch(
     source.value = value;
   },
 );
-const playback = usePlayback(source, {
-  request: (callback) => requestAnimationFrame(callback),
-  cancel: (handle) => cancelAnimationFrame(handle),
-});
+const playback = usePlayback(
+  source,
+  {
+    request: (callback) => requestAnimationFrame(callback),
+    cancel: (handle) => cancelAnimationFrame(handle),
+  },
+  // Playing frames redraw through the clock callback so event animations advance between ticks.
+  { onFrame: draw },
+);
+const reducedMotionQuery =
+  typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)")
+    : null;
 const { tick, playing, speed, previousError, nextError } = playback;
 const view = computed(() => props.session.view(tick.value));
 const participants = computed(() =>
@@ -93,9 +102,19 @@ function draw() {
   element.width = Math.round(width * ratio);
   element.height = Math.round(height * ratio);
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
-  view.value.draw(context, width, height);
+  view.value.draw(context, width, height, {
+    progress: playback.progress.value,
+    reducedMotion: reducedMotionQuery?.matches ?? false,
+  });
 }
-watch(view, draw, { flush: "post" });
+// Seeks and source swaps redraw the settled world while paused; playing draws come from onFrame.
+watch(
+  view,
+  () => {
+    if (!playing.value) draw();
+  },
+  { flush: "post" },
+);
 function handleVisibility() {
   if (document.hidden) playback.pause();
 }

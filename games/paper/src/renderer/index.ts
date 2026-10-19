@@ -2,7 +2,7 @@ import type { GameCatalogEntry } from "@si-arena/protocol";
 
 export { PAPER_PALETTE } from "./palette";
 
-export { drawPaperBoard, paperPlayerSummaries } from "./board";
+export { drawPaperBoard, paperPlayerSummaries, type PaperBoardAnimation } from "./board";
 
 export const paperPresentation = {
   id: "paper",

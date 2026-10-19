@@ -22,5 +22,9 @@
     "../../packages/*/vitest*.config.ts",
     "../../games/*/vitest*.config.ts"
   ],
-  "exclude": ["../../apps/web/tests/**", "../../packages/player/tests/**"]
+  "exclude": [
+    "../../apps/web/tests/**",
+    "../../packages/player/tests/**",
+    "../../games/paper/tests/**"
+  ]
 }

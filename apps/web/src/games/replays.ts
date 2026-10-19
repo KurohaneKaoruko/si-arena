@@ -8,7 +8,14 @@ export const replayGames = [
     game: paperGame,
     aspectRatio: 4 / 3,
     scoreUnit: "格",
-    draw: (context, frame, width, height) => drawPaperBoard(context, frame.state, width, height),
+    draw: (context, frame, width, height, motion) =>
+      drawPaperBoard(context, frame.state, width, height, {
+        previousState: frame.previousState,
+        events: frame.events,
+        progress: motion.progress,
+        reducedMotion: motion.reducedMotion,
+        erroredPlayers: new Set(Object.keys(frame.record?.errors ?? {})),
+      }),
     summarize: paperPlayerSummaries,
   }),
 ];
