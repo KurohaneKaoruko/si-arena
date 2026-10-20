@@ -125,15 +125,16 @@ export async function initializeGame(options: {
 
 function serverBase(value: string): URL {
   const url = new URL(value);
-  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   if (
-    (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) ||
+    (url.protocol !== "https:" && url.protocol !== "http:") ||
     url.username ||
     url.password ||
     url.search ||
     url.hash
   )
-    throw new Error("--server requires HTTPS; HTTP is allowed only for loopback development");
+    throw new Error(
+      "--server accepts only a plain HTTP(S) origin without credentials, query, or fragment",
+    );
   url.pathname = `${url.pathname.replace(/\/$/, "").replace(/\/api$/, "")}/api/`;
   return url;
 }

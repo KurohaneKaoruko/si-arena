@@ -12,7 +12,7 @@ pnpm exec arena init paper ./paper-bot --server http://127.0.0.1:3000
 pnpm exec arena init paper ./paper-bot --release paper@0.2.0 --server http://127.0.0.1:3000
 ```
 
-对外入口是 `npx @si-arena/cli@latest init paper ./paper-bot --server https://<平台地址>`（需要已发布的 npm 包）。CLI 默认连接 loopback，平台地址由 `--server` 传入；自托管构建可设置 `SI_ARENA_SERVER_URL` 烧入自己的默认地址。`--server` 允许 HTTPS 和 loopback HTTP，下载仅使用同源元数据中的固定发行地址，不跟随 HTTP 重定向。
+对外入口是 `npx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>`（需要已发布的 npm 包）。CLI 默认连接 loopback，平台地址由 `--server` 传入；自托管构建可设置 `SI_ARENA_SERVER_URL` 烧入自己的默认地址。`--server` 允许 HTTP 与 HTTPS，下载仅使用同源元数据中的固定发行地址，不跟随 HTTP 重定向。
 
 初始化先固定发行，下载最大 32MiB ZIP，校验外部字节数与 SHA-256、内部 release.json 摘要、组件版本/配置及逐文件摘要，最多解压 128MiB、2048 个文件加清单。只写常规文件，不恢复 ZIP 中的符号链接属性；拒绝越界、重复、大小写冲突和 Windows 保留路径。拒绝非空目标目录，校验后在相邻临时目录完整写入并原子移入，失败不留下半个项目。不会自动安装依赖、运行模块或创建线上比赛。
 

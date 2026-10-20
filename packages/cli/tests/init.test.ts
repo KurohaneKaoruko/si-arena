@@ -193,12 +193,12 @@ test("rejects archive and descriptor mismatches while preserving preexisting emp
   }
 });
 test.each([
-  "http://example.com",
+  "ftp://example.com",
   "https://user:password@example.com",
   "https://example.com/#fragment",
-])("requires an explicitly secure server URL: %s", async (server) => {
+])("rejects a server URL outside the accepted origin shape: %s", async (server) => {
   await expect(initializeGame({ gameId: "counter", directory: "unused", server })).rejects.toThrow(
-    "--server requires HTTPS",
+    "--server accepts only a plain HTTP(S) origin",
   );
 });
 test("honors cancellation without leaving files", async () => {

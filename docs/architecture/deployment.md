@@ -51,10 +51,10 @@ docker compose --env-file .env.prod -f deploy/compose.prod.yaml --profile tools 
 
 上线或重大变更后逐项验证：
 
-1. `https://<域名>/health` 返回 ok；`/api/games` 列出圈地。
+1. `<平台地址>/health` 返回 ok（HTTP 部署形如 `http://<IP>:<HTTP_PORT>`，HTTPS 部署形如 `https://<域名>`）；`/api/games` 列出圈地。
 2. 注册新账号、登录、上传一份代码、对官方 bot 发起匹配，比赛完成并出现排位分变化。
 3. 比赛详情可播放在线回放；`/api/matches/:id/replay` 可下载 gzip。
-4. 在另一台机器执行 `npx @si-arena/cli@latest init paper ./paper-bot --server https://<域名>` 能完成校验与下载，devkit 内 `pnpm arena run` 可跑完比赛。
+4. 在另一台机器执行 `npx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>` 能完成校验与下载，devkit 内 `pnpm arena run` 可跑完比赛。
 5. 游戏详情页的提示词、SDK 与官方 bot 下载链接可用。
 
 ## 版本与 npm 发布

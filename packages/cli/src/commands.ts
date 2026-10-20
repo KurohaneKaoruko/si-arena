@@ -19,7 +19,7 @@ Usage:
   arena dev --bot ./bot.js [--opponent <file>] [--seed <uint32>]  (standalone development package debug page)
 
 Options:
-  --server <url>     Platform origin (HTTPS; loopback HTTP allowed)
+  --server <url>     Platform origin (HTTP or HTTPS)
   --release <id>     Download a fixed historical release
   --registry <file>  Explicitly trust and load a local game registration module
   --game <id>        Select a registered game (optional with one game)
