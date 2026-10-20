@@ -25,19 +25,25 @@ const live = computed(() => (current.value?.tone === "danger" ? "assertive" : "p
         v-if="current"
         class="pointer-events-auto flex w-full max-w-[30rem] items-start gap-3 rounded-card border border-line bg-surface px-4 py-3 shadow-pop"
       >
-        <span
-          class="mt-1.5 size-1.5 shrink-0 rounded-full"
-          :class="accents[current.tone]"
-          aria-hidden="true"
-        />
+        <!-- 圆点、关闭图标都放进与正文同样的 24px 行盒里居中，三者才真正对齐 -->
+        <span class="flex h-6 shrink-0 items-center" aria-hidden="true">
+          <span class="size-1.5 rounded-full" :class="accents[current.tone]" />
+        </span>
         <p class="min-w-0 flex-1 text-sm leading-6 text-ink">{{ current.message }}</p>
         <button
           type="button"
-          class="-mt-0.5 -mr-1 shrink-0 rounded-control px-1.5 py-0.5 text-sm leading-5 text-faint transition hover:bg-muted hover:text-ink"
+          class="-mr-1 flex size-6 shrink-0 items-center justify-center rounded-control text-faint transition hover:bg-muted hover:text-ink"
           aria-label="关闭提示"
           @click="dismiss"
         >
-          ✕
+          <svg class="size-4" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+          </svg>
         </button>
       </div>
     </Transition>
