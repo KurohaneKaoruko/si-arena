@@ -76,16 +76,16 @@ test("initial state has fixed seats, symmetric homes and seeded xorshift32 place
   const state = init(2);
   expect(state.players.map((player) => player.position)).toStrictEqual([
     { x: 5, y: 14 },
-    { x: 34, y: 14 },
+    { x: 24, y: 14 },
   ]);
   expect(state.spawns, "the spawn is the reset target of a slot").toStrictEqual([
     { x: 5, y: 14 },
-    { x: 34, y: 14 },
+    { x: 24, y: 14 },
   ]);
   expect(state.rngState).toBe(540738);
   expect(state.tick).toBe(0);
-  expect(state.territory.length).toBe(1200);
-  expect(state.trails.length).toBe(1200);
+  expect(state.territory.length).toBe(900);
+  expect(state.trails.length).toBe(900);
   expect(state.trails.every((owner) => owner === -1)).toBeTruthy();
   for (const player of state.players) {
     const cells = state.territory.flatMap((owner, index) => (owner === player.slot ? [index] : []));
@@ -96,7 +96,7 @@ test("initial state has fixed seats, symmetric homes and seeded xorshift32 place
           required(player.position).x - 1,
           required(player.position).x,
           required(player.position).x + 1,
-        ].map((x) => y * 40 + x),
+        ].map((x) => y * 30 + x),
       ),
     );
   }
@@ -104,11 +104,11 @@ test("initial state has fixed seats, symmetric homes and seeded xorshift32 place
   expect(swapped.rngState).toBe(270369);
   expect(swapped.players.map((player) => player.id)).toStrictEqual(["alpha", "beta"]);
   expect(swapped.players.map((player) => player.position)).toStrictEqual([
-    { x: 34, y: 14 },
+    { x: 24, y: 14 },
     { x: 5, y: 14 },
   ]);
   expect(swapped.spawns).toStrictEqual([
-    { x: 34, y: 14 },
+    { x: 24, y: 14 },
     { x: 5, y: 14 },
   ]);
   expect(parsePaperState(state)).toStrictEqual(state);
@@ -129,7 +129,7 @@ test("zero seed uses the documented nonzero state and input order cannot change 
   first.territory[0] = 0;
   required(first.players[0].position).x = 0;
   expect(init()).toStrictEqual(init(2));
-  expect(paperManifest.config).toStrictEqual({ width: 40, height: 30, initialTerritorySize: 3 });
+  expect(paperManifest.config).toStrictEqual({ width: 30, height: 30, initialTerritorySize: 3 });
 });
 
 test("initialization rejects unsupported seeds, maps, duplicate identities and slots", () => {
@@ -137,7 +137,7 @@ test("initialization rejects unsupported seeds, maps, duplicate identities and s
     expect(() => initUnknown({ ...validInit(), seed })).toThrow();
   for (const config of [
     {},
-    { ...paperManifest.config, width: 39 },
+    { ...paperManifest.config, width: 29 },
     { ...paperManifest.config, height: 31 },
     { ...paperManifest.config, initialTerritorySize: 5 },
     { ...paperManifest.config, extra: 1 },
@@ -211,16 +211,16 @@ test("state schema rejects malformed worlds and inconsistent living/dead ownersh
   };
   const modifications: Array<(state: MalformedState) => void> = [
     (s) => {
-      s.width = 39;
+      s.width = 29;
     },
     (s) => {
-      s.maxTicks = 601;
+      s.maxTicks = 501;
     },
     (s) => {
       s.tick = -1;
     },
     (s) => {
-      s.tick = 601;
+      s.tick = 501;
     },
     (s) => {
       s.rngState = 0;
@@ -247,7 +247,7 @@ test("state schema rejects malformed worlds and inconsistent living/dead ownersh
       s.players[0].id = s.players[1].id;
     },
     (s) => {
-      required(s.players[0].position).x = 40;
+      required(s.players[0].position).x = 30;
     },
     (s) => {
       s.players[0].position = null;
@@ -265,7 +265,7 @@ test("state schema rejects malformed worlds and inconsistent living/dead ownersh
       s.spawns = [] as unknown as PaperState["spawns"];
     },
     (s) => {
-      s.spawns[0] = { x: 40, y: 14 };
+      s.spawns[0] = { x: 30, y: 14 };
     },
     (s) => {
       s.spawns[1] = { ...s.spawns[0] };
@@ -381,7 +381,7 @@ for (const [direction, x, y] of [
   test(`movement ${direction} advances exactly one cell and emits a detached move event`, () => {
     const output = stepFrozen(world(), actions(move(direction)));
     expect(output.nextState.players[0].position).toStrictEqual({ x, y });
-    expect(output.nextState.trails[y * 40 + x]).toBe(0);
+    expect(output.nextState.trails[y * 30 + x]).toBe(0);
     expect(output.events).toStrictEqual([
       { type: "move", playerId: "alpha", from: { x: 5, y: 5 }, to: { x, y } },
     ]);

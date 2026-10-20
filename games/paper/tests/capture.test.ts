@@ -13,7 +13,7 @@ test("a trail may close on a different home cell and capture the enclosed interi
   expect(!output.nextState.trails.includes(0)).toBeTruthy();
   expect(output.nextState.territory[indexAt(3, 3)]).toBe(0);
   const capture = eventOf(output, "capture");
-  expect(capture.cells).toStrictEqual(rectangle.filter((index) => index % 40 !== 2));
+  expect(capture.cells).toStrictEqual(rectangle.filter((index) => index % 30 !== 2));
   expect(parsePaperState(output.nextState)).toStrictEqual(output.nextState);
 });
 
@@ -63,7 +63,7 @@ test("simultaneous nested closures preserve neutral and owned cells in the inter
 
 test("two independent simultaneous closures both gain land", () => {
   const state = box(world(), 0);
-  box(state, 1, 30, 20, 32, 22);
+  box(state, 1, 20, 20, 22, 22);
   const output = stepFrozen(state, actions(move("left"), move("left")));
   expect(output.nextState.territory.filter((owner) => owner === 0).length).toBe(9);
   expect(output.nextState.territory.filter((owner) => owner === 1).length).toBe(9);
@@ -79,7 +79,7 @@ test("capturing enemy territory neither kills their head nor deletes their exist
   expect(output.nextState.players[1].alive).toBe(true);
   expect(output.nextState.territory[indexAt(3, 3)]).toBe(0);
   expect(output.nextState.trails[indexAt(3, 3)]).toBe(1);
-  expect(output.nextState.territory[indexAt(34, 14)], "disconnected territory is retained").toBe(1);
+  expect(output.nextState.territory[indexAt(24, 14)], "disconnected territory is retained").toBe(1);
 });
 
 test("covering a head's last home creates a vulnerable one-cell trail, and zero land keeps the player in the match", () => {
@@ -151,7 +151,7 @@ test("a closer that cuts a tail on their home cell still captures the enclosed l
   const state = box(world(), 0);
   outside(state, 1, [
     [2, 4],
-    [34, 14],
+    [24, 14],
   ]);
   const output = stepFrozen(state, actions(move("left")));
   expect(output.nextState.players[1].alive).toBe(true);
@@ -159,7 +159,7 @@ test("a closer that cuts a tail on their home cell still captures the enclosed l
   expect(
     output.nextState.trails.flatMap((owner, index) => (owner === 1 ? [index] : [])),
     "the old trail is cut and the spawn outside the own territory keeps one cell",
-  ).toStrictEqual([indexAt(34, 14)]);
+  ).toStrictEqual([indexAt(24, 14)]);
   expect(output.nextState.territory.includes(1), "the reset player keeps its home").toBeTruthy();
   expect(areaOf(output.nextState, 0)).toBe(9);
   expect(output.events.map((event) => event.type)).toStrictEqual([

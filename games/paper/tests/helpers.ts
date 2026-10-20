@@ -36,7 +36,7 @@ export function eventOf<Type extends PaperEvent["type"]>(
 }
 export const idle = (): PaperAction => ({ type: "idle" });
 export const move = (direction: PaperDirection): PaperAction => ({ type: "move", direction });
-export const indexAt = (x: number, y: number) => y * 40 + x;
+export const indexAt = (x: number, y: number) => y * 30 + x;
 /** Territory cells a slot owns in the given world. */
 export const areaOf = (state: PaperState, slot: Slot) =>
   state.territory.filter((owner) => owner === slot).length;
@@ -62,7 +62,7 @@ export const stepUnknown = (state: PaperState, input: unknown) =>
 export function world(
   positions: readonly [Position, Position] = [
     { x: 5, y: 5 },
-    { x: 34, y: 14 },
+    { x: 24, y: 14 },
   ],
 ): PaperState {
   const state = init();
@@ -78,7 +78,7 @@ export function outside(
   state: PaperState,
   slot: Slot,
   points: readonly Cell[],
-  home: readonly Cell[] = slot === 0 ? [[1, 1]] : [[38, 28]],
+  home: readonly Cell[] = slot === 0 ? [[1, 1]] : [[28, 28]],
 ): PaperState {
   state.territory = state.territory.map((owner) => (owner === slot ? -1 : owner));
   state.trails = state.trails.map((owner) => (owner === slot ? -1 : owner));

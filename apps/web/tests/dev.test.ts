@@ -75,7 +75,7 @@ test("the dev page polls the session, loads the replay and restarts on demand", 
       run,
       seed: 42,
       completedTicks: 3,
-      maxTicks: 600,
+      maxTicks: 500,
       players,
       result,
     },
@@ -109,7 +109,7 @@ test("the dev page polls the session, loads the replay and restarts on demand", 
 
   const wrapper = mount(DevPage);
   await flushPromises();
-  expect(wrapper.get('[data-testid="dev-progress"]').text()).toContain("已完成 1 / 600 tick");
+  expect(wrapper.get('[data-testid="dev-progress"]').text()).toContain("已完成 1 / 500 tick");
   expect(wrapper.text()).toContain("比赛进行中");
   expect(wrapper.find('[aria-label="比赛回放"]').exists()).toBe(false);
 

@@ -6,7 +6,7 @@ import { areaOf, eventOf } from "./helpers";
 for (const [direction, position] of [
   ["left", { x: 0, y: 5 }],
   ["up", { x: 5, y: 0 }],
-  ["right", { x: 39, y: 5 }],
+  ["right", { x: 29, y: 5 }],
   ["down", { x: 5, y: 29 }],
 ] as const) {
   test(`moving ${direction} across the edge resets that player to its spawn`, () => {
@@ -242,12 +242,12 @@ test("the match only ends at the tick limit, never on a reset", () => {
 test("an out-of-bounds target cannot wrap its linear index into an enemy trail", () => {
   const state = world([
     { x: 0, y: 5 },
-    { x: 39, y: 4 },
+    { x: 29, y: 4 },
   ]);
-  outside(state, 1, [[39, 4]]);
+  outside(state, 1, [[29, 4]]);
   const output = stepFrozen(state, actions(move("left")));
   assertReset(output, [0]);
   expect(output.nextState.players[1].alive).toBe(true);
-  expect(output.nextState.trails[indexAt(39, 4)]).toBe(1);
+  expect(output.nextState.trails[indexAt(29, 4)]).toBe(1);
   expect(!output.events.some((event) => event.type === "trail-cut")).toBeTruthy();
 });

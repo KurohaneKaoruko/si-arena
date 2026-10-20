@@ -83,7 +83,7 @@ test("the published official Paper bot plays under the normal release limits and
     },
   });
   expect(result.result.completedTicks).toBeGreaterThan(1);
-  expect(result.result.completedTicks).toBeLessThanOrEqual(600);
+  expect(result.result.completedTicks).toBe(500);
   expect(result.result.players.find((player) => player.id === "official")!.score).toBeGreaterThan(
     9,
   );
@@ -95,7 +95,7 @@ test("the published official Paper bot plays under the normal release limits and
   );
   expect(officialErrors).toEqual([]);
   expect(await replayMatch(sink.replay, paperGame)).toEqual(result);
-  // A full 600-tick match on slow shared CI runners needs well over the
+  // A full 500-tick match on slow shared CI runners needs well over the
   // default 5s test timeout.
 }, 60000);
 
@@ -137,64 +137,64 @@ test("the official Paper bot keeps to the safe directions when the opponent head
     ...paperGame.manifest.resolvedLimits,
     cpuMs: Math.ceil(paperGame.manifest.resolvedLimits.cpuMs * factor),
   });
-  const width = 40;
+  const width = 30;
   // The bot owns a home block and reaches a sweep anchor through it, while
   // the opponent head stands on the own border next to the bot head. The
   // walk to the anchor used to step onto that head, which is a head collision
   // and resets both heads to their spawns.
   const home: Cell[] = [
-    [33, 13],
-    [34, 13],
-    [35, 13],
-    [33, 14],
-    [34, 14],
-    [35, 14],
-    [33, 15],
-    [34, 15],
-    [35, 15],
+    [23, 13],
+    [24, 13],
+    [25, 13],
+    [23, 14],
+    [24, 14],
+    [25, 14],
+    [23, 15],
+    [24, 15],
+    [25, 15],
   ];
   const scenarios: { extra: Cell[]; head: Cell; enemy: Cell }[] = [
     {
       extra: [
-        [36, 14],
-        [37, 14],
+        [26, 14],
+        [27, 14],
       ],
-      head: [37, 14],
-      enemy: [36, 14],
+      head: [27, 14],
+      enemy: [26, 14],
     },
     {
       extra: [
-        [36, 15],
-        [35, 16],
-        [34, 16],
-        [36, 14],
-        [36, 13],
-        [35, 12],
-        [34, 12],
-        [36, 16],
-        [37, 16],
-        [33, 16],
-        [36, 12],
-        [32, 16],
-        [37, 15],
+        [26, 15],
+        [25, 16],
+        [24, 16],
+        [26, 14],
+        [26, 13],
+        [25, 12],
+        [24, 12],
+        [26, 16],
+        [27, 16],
+        [23, 16],
+        [26, 12],
+        [22, 16],
+        [27, 15],
       ],
-      head: [35, 12],
-      enemy: [35, 13],
+      head: [25, 12],
+      enemy: [25, 13],
     },
     {
       extra: [
-        [34, 16],
-        [34, 17],
-        [35, 16],
-        [36, 16],
-        [34, 12],
-        [35, 13],
-        [33, 13],
-        [33, 14],
-        [33, 15],
+        [24, 16],
+        [24, 17],
+        [25, 16],
+        [26, 16],
+        [24, 12],
+        [25, 13],
+        [23, 13],
+        [23, 14],
+        [23, 15],
       ],
-      head: [34, 12],
-      enemy: [34, 13],
+      head: [24, 12],
+      enemy: [24, 13],
     },
   ];
   const bot = await SandboxPlayer.create({
@@ -233,10 +233,10 @@ test("the official Paper bot keeps to the safe directions when the opponent head
         const x = scenario.head[0] + delta[0]!;
         const y = scenario.head[1] + delta[1]!;
         expect(x).toBeGreaterThanOrEqual(0);
-        expect(x).toBeLessThan(40);
+        expect(x).toBeLessThan(30);
         expect(y).toBeGreaterThanOrEqual(0);
         expect(y).toBeLessThan(30);
-        expect(state.trails[y * 40 + x]).not.toBe(0);
+        expect(state.trails[y * 30 + x]).not.toBe(0);
         expect([x, y]).not.toEqual(scenario.enemy);
       }
     }

@@ -5,11 +5,11 @@ import { resolveResourceLimits } from "@si-arena/protocol";
 
 const limits = resolveResourceLimits();
 const source = "export default ({Memory})=>{Memory.n=(Memory.n??0)+1;}";
-// Approximate the two 40x30 Paper grids, without importing a game into the sandbox package.
+// Approximate the two 30x30 Paper grids, without importing a game into the sandbox package.
 const observation = {
   tick: 0,
-  territory: Array.from({ length: 1200 }, () => null),
-  trails: Array.from({ length: 1200 }, () => null),
+  territory: Array.from({ length: 900 }, () => null),
+  trails: Array.from({ length: 900 }, () => null),
 };
 await initializeRuntime();
 const samples = [];

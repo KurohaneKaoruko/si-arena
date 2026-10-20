@@ -8,8 +8,8 @@ import type { PaperEvent } from "@si-arena/game-paper/rules";
 import type { PaperState } from "@si-arena/game-paper/sdk";
 import { indexAt, required, world } from "./helpers";
 
-const WIDTH = 400,
-  HEIGHT = 300; // 40×30 grid → 10×10 px cells.
+const WIDTH = 300,
+  HEIGHT = 300; // 30×30 grid → 10×10 px cells.
 
 interface CanvasCall {
   op: string;
@@ -266,8 +266,8 @@ test("error badges stay on errored players regardless of progress or reduced mot
   const events: PaperEvent[] = [];
   const marked = badges(draw(state, animation(events, { progress: 1, erroredPlayers: ["beta"] })));
   expect(marked).toHaveLength(1);
-  expect(arg(marked[0]!, 1)).toBeGreaterThanOrEqual(340);
-  expect(arg(marked[0]!, 1)).toBeLessThanOrEqual(350);
+  expect(arg(marked[0]!, 1)).toBeGreaterThanOrEqual(240);
+  expect(arg(marked[0]!, 1)).toBeLessThanOrEqual(250);
   expect(arg(marked[0]!, 2)).toBeGreaterThanOrEqual(140);
   expect(arg(marked[0]!, 2)).toBeLessThanOrEqual(150);
   expect(badges(draw(state, animation(events, { progress: 1 })))).toHaveLength(0);

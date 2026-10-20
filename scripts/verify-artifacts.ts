@@ -137,11 +137,11 @@ let state = paperRules.init({
   players: [{ id: "alpha", slot: 0 }, { id: "beta", slot: 1 }],
 });
 let result: PaperResult | undefined;
-for (let tick = 0; tick < 600; tick++) {
+for (let tick = 0; tick < 500; tick++) {
   const output = paperRules.step(state, { alpha: { type: "idle" }, beta: { type: "idle" } });
   state = output.nextState; result = output.result;
 }
-if (result?.completedTicks !== 600 || result.players.some(p => p.rank !== 1 || p.score !== 9 || !p.alive)) {
+if (result?.completedTicks !== 500 || result.players.some(p => p.rank !== 1 || p.score !== 9 || !p.alive)) {
   throw new Error("Standalone match returned an unexpected result");
 }
 const bot = await SandboxPlayer.create({
@@ -297,7 +297,7 @@ export default [defineLocalGame({game:paperGame,sdkSource:PAPER_SDK_SOURCE,offic
     root,
   );
   console.log(
-    `Verified ${archives.length} packed packages and ${entries.length} public exports outside the workspace, strict NodeNext types, a 600-tick match, isolated sandbox, CLI batch/replay without bot files and compiled API.`,
+    `Verified ${archives.length} packed packages and ${entries.length} public exports outside the workspace, strict NodeNext types, a 500-tick match, isolated sandbox, CLI batch/replay without bot files and compiled API.`,
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

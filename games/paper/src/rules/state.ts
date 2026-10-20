@@ -121,7 +121,7 @@ export function initPaper(input: InitInput): PaperState {
     id,
     slot,
     alive: true,
-    position: { x: (slot === 0) !== swap ? 5 : 34, y: 14 },
+    position: { x: (slot === 0) !== swap ? 5 : 24, y: 14 },
   });
   const seats = [createPlayer(first.id, 0), createPlayer(second.id, 1)];
   const spawns = seats.map((player) => {

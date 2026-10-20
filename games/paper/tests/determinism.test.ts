@@ -8,20 +8,20 @@ import { required, resultOf } from "./helpers";
 
 const reflectPlayer = (player: PaperPlayer): PaperPlayer => ({
   ...player,
-  position: player.position ? { x: 39 - player.position.x, y: player.position.y } : null,
+  position: player.position ? { x: 29 - player.position.x, y: player.position.y } : null,
 });
 const reflect = (state: PaperState): PaperState => ({
   ...structuredClone(state),
   territory: state.territory.map((_, index) =>
-    required(state.territory[Math.floor(index / 40) * 40 + 39 - (index % 40)]),
+    required(state.territory[Math.floor(index / 30) * 30 + 29 - (index % 30)]),
   ),
   trails: state.trails.map((_, index) =>
-    required(state.trails[Math.floor(index / 40) * 40 + 39 - (index % 40)]),
+    required(state.trails[Math.floor(index / 30) * 30 + 29 - (index % 30)]),
   ),
   players: [reflectPlayer(state.players[0]), reflectPlayer(state.players[1])],
-  spawns: state.spawns.map((spawn) => ({ x: 39 - spawn.x, y: spawn.y })) as PaperState["spawns"],
+  spawns: state.spawns.map((spawn) => ({ x: 29 - spawn.x, y: spawn.y })) as PaperState["spawns"],
 });
-const point = ({ x, y }: Position) => ({ x: 39 - x, y });
+const point = ({ x, y }: Position) => ({ x: 29 - x, y });
 const reflectEvent = (event: PaperEvent): PaperEvent => {
   if (event.type === "move") return { ...event, from: point(event.from), to: point(event.to) };
   if (event.type === "trail-cut") return { ...event, position: point(event.position) };
@@ -30,17 +30,17 @@ const reflectEvent = (event: PaperEvent): PaperEvent => {
     return {
       ...event,
       cells: event.cells
-        .map((index) => Math.floor(index / 40) * 40 + 39 - (index % 40))
+        .map((index) => Math.floor(index / 30) * 30 + 29 - (index % 30))
         .toSorted((a, b) => a - b),
     };
   return event;
 };
 
-test("the 600th completed tick ends a tied game and cannot be followed by another action", () => {
-  const ticks = Array.from({ length: 600 }, () => actions());
+test("the 500th completed tick ends a tied game and cannot be followed by another action", () => {
+  const ticks = Array.from({ length: 500 }, () => actions());
   const output = play(init(), ticks);
   expect(resultOf(output).reason).toBe("tick-limit");
-  expect(resultOf(output).completedTicks).toBe(600);
+  expect(resultOf(output).completedTicks).toBe(500);
   expect(
     resultOf(output).players.map((player) => [player.rank, player.score, player.alive]),
   ).toStrictEqual([
@@ -53,7 +53,7 @@ test("the 600th completed tick ends a tied game and cannot be followed by anothe
 
 test("the tick limit is the only ending and it compares territory", () => {
   const state = world();
-  state.tick = 599;
+  state.tick = 499;
   state.territory[0] = 0;
   const timed = stepFrozen(state, actions());
   expect(resultOf(timed).reason).toBe("tick-limit");
@@ -63,9 +63,9 @@ test("the tick limit is the only ending and it compares territory", () => {
   ]);
   const edge = world([
     { x: 0, y: 0 },
-    { x: 39, y: 29 },
+    { x: 29, y: 29 },
   ]);
-  edge.tick = 599;
+  edge.tick = 499;
   const reset = stepFrozen(edge, actions(move("left")));
   expect(resultOf(reset).reason).toBe("tick-limit");
   expect(resultOf(reset).players.map((player) => [player.rank, player.score])).toStrictEqual([
@@ -86,7 +86,7 @@ test("a full match is reproduced solely from serialized initial state and action
     ...Array<PaperDirection>(4).fill("up"),
   ];
   const opposite = { right: "left", down: "up", left: "right", up: "down" } as const;
-  const records = Array.from({ length: 600 }, (_, tick) => {
+  const records = Array.from({ length: 500 }, (_, tick) => {
     const direction = directions[tick];
     return actions(
       direction ? move(direction) : idle(),
@@ -133,7 +133,7 @@ test("generated games keep every state valid for a full match", () => {
   for (let seed = 1; seed <= 12; seed++) {
     let state = init(seed);
     let random = seed;
-    for (let tick = 0; tick < 600; tick++) {
+    for (let tick = 0; tick < 500; tick++) {
       const directions = ["up", "right", "down", "left"] as const;
       const pick = () => {
         random = (Math.imul(random, 1664525) + 1013904223) >>> 0;
@@ -143,16 +143,16 @@ test("generated games keep every state valid for a full match", () => {
       state = output.nextState;
       expect(() => parsePaperState(state), `seed ${seed}, tick ${tick}`).not.toThrow();
     }
-    expect(state.tick, `seed ${seed} reaches the published tick limit`).toBe(600);
+    expect(state.tick, `seed ${seed} reaches the published tick limit`).toBe(500);
   }
-  // A full match of 600 validated ticks per seed needs more than the default budget.
+  // A full match of 500 validated ticks per seed needs more than the default budget.
 }, 30000);
 
 test("the action insertion order does not change the result of a match", () => {
   for (let seed = 1; seed <= 4; seed++) {
     let state = init(seed);
     let random = seed;
-    for (let tick = 0; tick < 600; tick++) {
+    for (let tick = 0; tick < 500; tick++) {
       const directions = ["up", "right", "down", "left"] as const;
       const pick = () => {
         random = (Math.imul(random, 1664525) + 1013904223) >>> 0;

@@ -35,11 +35,11 @@ export default function tick({ game, Memory }) {
 | 字段                         | 含义                                                                         |
 | ---------------------------- | ---------------------------------------------------------------------------- |
 | `game.tick`                  | 当前输入 tick，从 0 开始                                                     |
-| `game.maxTicks`              | 本局回合上限，固定 600                                                       |
+| `game.maxTicks`              | 本局回合上限，固定 500                                                       |
 | `game.self`                  | 自己的 `id`、`slot`、`position: {x,y}`、`spawn: {x,y}`，以及上述两个动作方法 |
 | `game.opponent`              | 对手的 `id`、`slot`、`position`、`spawn`                                     |
-| `game.board.width`, `height` | 固定 40×30                                                                   |
-| `game.board.territory`       | 长度 1200 的领地数组，索引 `y * width + x`；-1 为无主，0/1 为所属席位        |
+| `game.board.width`, `height` | 固定 30×30                                                                   |
+| `game.board.territory`       | 长度 900 的领地数组，索引 `y * width + x`；-1 为无主，0/1 为所属席位         |
 | `game.board.trails`          | 同样编码的尾迹数组，-1 为无尾迹                                              |
 | `game.events`                | 上一 tick 结算产生的公开事件，tick 0 为空数组                                |
 

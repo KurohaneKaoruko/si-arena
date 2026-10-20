@@ -107,7 +107,7 @@ interface GameRules<State, Observation, Action, Event> {
 
 ## 模块配置与注册
 
-manifest 包含稳定游戏 ID、展示信息、人数范围、规则发行标识、默认配置、tick 上限和资源限制。圈地固定 2 人、40×30 地图、600 tick，资源数值遵守 [资源限额](resource-limits.md)。游戏在 `limits` 中按字段覆盖平台默认资源预算，未指定的字段继承默认值；发布时生成完整的 `resolvedLimits`，网站、上传 API、沙箱与本地工具读取同一发行配置。游戏模块提供固定、可信的参数 schema。
+manifest 包含稳定游戏 ID、展示信息、人数范围、规则发行标识、默认配置、tick 上限和资源限制。圈地固定 2 人、30×30 地图、500 tick，资源数值遵守 [资源限额](resource-limits.md)。游戏在 `limits` 中按字段覆盖平台默认资源预算，未指定的字段继承默认值；发布时生成完整的 `resolvedLimits`，网站、上传 API、沙箱与本地工具读取同一发行配置。游戏模块提供固定、可信的参数 schema。
 
 manifest 的 `botProtocolVersion` 是从 1 开始的整数，标识玩家代码接口兼容性；圈地当前为 2。观察、动作、SDK、Memory 协议或受支持 JS 语法发生不向后兼容的改变时递增。规则平衡、画面与保持旧调用有效的接口扩展不递增。发行标识与协议版本不能互相替代。
 

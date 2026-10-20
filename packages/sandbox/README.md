@@ -102,6 +102,6 @@ pnpm test:artifacts
 
 测试覆盖异常回滚、超限后恢复、被 catch 的分配失败、累计小额分配、进程死亡与墙钟终止、Promise、宿主能力隔离、恶意 getter/原型修改、日志预算、长度前缀和发布后实际执行。Linux 主机可设置 `ARENA_TEST_CGROUP_ROOT` 为已委派目录，再运行同一测试命令，验证真实 OOM 终止；未提供 Linux 环境时该项显式跳过。
 
-性能脚本使用两个 1200 格数组模拟观察体积，执行 5 tick 预热与 100 tick 采样；分别报告玩家计费 CPU（`playerCpu`，与 `cpuUsedUs` 上报同源，不含运行时创建与 SDK 初始化等可信引导）、往返墙钟和整 tick 线程 CPU 的内部阶段分解（`phases`，仍包含可信引导）。它只测执行器，不连接平台、不创建排位。
+性能脚本使用两个 900 格数组模拟观察体积，执行 5 tick 预热与 100 tick 采样；分别报告玩家计费 CPU（`playerCpu`，与 `cpuUsedUs` 上报同源，不含运行时创建与 SDK 初始化等可信引导）、往返墙钟和整 tick 线程 CPU 的内部阶段分解（`phases`，仍包含可信引导）。它只测执行器，不连接平台、不创建排位。
 
 采样针对常驻环境的热 tick，首次 Runtime/Context、SDK 与玩家模块初始化已在预热中发生。冷热对照和真实 Paper 完整比赛见[常驻执行实施记录](../../docs/research/player-execution-implementation.md)；历史基线不代表当前每 tick 成本。

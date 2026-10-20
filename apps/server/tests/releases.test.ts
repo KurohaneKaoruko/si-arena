@@ -32,7 +32,7 @@ test("development materials and immutable release downloads are public without a
   try {
     const docs = await app.inject("/api/games/paper/development");
     expect(docs.statusCode).toBe(200);
-    expect(docs.json().prompt).toContain("40×30");
+    expect(docs.json().prompt).toContain("30×30");
     expect(docs.json().sdk).toContain("game.self.move");
     expect(docs.json().officialBot).toContain("export default");
     expect(docs.json().template).toContain("Memory");
