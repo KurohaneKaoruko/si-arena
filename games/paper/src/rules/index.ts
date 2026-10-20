@@ -195,18 +195,21 @@ function step(
       nextState.trails[index] = slot;
     } else if (nextState.trails.includes(slot)) closing.add(slot);
   }
-  // Compute both claim sets before applying any territory change.
+  // Compute both claim sets before applying any territory change. Each closer's
+  // pre-existing territory is excluded from the contest, so enclosed enemy land
+  // converts regardless of the enemy closing elsewhere on the same tick; only
+  // neutral cells enclosed by both closers stay neutral.
   const claims = [
     closing.has(0) ? captureCells(nextState, 0) : new Set<number>(),
     closing.has(1) ? captureCells(nextState, 1) : new Set<number>(),
   ] as const;
   const gained: [number[], number[]] = [[], []];
   for (let index = 0; index < nextState.territory.length; index++) {
-    const first = claims[0].has(index);
-    const second = claims[1].has(index);
+    const first = claims[0].has(index) && nextState.territory[index] !== 0;
+    const second = claims[1].has(index) && nextState.territory[index] !== 1;
     if (first === second) continue;
     const slot = first ? 0 : 1;
-    if (nextState.territory[index] !== slot) gained[slot].push(index);
+    gained[slot].push(index);
     nextState.territory[index] = slot;
   }
   for (const player of nextState.players) {

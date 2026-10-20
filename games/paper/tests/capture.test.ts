@@ -33,32 +33,42 @@ test("movement wholly inside home produces no capture and no trail", () => {
   expect(!output.nextState.trails.includes(0)).toBeTruthy();
 });
 
-test("simultaneous nested closures preserve neutral and owned cells in the intersection", () => {
+test("simultaneous nested closures convert enclosed land and only suspend doubly-claimed neutral", () => {
   const state = box(world(), 0, 2, 2, 8, 8);
   box(state, 1, 4, 4, 6, 6);
   state.territory[indexAt(5, 5)] = 0;
-  const before = [...state.territory];
   const output = stepFrozen(state, actions(move("left"), move("left")));
-  for (let y = 4; y <= 6; y++)
-    for (let x = 4; x <= 6; x++) {
-      expect(output.nextState.territory[indexAt(x, y)]).toBe(before[indexAt(x, y)]);
-    }
   expect(output.nextState.territory[indexAt(3, 3)]).toBe(0);
   expect(
     output.nextState.territory[indexAt(5, 4)],
-    "contested neutral trail cells stay neutral",
+    "neutral trail cells enclosed by both closers stay neutral",
   ).toBe(-1);
-  expect(output.nextState.territory[indexAt(4, 5)], "contested old enemy home stays theirs").toBe(
-    1,
-  );
+  expect(
+    output.nextState.territory[indexAt(4, 5)],
+    "the outer closure converts the inner closer's home",
+  ).toBe(0);
   expect(
     output.nextState.territory[indexAt(5, 5)],
-    "contested old friendly territory stays friendly",
-  ).toBe(0);
-  expect(output.nextState.trails.every((owner) => owner === -1)).toBeTruthy();
+    "the inner closure converts the enemy island it encloses",
+  ).toBe(1);
+  expect(
+    output.nextState.trails.flatMap((owner, cell) => (owner === 1 ? [cell] : [])),
+    "the inner closer stands on converted land and keeps one trail cell",
+  ).toStrictEqual([indexAt(4, 6)]);
+  expect(output.nextState.trails.includes(0)).toBe(false);
   expect(output.events.filter((event) => event.type === "capture").length).toBe(2);
-  expect(output.nextState.territory.filter((owner) => owner === 0).length).toBe(41);
-  expect(output.nextState.territory.filter((owner) => owner === 1).length).toBe(3);
+  expect(output.nextState.territory.filter((owner) => owner === 0).length).toBe(43);
+  expect(output.nextState.territory.filter((owner) => owner === 1).length).toBe(1);
+});
+
+test("enclosed enemy territory converts even when the enemy closes elsewhere on the same tick", () => {
+  const state = box(world(), 0, 2, 2, 8, 8);
+  box(state, 1, 20, 20, 22, 22);
+  state.territory[indexAt(5, 5)] = 1;
+  const output = stepFrozen(state, actions(move("left"), move("left")));
+  expect(output.nextState.territory[indexAt(5, 5)], "enclosed enemy land converts").toBe(0);
+  expect(output.events.filter((event) => event.type === "capture")).toHaveLength(2);
+  expect(output.nextState.territory.filter((owner) => owner === 1).length).toBe(9);
 });
 
 test("two independent simultaneous closures both gain land", () => {
