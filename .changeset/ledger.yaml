@@ -2,18 +2,34 @@
   dir: packages/cli
   intents:
     - calm-geese-compete
+"@si-arena/cli@0.3.0":
+  dir: packages/cli
+  intents:
+    - tall-beans-play
 "@si-arena/engine@0.2.0":
   dir: packages/engine
   intents:
     - calm-geese-compete
+"@si-arena/engine@0.3.0":
+  dir: packages/engine
+  intents:
+    - tall-beans-play
 "@si-arena/game-paper@0.2.0":
   dir: games/paper
   intents:
     - calm-geese-compete
+"@si-arena/game-paper@0.3.0":
+  dir: games/paper
+  intents:
+    - tall-beans-play
 "@si-arena/player@0.2.0":
   dir: packages/player
   intents:
     - calm-geese-compete
+"@si-arena/player@0.3.0":
+  dir: packages/player
+  intents:
+    - tall-beans-play
 "@si-arena/protocol@0.1.0":
   dir: packages/protocol
   intents:
@@ -22,7 +38,15 @@
   dir: packages/protocol
   intents:
     - calm-geese-compete
+"@si-arena/protocol@0.3.0":
+  dir: packages/protocol
+  intents:
+    - tall-beans-play
 "@si-arena/sandbox@0.2.0":
   dir: packages/sandbox
   intents:
     - calm-geese-compete
+"@si-arena/sandbox@0.3.0":
+  dir: packages/sandbox
+  intents:
+    - tall-beans-play
