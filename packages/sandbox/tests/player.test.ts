@@ -453,7 +453,10 @@ test("a transient rebuild failure is retried on later ticks instead of wedging t
 });
 
 test("wall watchdog kills a delayed executor and allows later ticks to recover", async () => {
-  const budget = limits({ cpuMs: 40, wallMs: 80 });
+  // wallMs must clear the unbilled trusted per-tick setup (runtime, context,
+  // SDK) on slow shared CI runners; a stopped process never answers at any
+  // budget, so the watchdog semantics do not depend on the exact value.
+  const budget = limits({ cpuMs: 40, wallMs: 400 });
   const player = await create(
     `export default ({Memory})=>{Memory.n=(Memory.n??0)+1;return {type:'move'}}`,
     { limits: budget },
@@ -467,7 +470,7 @@ test("wall watchdog kills a delayed executor and allows later ticks to recover",
     error: { type: "EXECUTION_TIMEOUT" },
     memory: { n: 1 },
   });
-  // Rebuilding is asynchronous and has its own startup budget, independent of this 80ms tick.
+  // Rebuilding is asynchronous and has its own startup budget, independent of this tick.
   await expect.poll(() => player.processId, { timeout: budget.startupMs }).toBeDefined();
   expect(player.processId).not.toBe(pid);
   expect(await player.execute(2, {})).toMatchObject({ ok: true, memory: { n: 2 } });

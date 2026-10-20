@@ -92,9 +92,42 @@ test("the published official Paper bot plays under the normal release limits and
   // default 5s test timeout.
 }, 60000);
 
+// The release cpuMs assumes production-like hardware; shared CI runners execute
+// the same guest work 2-3x slower. Measure this machine's steady guest speed
+// with a spin of the reference size (about 10ms of guest work, far above the
+// Linux thread-CPU accounting granularity) and scale CPU budgets by the same
+// factor, mirroring the sandbox performance tests.
+async function cpuSpeedFactor(): Promise<number> {
+  const player = await SandboxPlayer.create({
+    matchId: "paper-calibration",
+    playerId: "calibration",
+    source: `let s=0;for(let i=0;i<200000;i++)s+=i;export default ()=>({type:'idle'})`,
+    limits: resolveResourceLimits({ cpuMs: 1000, wallMs: 10000 }),
+    isolation: { kind: "local" },
+    parseAction: paperGame.rules.parseAction,
+    defaultAction: { type: "idle" },
+  });
+  try {
+    // The first tick pays one-time JIT warm-up; the second reflects steady cost.
+    await player.execute(0, {});
+    const steady = await player.execute(1, {});
+    const baseline = steady.resources?.cpuUsedUs ?? 0;
+    if (!steady.ok || baseline <= 0) throw new Error("CPU speed calibration failed");
+    return Math.max(1, baseline / 10_000);
+  } finally {
+    await player.close();
+  }
+}
+
 test("the official Paper bot keeps to the safe directions when the opponent head is inside its territory", async () => {
   const source = await readFile(officialBotUrl, "utf8");
-  const limits = paperGame.manifest.resolvedLimits;
+  // Direction safety is the property under test here; budget compliance under
+  // the raw release limits is covered by the full-match test above.
+  const factor = await cpuSpeedFactor();
+  const limits = resolveResourceLimits({
+    ...paperGame.manifest.resolvedLimits,
+    cpuMs: Math.ceil(paperGame.manifest.resolvedLimits.cpuMs * factor),
+  });
   const width = 40;
   // The bot owns a home block and reaches a sweep anchor through it, while
   // the opponent head stands on the own border next to the bot head. The

@@ -168,7 +168,9 @@ test("the action insertion order does not change the result of a match", () => {
       state = ordered.nextState;
     }
   }
-});
+  // Each tick steps the match twice and deep-compares the full states, so
+  // slow shared CI runners need more than the default budget.
+}, 30000);
 
 test("horizontal reflection preserves outcomes and reflects the same rule events", () => {
   const nested = box(world(), 0, 2, 2, 8, 8);
