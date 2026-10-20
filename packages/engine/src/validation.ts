@@ -12,6 +12,7 @@ import {
   type JsonValue,
   type ResourceLimits,
 } from "@si-arena/protocol";
+import { sha256Hex } from "./sha256";
 import {
   ENGINE_COMPATIBILITY,
   EngineError,
@@ -201,8 +202,14 @@ export function canonical(value: unknown): string {
 }
 export async function stateHash(state: unknown): Promise<string> {
   const bytes = new TextEncoder().encode(canonical(state));
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  // crypto.subtle 只在安全上下文暴露；纯 HTTP 浏览器退回本地实现，哈希链保持一致。
+  if (globalThis.crypto?.subtle) {
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join(
+      "",
+    );
+  }
+  return sha256Hex(bytes);
 }
 export function parsedAction<
   State extends { tick: number },
