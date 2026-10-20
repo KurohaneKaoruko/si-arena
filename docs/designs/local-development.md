@@ -19,7 +19,7 @@
 独立开发包提供以下命令：
 
 ```sh
-npx @si-arena/cli@latest init paper ./paper-bot
+npx @si-arena/cli@latest init paper ./paper-bot --server https://<平台地址>
 cd paper-bot
 pnpm install
 pnpm arena dev --bot ./bot.js
@@ -27,7 +27,7 @@ pnpm arena run --bot ./bot.js --matches 20 --seed 42
 pnpm arena replay ./replays/match.json.gz
 ```
 
-初始化命令也支持 `pnpm dlx @si-arena/cli@latest init paper ./paper-bot`。它下载并解压开发包、固定发行与资源配置，不自动安装依赖、不覆盖非空目录，也不创建线上比赛。`--release <releaseId>` 用于选择指定游戏发行。
+初始化命令也支持 `pnpm dlx @si-arena/cli@latest init paper ./paper-bot --server https://<平台地址>`。它下载并解压开发包、固定发行与资源配置，不自动安装依赖、不覆盖非空目录，也不创建线上比赛。`--release <releaseId>` 用于选择指定游戏发行。
 
 开发包包含 botProtocolVersion，与网站参赛提示词一同显示。不兼容升级时用户重新获取当前开发包并上传适配代码；兼容升级不强制重传，排位分均保留。批量运行指定的每个本地 bot 同样接受语法和入口协议检查。
 

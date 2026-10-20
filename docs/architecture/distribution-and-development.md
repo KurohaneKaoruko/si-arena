@@ -11,18 +11,18 @@
 ## 一条命令下载
 
 ```sh
-npx @si-arena/cli@latest init paper ./paper-bot
+npx @si-arena/cli@latest init paper ./paper-bot --server https://<平台地址>
 ```
 
 pnpm 用户使用等价入口：
 
 ```sh
-pnpm dlx @si-arena/cli@latest init paper ./paper-bot
+pnpm dlx @si-arena/cli@latest init paper ./paper-bot --server https://<平台地址>
 ```
 
 `init <gameId> <directory>` 先通过 `GET /games/:gameId` 获取当前发行 ID，再通过 `GET /games/:gameId/releases/:releaseId` 获取不可变发行元数据，按该版本的下载地址获取并校验网页同款 ZIP，解压到目标目录，输出安装、启动命令。`--release <releaseId>` 跳过当前发行查询，直接选择指定历史软件发行。不能在读完旧发行元数据后再请求可变的 current 下载别名，避免发布切换时混用版本。
 
-CLI npm 包通过构建环境变量 `SI_ARENA_SERVER_URL` 固定平台地址，本地构建默认 `http://127.0.0.1:3000`；`--server <url>` 可显式指定另一个部署，支持源站或以 `/api` 结尾的基址。仅接受 HTTPS，loopback 开发地址允许 HTTP。下载地址必须与所选服务同源，HTTP 重定向被拒绝。发行元数据给出压缩包字节数与 SHA-256，CLI 在解压前验证；内部 release.json 的摘要、发行、组件版本和 resolvedLimits 必须与外部元数据一致，每个发行文件还验证字节数与 SHA-256。校验值来自受信连接的元数据，不仅依赖 ZIP 内部自述。
+CLI 默认连接 `http://127.0.0.1:3000`，平台地址由 `--server <url>` 传入，支持源站或以 `/api` 结尾的基址；官方 npm 包不烧入特定部署地址，自托管构建可设置 `SI_ARENA_SERVER_URL` 固定自己的默认地址。仅接受 HTTPS，loopback 开发地址允许 HTTP。下载地址必须与所选服务同源，HTTP 重定向被拒绝。发行元数据给出压缩包字节数与 SHA-256，CLI 在解压前验证；内部 release.json 的摘要、发行、组件版本和 resolvedLimits 必须与外部元数据一致，每个发行文件还验证字节数与 SHA-256。校验值来自受信连接的元数据，不仅依赖 ZIP 内部自述。
 
 目标目录不存在时创建，已存在且非空时拒绝覆盖，目标本身不能是符号链接。ZIP 最大 32MiB，解压最多 128MiB、2048 个文件加清单。只创建常规文件，不恢复符号链接属性，拒绝越界、重复、大小写冲突和 Windows 保留路径；所有内容校验后写入相邻临时目录，再原子移入目标。失败时清理临时内容，保留原有空目录和并发写入的用户文件。用户无需平台账号，命令不上传代码、不发起线上匹配，不自动安装全局工具。
 

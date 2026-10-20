@@ -10,7 +10,7 @@ import { x as extract } from "tar";
  * 发布执行器：只负责把已定版的公开包按拓扑序发上 npm。版本决策由 pnpm 原生
  * versioning.fixed 承担（`pnpm change` → `pnpm version -r`），本脚本不修改版本。
  *
- * 用法：SI_ARENA_SERVER_URL=https://… pnpm publish:packages [--dry-run] [--otp <code>]
+ * 用法：pnpm publish:packages [--dry-run] [--otp <code>]
  */
 
 const PUBLIC_PACKAGES = [
@@ -28,25 +28,18 @@ const dryRun = args.includes("--dry-run");
 const otpIndex = args.indexOf("--otp");
 const otp = otpIndex >= 0 ? args[otpIndex + 1] : process.env.NPM_CONFIG_OTP;
 
-const serverUrl = process.env.SI_ARENA_SERVER_URL;
-if (!serverUrl)
-  throw new Error("Set SI_ARENA_SERVER_URL (the public API origin) before publishing");
-const parsedUrl = new URL(serverUrl);
-const isLoopback = parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1";
-if (parsedUrl.protocol !== "https:" && !isLoopback)
-  throw new Error("SI_ARENA_SERVER_URL must use https (loopback allowed for dry runs)");
-
 const nodeMajor = Number(process.versions.node.split(".")[0]);
 if (nodeMajor < 26) throw new Error("Publishing requires Node.js 26 or newer");
 
 const pnpmPath = process.env.npm_execpath;
 if (!pnpmPath) throw new Error("Run this script with pnpm publish:packages");
 const pnpmIsScript = /\.[cm]?js$/.test(pnpmPath);
-const runPnpm = (pnpmArgs: string[], options: { timeoutMs: number; env?: NodeJS.ProcessEnv }) =>
+const runPnpm = (pnpmArgs: string[], options: { timeoutMs: number }) =>
   spawnSync(
     pnpmIsScript ? process.execPath : pnpmPath,
     pnpmIsScript ? [pnpmPath, ...pnpmArgs] : pnpmArgs,
-    { cwd: root, env: options.env, stdio: "inherit", timeout: options.timeoutMs },
+    // 不传 env：子进程继承当前环境，SI_ARENA_SERVER_URL 等变量自然透传给构建。
+    { cwd: root, stdio: "inherit", timeout: options.timeoutMs },
   );
 
 // lockstep 防线：publish 前所有公开包版本必须一致（正常由 versioning.fixed 保证）。
@@ -97,9 +90,9 @@ try {
   );
   console.log(`workspace 依赖替换形态（版本 ${version}）：`, internalRanges);
 
-  // 带公开地址构建；publish 阶段的 prepack 重建也沿用同一 env。
-  const buildEnv = { ...process.env, SI_ARENA_SERVER_URL: serverUrl };
-  runPnpm(["build"], { timeoutMs: 10 * 60_000, env: buildEnv });
+  // 环境原样透传给构建与 prepack：自托管者可设置 SI_ARENA_SERVER_URL 烧入
+  // 自己的默认地址，官方发布不设置，npm 包默认连接 loopback。
+  runPnpm(["build"], { timeoutMs: 10 * 60_000 });
 
   for (const pkg of PUBLIC_PACKAGES) {
     console.log(`\n>>> publishing ${pkg.name}@${version}${dryRun ? " (dry run)" : ""}`);
@@ -114,7 +107,7 @@ try {
         ...(dryRun ? ["--dry-run"] : []),
         ...(otp ? ["--otp", otp] : []),
       ],
-      { timeoutMs: 10 * 60_000, env: buildEnv },
+      { timeoutMs: 10 * 60_000 },
     );
     if (result.status !== 0) throw new Error(`Publishing ${pkg.name} failed`);
   }

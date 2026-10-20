@@ -69,8 +69,8 @@ pnpm change <包名...> --bump <patch|minor|major> --summary "…"
 pnpm version -r
 git add -A && git commit -m "chore: release <版本>"
 
-# 3. 发布（构建时把公开服务地址烧入 CLI 默认值）
-SI_ARENA_SERVER_URL=https://<域名> pnpm publish:packages [--otp <验证码>]
+# 3. 发布（CLI 默认连 loopback，平台地址由玩家通过 --server 传入，发布与部署解耦）
+pnpm publish:packages [--otp <验证码>]
 ```
 
 `scripts/publish.ts` 只做执行器：校验工作区干净、公开包版本一致、抽查 CLI tarball 中 `workspace:*` 已替换为当前版本，然后按依赖拓扑序（protocol → sandbox → engine → player → game-paper → cli）以 `--access public` 发布。`--dry-run` 走全链但不真正发布，用于演练。npm 账号开启 2FA 时用 `--otp` 或 `NPM_CONFIG_OTP` 传入验证码。

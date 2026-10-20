@@ -139,7 +139,7 @@ pnpm arena replay ./replays/实际文件名.json.gz
 
 `arena init` 校验发行、ZIP 大小及 SHA-256、内部清单与逐文件摘要，拒绝非空目录与越界路径，不安装依赖或执行代码。安装后运行比赛和回放无需平台 API、数据库或账号。开发包的可视化回放命令输出 loopback URL，在浏览器打开即可，Ctrl+C 停止；`--verify --logs` 仍用于终端校验。实时调试命令 `pnpm arena dev --bot ./bot.js` 同样输出 loopback URL：自动与官方 bot 开局（也可 `--opponent` 指定本地 bot），运行中显示 tick 进度，整场完成后提供逐 tick 动作、日志、错误与 Memory 提交前后对比，并可在页面上同种子或换随机种子重新开局；修改代码后重开即生效，不热替换进行中的比赛。
 
-对外 npm 入口为 `npx @si-arena/cli@latest init paper ./paper-bot`。构建 CLI 时通过 `SI_ARENA_SERVER_URL` 固定公开服务地址，`--server` 可覆盖；本地构建默认 `http://127.0.0.1:3000`。公开包采用统一版本（lockstep）：`pnpm change` 记录意图、`pnpm version -r` 统一升版，`SI_ARENA_SERVER_URL=https://… pnpm publish:packages` 按拓扑序发布到 `@si-arena` 组织（支持 `--dry-run` 演练与 `--otp` 二次验证）。仓库构建与测试不发布 npm 包。
+对外 npm 入口为 `npx @si-arena/cli@latest init paper ./paper-bot --server https://<平台地址>`。CLI 默认连接 `http://127.0.0.1:3000`，平台地址由 `--server` 传入；自托管构建可设置 `SI_ARENA_SERVER_URL` 烧入自己的默认地址，官方发布不设置。公开包采用统一版本（lockstep）：`pnpm change` 记录意图、`pnpm version -r` 统一升版，`pnpm publish:packages` 按拓扑序发布到 `@si-arena` 组织（支持 `--dry-run` 演练与 `--otp` 二次验证）。仓库构建与测试不发布 npm 包。
 
 ## 生产部署
 
