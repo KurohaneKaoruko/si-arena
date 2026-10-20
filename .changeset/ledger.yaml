@@ -1,4 +1,28 @@
+"@si-arena/cli@0.2.0":
+  dir: packages/cli
+  intents:
+    - calm-geese-compete
+"@si-arena/engine@0.2.0":
+  dir: packages/engine
+  intents:
+    - calm-geese-compete
+"@si-arena/game-paper@0.2.0":
+  dir: games/paper
+  intents:
+    - calm-geese-compete
+"@si-arena/player@0.2.0":
+  dir: packages/player
+  intents:
+    - calm-geese-compete
 "@si-arena/protocol@0.1.0":
   dir: packages/protocol
   intents:
     - khaki-onions-fly
+"@si-arena/protocol@0.2.0":
+  dir: packages/protocol
+  intents:
+    - calm-geese-compete
+"@si-arena/sandbox@0.2.0":
+  dir: packages/sandbox
+  intents:
+    - calm-geese-compete
