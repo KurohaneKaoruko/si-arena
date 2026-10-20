@@ -6,6 +6,10 @@
   dir: packages/cli
   intents:
     - tall-beans-play
+"@si-arena/cli@0.3.1":
+  dir: packages/cli
+  intents:
+    - smooth-falcons-dance
 "@si-arena/engine@0.2.0":
   dir: packages/engine
   intents:
@@ -14,6 +18,10 @@
   dir: packages/engine
   intents:
     - tall-beans-play
+"@si-arena/engine@0.3.1":
+  dir: packages/engine
+  intents:
+    - smooth-falcons-dance
 "@si-arena/game-paper@0.2.0":
   dir: games/paper
   intents:
@@ -22,6 +30,10 @@
   dir: games/paper
   intents:
     - tall-beans-play
+"@si-arena/game-paper@0.3.1":
+  dir: games/paper
+  intents:
+    - smooth-falcons-dance
 "@si-arena/player@0.2.0":
   dir: packages/player
   intents:
@@ -30,6 +42,10 @@
   dir: packages/player
   intents:
     - tall-beans-play
+"@si-arena/player@0.3.1":
+  dir: packages/player
+  intents:
+    - smooth-falcons-dance
 "@si-arena/protocol@0.1.0":
   dir: packages/protocol
   intents:
@@ -42,6 +58,10 @@
   dir: packages/protocol
   intents:
     - tall-beans-play
+"@si-arena/protocol@0.3.1":
+  dir: packages/protocol
+  intents:
+    - smooth-falcons-dance
 "@si-arena/sandbox@0.2.0":
   dir: packages/sandbox
   intents:
@@ -50,3 +70,7 @@
   dir: packages/sandbox
   intents:
     - tall-beans-play
+"@si-arena/sandbox@0.3.1":
+  dir: packages/sandbox
+  intents:
+    - smooth-falcons-dance
