@@ -65,7 +65,10 @@ const links = computed(() => {
               :key="instruction"
               class="flex gap-3"
             >
-              <span class="mt-2 size-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true"></span>
+              <!-- 圆点放进与正文同样的 28px 行盒里居中，才和文字真正对齐 -->
+              <span class="flex h-7 shrink-0 items-center" aria-hidden="true">
+                <span class="size-1.5 rounded-full bg-accent"></span>
+              </span>
               <span>{{ instruction }}</span>
             </li>
           </ol>

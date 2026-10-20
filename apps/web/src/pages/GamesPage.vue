@@ -40,10 +40,10 @@ const { data, status, empty, error, reload } = useApiResource(() => "/api/games"
             :to="{ name: 'game', params: { gameId: game.id } }"
             class="group block p-5 transition hover:bg-subtle"
           >
-            <div class="flex items-start justify-between gap-4">
+            <div class="flex items-center justify-between gap-4">
               <h3 class="text-lg font-semibold tracking-tight">{{ game.name }}</h3>
               <span
-                class="mt-1 shrink-0 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent"
+                class="shrink-0 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent"
                 aria-hidden="true"
                 >→</span
               >
