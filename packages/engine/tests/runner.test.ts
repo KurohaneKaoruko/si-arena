@@ -42,7 +42,9 @@ test("out-of-order execution and mutations of observations never change the shar
         async execute(tick, observation) {
           expect(observation.total).toBe(tick * 2);
           observation.total = 999;
-          await new Promise((resolve) => setTimeout(resolve, player.id === "a" ? 8 : 0));
+          // The gap must force 'b' to complete first even when slow shared CI
+          // runners add scheduling jitter between dispatching the two executions.
+          await new Promise((resolve) => setTimeout(resolve, player.id === "a" ? 50 : 0));
           completions.push(player.id);
           return outcome(player.id, tick);
         },

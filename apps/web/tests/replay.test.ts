@@ -61,7 +61,8 @@ test("missing logs for prototype-named participants remain empty rather than inh
   expect(wrapper.text()).toContain("此回放未包含玩家日志");
   expect(wrapper.find("#log-level").exists()).toBe(false);
   expect(wrapper.find('[aria-label="玩家执行错误"]').exists()).toBe(false);
-});
+  // Loading a Paper replay validates every tick of the match.
+}, 15000);
 
 test("leaving the viewer cancels playback and hidden tabs pause it", async () => {
   const session = await loadRegisteredReplay(await replayFixture(), replayGames);
