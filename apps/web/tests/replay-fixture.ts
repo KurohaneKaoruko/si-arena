@@ -2,7 +2,7 @@ import { MemoryReplaySink, runMatch } from "@si-arena/engine";
 import { paperGame } from "@si-arena/game-paper/game";
 import type { PaperAction, PaperState } from "@si-arena/game-paper/sdk";
 
-export async function replayFixture() {
+async function buildFixture() {
   const sink = new MemoryReplaySink<PaperState, PaperAction>();
   await runMatch({
     game: paperGame,
@@ -42,4 +42,12 @@ export async function replayFixture() {
     },
   });
   return sink.replay;
+}
+
+// A Paper match always runs to the tick limit, so the fixture is built once
+// per test file and shared by the tests that only read it.
+let fixture: ReturnType<typeof buildFixture> | undefined;
+export function replayFixture() {
+  fixture ??= buildFixture();
+  return fixture;
 }

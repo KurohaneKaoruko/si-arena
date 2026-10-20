@@ -1,14 +1,10 @@
 import type { PaperState, PaperPlayer, PaperDirection } from "@si-arena/game-paper/sdk";
-import type { PaperEvent, PaperResult } from "@si-arena/game-paper/rules";
+import type { PaperEvent } from "@si-arena/game-paper/rules";
 import type { Position, TickActions } from "./helpers";
-import { createHash } from "node:crypto";
 import { test, expect } from "vitest";
 import { paperRules, parsePaperState } from "@si-arena/game-paper/rules";
 import { actions, box, idle, init, move, play, stepFrozen, world } from "./helpers";
 import { required, resultOf } from "./helpers";
-
-const hash = (state: PaperState) =>
-  createHash("sha256").update(JSON.stringify(state)).digest("hex");
 
 const reflectPlayer = (player: PaperPlayer): PaperPlayer => ({
   ...player,
@@ -23,11 +19,13 @@ const reflect = (state: PaperState): PaperState => ({
     required(state.trails[Math.floor(index / 40) * 40 + 39 - (index % 40)]),
   ),
   players: [reflectPlayer(state.players[0]), reflectPlayer(state.players[1])],
+  spawns: state.spawns.map((spawn) => ({ x: 39 - spawn.x, y: spawn.y })) as PaperState["spawns"],
 });
 const point = ({ x, y }: Position) => ({ x: 39 - x, y });
 const reflectEvent = (event: PaperEvent): PaperEvent => {
   if (event.type === "move") return { ...event, from: point(event.from), to: point(event.to) };
   if (event.type === "trail-cut") return { ...event, position: point(event.position) };
+  if (event.type === "reset") return { ...event, from: point(event.from), to: point(event.to) };
   if (event.type === "capture")
     return {
       ...event,
@@ -53,7 +51,7 @@ test("the 600th completed tick ends a tied game and cannot be followed by anothe
   expect(() => paperRules.step(output.state, actions())).toThrow(/finished/);
 });
 
-test("the tick limit compares territory but elimination on the last tick takes priority", () => {
+test("the tick limit is the only ending and it compares territory", () => {
   const state = world();
   state.tick = 599;
   state.territory[0] = 0;
@@ -68,10 +66,16 @@ test("the tick limit compares territory but elimination on the last tick takes p
     { x: 39, y: 29 },
   ]);
   edge.tick = 599;
-  const eliminated = stepFrozen(edge, actions(move("left")));
-  expect(resultOf(eliminated).reason).toBe("last-survivor");
+  const reset = stepFrozen(edge, actions(move("left")));
+  expect(resultOf(reset).reason).toBe("tick-limit");
+  expect(resultOf(reset).players.map((player) => [player.rank, player.score])).toStrictEqual([
+    [1, 1],
+    [1, 1],
+  ]);
+  expect(resultOf(reset).players.every((player) => player.alive)).toBeTruthy();
   const mutual = stepFrozen(edge, actions(move("left"), move("right")));
-  expect(resultOf(mutual).reason).toBe("mutual-elimination");
+  expect(resultOf(mutual).reason).toBe("tick-limit");
+  expect(resultOf(mutual).players.map((player) => player.alive)).toStrictEqual([true, true]);
 });
 
 test("a full match is reproduced solely from serialized initial state and action records", () => {
@@ -101,7 +105,7 @@ test("a full match is reproduced solely from serialized initial state and action
   expect(live.state.rngState, "step does not consume additional random numbers").toBe(
     initial.rngState,
   );
-  expect(hash(live.state)).toBe(hash(replay.state));
+  expect(live.state).toStrictEqual(replay.state);
   expect(parsePaperState(replay.state)).toStrictEqual(replay.state);
 });
 
@@ -123,27 +127,46 @@ test("rules do not use host randomness or wall time", () => {
   }
 });
 
-test("deterministic generated games keep every state valid and ignore action insertion order", () => {
-  for (let seed = 1; seed <= 32; seed++) {
+test("generated games keep every state valid for a full match", () => {
+  // Every match now runs to the tick limit, so a long random game exercises the
+  // reset path far more often than a game that ended on an elimination.
+  for (let seed = 1; seed <= 12; seed++) {
     let state = init(seed);
-    let result: PaperResult | undefined;
     let random = seed;
-    for (let tick = 0; tick < 600 && !result; tick++) {
+    for (let tick = 0; tick < 600; tick++) {
+      const directions = ["up", "right", "down", "left"] as const;
+      const pick = () => {
+        random = (Math.imul(random, 1664525) + 1013904223) >>> 0;
+        return random % 5 === 4 ? idle() : move(required(directions[(random >>> 8) % 4]));
+      };
+      const output = paperRules.step(state, actions(pick(), pick()));
+      state = output.nextState;
+      expect(() => parsePaperState(state), `seed ${seed}, tick ${tick}`).not.toThrow();
+    }
+    expect(state.tick, `seed ${seed} reaches the published tick limit`).toBe(600);
+  }
+  // A full match of 600 validated ticks per seed needs more than the default budget.
+}, 30000);
+
+test("the action insertion order does not change the result of a match", () => {
+  for (let seed = 1; seed <= 4; seed++) {
+    let state = init(seed);
+    let random = seed;
+    for (let tick = 0; tick < 600; tick++) {
       const directions = ["up", "right", "down", "left"] as const;
       const pick = () => {
         random = (Math.imul(random, 1664525) + 1013904223) >>> 0;
         return random % 5 === 4 ? idle() : move(required(directions[(random >>> 8) % 4]));
       };
       const input = actions(pick(), pick());
-      const ordered = stepFrozen(state, input);
-      const reversed = stepFrozen(state, Object.fromEntries(Object.entries(input).toReversed()));
+      const ordered = paperRules.step(state, input);
+      const reversed = paperRules.step(
+        state,
+        Object.fromEntries(Object.entries(input).toReversed()),
+      );
       expect(ordered, `seed ${seed}, tick ${tick}`).toStrictEqual(reversed);
       state = ordered.nextState;
-      result = ordered.result;
-      expect(parsePaperState(state)).toStrictEqual(state);
     }
-    expect(result, `seed ${seed} terminates within the published budget`).toBeTruthy();
-    expect(required(result).completedTicks).toBe(state.tick);
   }
 });
 

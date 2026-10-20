@@ -166,7 +166,7 @@ const played = await runMatch({
   },
 });
 const replayed = await replayMatch(sink.replay,paperGame);
-if(played.result.reason!=="last-survivor" || replayed.finalStateHash!==played.finalStateHash)throw new Error("Packed engine/replay mismatch");
+if(played.result.reason!=="tick-limit" || replayed.finalStateHash!==played.finalStateHash)throw new Error("Packed engine/replay mismatch");
 const playback = await createReplaySession(sink.replay,paperGame);
 if(playback.frame(played.result.completedTicks).state.tick!==played.result.completedTicks || playback.frame(0).record!==null)throw new Error("Packed playback seek failed");
 `,

@@ -245,7 +245,11 @@ test("switching sidebar tabs preserves the loaded replay and its current tick", 
   );
   await router.push(`/games/paper?match=${raw.matchId}`);
   await flushPromises();
-  await vi.waitFor(() => expect(wrapper.findComponent(ReplayViewer).exists()).toBe(true));
+  // A Paper replay always runs to the tick limit, so loading it validates
+  // every tick and needs more than the default wait.
+  await vi.waitFor(() => expect(wrapper.findComponent(ReplayViewer).exists()).toBe(true), {
+    timeout: 10000,
+  });
   const canvas = wrapper.getComponent(ReplayViewer).get("canvas").element;
   await wrapper.getComponent(ReplayViewer).get('[aria-label="前进一个 tick"]').trigger("click");
   expect(wrapper.get('[data-testid="tick-count"]').text()).toContain("已完成 1");
@@ -258,7 +262,8 @@ test("switching sidebar tabs preserves the loaded replay and its current tick", 
   await flushPromises();
   expect(wrapper.get("#game-panel-match").text()).toContain("执行 tick 0 → 世界 S1");
   expect(fetch.mock.calls.filter(([url]) => url.endsWith("/replay"))).toHaveLength(1);
-});
+  // Loading a Paper replay validates every tick of the match.
+}, 20000);
 
 test("reload recovers an active request without replacing an explicitly selected historical match", async () => {
   const me = { ...initial, activeMatch: { id: "first", status: "pending" as const } };

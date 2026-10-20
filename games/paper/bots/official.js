@@ -11,7 +11,10 @@
  *
  * A sweep is only started when the opponent cannot reach any cell of the
  * trail before the sweep closes; otherwise the bot abandons it and runs home.
- * An opponent trail next to the head is cut instead, which ends the match.
+ * Stepping on an opponent trail resets the opponent to its spawn and ends the
+ * current excursion of that opponent, which is a good trade, but it never ends
+ * the match: both players keep their territory and the match always runs to
+ * the tick limit.
  *
  * The bot uses the same observation, SDK, Memory and limits as every player.
  */
@@ -23,6 +26,13 @@ const DELTAS = [
   [0, 1],
   [-1, 0],
 ];
+/** The same steps, keyed by the direction name of an action. */
+const DIRECTION_DELTA = new Map([
+  ["up", DELTAS[0]],
+  ["right", DELTAS[1]],
+  ["down", DELTAS[2]],
+  ["left", DELTAS[3]],
+]);
 /** Side lengths a sweep may use; the planner scores every combination. */
 const SWEEP_SIZES = [1, 2, 3, 4, 6, 8, 10, 13, 16, 20];
 /** Longest walk inside the own territory before a sweep is started. */
@@ -316,10 +326,32 @@ function sweepStillSafe(o, sweep) {
   return false;
 }
 
-export default function tick({ observation, Memory, sdk }) {
-  const o = observation;
+export default function tick(input) {
+  const action = decide(input.observation, input.Memory, input.sdk);
+  // Remember where this action leaves the head, so the next tick can tell a
+  // reset apart from the move the bot asked for.
+  input.Memory.expect = expectedHead(input.observation, action);
+  return action;
+}
+
+/** Where the head of the own player ends up after the action was applied. */
+function expectedHead(o, action) {
+  const self = o.players[o.selfSlot];
+  if (!self.position) return null;
+  if (action.type !== "move") return { x: self.position.x, y: self.position.y };
+  const delta = DIRECTION_DELTA.get(action.direction) ?? [0, 0];
+  return { x: self.position.x + delta[0], y: self.position.y + delta[1] };
+}
+
+function decide(o, Memory, sdk) {
   const self = o.players[o.selfSlot];
   if (!self.alive || !self.position) return { type: "idle" };
+  // A reset sends the head back to the spawn, so a plan that was built for the
+  // previous position no longer applies.
+  const expected = Memory.expect ?? null;
+  if (expected && (expected.x !== self.position.x || expected.y !== self.position.y)) {
+    Memory.plan = null;
+  }
   const home = sdk.homePath(o);
   const threat = sdk.threatDistance(o);
   const safe = sdk.safeMoves(o);
@@ -396,7 +428,7 @@ export default function tick({ observation, Memory, sdk }) {
   return { type: "move", direction: first };
 }
 
-/** Step on an opponent trail next to the head; that eliminates the opponent. */
+/** Step on an opponent trail next to the head; that resets the opponent to its spawn. */
 function cutOpponent(o, safe) {
   const self = o.players[o.selfSlot];
   const head = cellOf(o, self.position.x, self.position.y);
@@ -407,8 +439,8 @@ function cutOpponent(o, safe) {
     if (next < 0) continue;
     if (o.trails[next] !== enemySlot) continue;
     if (!safe.includes(DIRECTIONS[dir])) continue;
-    // The opponent head may move onto the same cell, which would end the
-    // match as a draw instead of a win.
+    // The opponent head may move onto the same cell, which would reset both
+    // players instead of only the opponent.
     if (opponent.position) {
       const distance =
         Math.abs(xOf(o, next) - opponent.position.x) + Math.abs(yOf(o, next) - opponent.position.y);

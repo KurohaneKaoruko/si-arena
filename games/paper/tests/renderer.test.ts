@@ -113,6 +113,9 @@ const strokeCalls = (calls: CanvasCall[], color: string) =>
 const ringCalls = (calls: CanvasCall[], color: string) =>
   calls.filter((call) => call.op === "arc" && call.strokeStyle === color);
 const arg = (call: CanvasCall, index: number) => Number(call.args[index]);
+const cross = (calls: CanvasCall[]) => strokeCalls(calls, PAPER_PALETTE.players[1]!);
+const rings = (calls: CanvasCall[]) => ringCalls(calls, PAPER_PALETTE.players[0]!);
+const badges = (calls: CanvasCall[]) => textCalls(calls, "!");
 
 test("move events interpolate the head between cells until the window settles", () => {
   const before = world();
@@ -140,7 +143,6 @@ test("trail cuts draw an attacker-colored cross that fades with progress", () =>
   const events: PaperEvent[] = [
     { type: "trail-cut", playerId: "alpha", attackerId: "beta", position: { x: 6, y: 5 } },
   ];
-  const cross = (calls: CanvasCall[]) => strokeCalls(calls, PAPER_PALETTE.players[1]!);
   const fading = cross(draw(state, animation(events, { progress: 0.5 })));
   expect(fading).toHaveLength(1);
   expect(fading[0]!.globalAlpha).toBeCloseTo(0.5);
@@ -164,7 +166,6 @@ test("out-of-range progress clamps into the window instead of drawing off-board"
     { type: "move", playerId: "alpha", from: { x: 5, y: 5 }, to: { x: 6, y: 5 } },
     { type: "trail-cut", playerId: "alpha", attackerId: "beta", position: { x: 6, y: 5 } },
   ];
-  const cross = (calls: CanvasCall[]) => strokeCalls(calls, PAPER_PALETTE.players[1]!);
   const below = draw(after, animation(events, { progress: -0.5, previousState: before }));
   expect(numeral(below, 0).args[1]).toBeCloseTo(55);
   expect(cross(below)).toHaveLength(1);
@@ -228,14 +229,19 @@ test("captures flash gained cells and pulse the closer when nothing was gained",
   expect(midPulse[0]!.globalAlpha).toBeCloseTo(0.5);
 });
 
-test("eliminations expand a ring at the victim's previous position", () => {
+test("resets expand a ring at the cell the head left", () => {
   const before = world();
   const after = world();
-  after.players[0].alive = false;
-  after.players[0].position = null;
-  after.territory[indexAt(5, 5)] = -1;
-  const events: PaperEvent[] = [{ type: "elimination", playerId: "alpha", causes: ["trail-cut"] }];
-  const rings = (calls: CanvasCall[]) => ringCalls(calls, PAPER_PALETTE.players[0]!);
+  after.players[0].position = { x: 5, y: 14 };
+  const events: PaperEvent[] = [
+    {
+      type: "reset",
+      playerId: "alpha",
+      from: { x: 5, y: 5 },
+      to: { x: 5, y: 14 },
+      causes: ["trail-cut"],
+    },
+  ];
   const early = rings(draw(after, animation(events, { progress: 0, previousState: before })));
   expect(early).toHaveLength(1);
   expect(arg(early[0]!, 0)).toBeCloseTo(55);
@@ -258,7 +264,6 @@ test("eliminations expand a ring at the victim's previous position", () => {
 test("error badges stay on errored players regardless of progress or reduced motion", () => {
   const state = world();
   const events: PaperEvent[] = [];
-  const badges = (calls: CanvasCall[]) => textCalls(calls, "!");
   const marked = badges(draw(state, animation(events, { progress: 1, erroredPlayers: ["beta"] })));
   expect(marked).toHaveLength(1);
   expect(arg(marked[0]!, 1)).toBeGreaterThanOrEqual(340);
@@ -269,17 +274,24 @@ test("error badges stay on errored players regardless of progress or reduced mot
 
   const before = world();
   const after = world();
-  after.players[0].alive = false;
-  after.players[0].position = null;
-  const gone: PaperEvent[] = [{ type: "elimination", playerId: "alpha", causes: ["boundary"] }];
+  after.players[0].position = { x: 5, y: 14 };
+  const gone: PaperEvent[] = [
+    {
+      type: "reset",
+      playerId: "alpha",
+      from: { x: 5, y: 5 },
+      to: { x: 5, y: 14 },
+      causes: ["boundary"],
+    },
+  ];
   const atLastPosition = badges(
     draw(after, animation(gone, { progress: 1, erroredPlayers: ["alpha"], previousState: before })),
   );
   expect(atLastPosition).toHaveLength(1);
-  expect(arg(atLastPosition[0]!, 1)).toBeGreaterThanOrEqual(50);
+  expect(arg(atLastPosition[0]!, 1), "the badge follows the reset head").toBeGreaterThanOrEqual(50);
   expect(arg(atLastPosition[0]!, 1)).toBeLessThanOrEqual(60);
-  expect(arg(atLastPosition[0]!, 2)).toBeGreaterThanOrEqual(50);
-  expect(arg(atLastPosition[0]!, 2)).toBeLessThanOrEqual(60);
+  expect(arg(atLastPosition[0]!, 2)).toBeGreaterThanOrEqual(140);
+  expect(arg(atLastPosition[0]!, 2)).toBeLessThanOrEqual(150);
 });
 
 test("drawing without animation input renders the settled board", () => {

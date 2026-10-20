@@ -1,4 +1,3 @@
-import { webcrypto } from "node:crypto";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { loadRegisteredReplay } from "@si-arena/player/browser";
@@ -9,7 +8,6 @@ import { replayFixture } from "./replay-fixture";
 
 enableAutoUnmount(afterEach);
 beforeEach(() => {
-  vi.stubGlobal("crypto", webcrypto);
   vi.stubGlobal(
     "requestAnimationFrame",
     vi.fn(() => 1),
@@ -48,10 +46,12 @@ test("timeline, keyboard and error navigation preserve S0/input tick semantics a
   expect(wrapper.get('[data-testid="tick-count"]').text()).toContain("已完成 0");
   await wrapper.get("#replay-tick").setValue(3);
   expect(wrapper.get('[data-testid="tick-count"]').text()).toContain("已完成 3");
-});
+  // Loading a Paper replay validates every tick of the match.
+}, 20000);
 
 test("missing logs for prototype-named participants remain empty rather than inherited values", async () => {
-  const raw = await replayFixture();
+  // The fixture is shared, so the mutation works on a copy of it.
+  const raw = structuredClone(await replayFixture());
   for (const tick of raw.ticks) {
     delete tick.logs;
   }

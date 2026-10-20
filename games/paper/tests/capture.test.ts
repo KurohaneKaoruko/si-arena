@@ -1,7 +1,7 @@
 import { test, expect } from "vitest";
 import { parsePaperState } from "@si-arena/game-paper/rules";
-import { actions, box, idle, indexAt, move, outside, stepFrozen, world } from "./helpers";
-import { resultOf, eventOf } from "./helpers";
+import { actions, areaOf, box, idle, indexAt, move, outside, stepFrozen, world } from "./helpers";
+import { eventOf } from "./helpers";
 
 test("a trail may close on a different home cell and capture the enclosed interior", () => {
   const state = box(world(), 0);
@@ -82,7 +82,7 @@ test("capturing enemy territory neither kills their head nor deletes their exist
   expect(output.nextState.territory[indexAt(34, 14)], "disconnected territory is retained").toBe(1);
 });
 
-test("covering a head's last home creates a vulnerable one-cell trail, and zero land can still win", () => {
+test("covering a head's last home creates a vulnerable one-cell trail, and zero land keeps the player in the match", () => {
   const state = box(world(), 0);
   state.territory = state.territory.map((owner) => (owner === 1 ? -1 : owner));
   state.territory[indexAt(3, 3)] = 1;
@@ -95,10 +95,8 @@ test("covering a head's last home creates a vulnerable one-cell trail, and zero 
   let next = stepFrozen(captured.nextState, actions(move("down"), move("down")));
   next = stepFrozen(next.nextState, actions(move("down"), move("left")));
   next = stepFrozen(next.nextState, actions(move("down"), move("down")));
-  expect(resultOf(next).reason).toBe("last-survivor");
-  expect(resultOf(next).players[1].rank).toBe(1);
-  expect(resultOf(next).players[1].score).toBe(0);
-  expect(resultOf(next).players[1].alive).toBe(true);
+  expect(next.result, "a player without land never ends the match early").toBe(undefined);
+  expect(next.nextState.players[1].alive).toBe(true);
   expect(!next.events.some((event) => event.type === "capture")).toBeTruthy();
 });
 
@@ -149,20 +147,24 @@ test("a moving enemy head also receives a new trail if closure covers its destin
   expect(output.nextState.trails.filter((owner) => owner === 1).length).toBe(1);
 });
 
-test("a surviving closer can cut a tail on their home cell and capture after enemy cleanup", () => {
+test("a closer that cuts a tail on their home cell still captures the enclosed land", () => {
   const state = box(world(), 0);
   outside(state, 1, [
     [2, 4],
     [34, 14],
   ]);
   const output = stepFrozen(state, actions(move("left")));
-  expect(output.nextState.players[1].alive).toBe(false);
-  expect(!output.nextState.trails.includes(1)).toBeTruthy();
-  expect(!output.nextState.territory.includes(1)).toBeTruthy();
-  expect(resultOf(output).players[0].score).toBe(9);
+  expect(output.nextState.players[1].alive).toBe(true);
+  expect(output.nextState.players[1].position).toStrictEqual(output.nextState.spawns[1]);
+  expect(
+    output.nextState.trails.flatMap((owner, index) => (owner === 1 ? [index] : [])),
+    "the old trail is cut and the spawn outside the own territory keeps one cell",
+  ).toStrictEqual([indexAt(34, 14)]);
+  expect(output.nextState.territory.includes(1), "the reset player keeps its home").toBeTruthy();
+  expect(areaOf(output.nextState, 0)).toBe(9);
   expect(output.events.map((event) => event.type)).toStrictEqual([
     "trail-cut",
-    "elimination",
+    "reset",
     "move",
     "capture",
   ]);

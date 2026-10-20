@@ -99,7 +99,7 @@ test("the official Paper bot keeps to the safe directions when the opponent head
   // The bot owns a home block and reaches a sweep anchor through it, while
   // the opponent head stands on the own border next to the bot head. The
   // walk to the anchor used to step onto that head, which is a head collision
-  // and ends the match in a mutual elimination.
+  // and resets both heads to their spawns.
   const home: Cell[] = [
     [33, 13],
     [34, 13],

@@ -40,7 +40,7 @@ S0 与跳转重演的每步结果都通过引擎公开的 `parseGameState` 解�
 
 浏览器入口需要支持 DecompressionStream 的现代浏览器与安全上下文中的 Web Crypto。Canvas 绘制函数只在已有 Canvas 上执行；服务端导入元数据或纯规则不会触及 DOM。
 
-通用入口 `@si-arena/player` 导出会话和 Vue composable，可在无 DOM 环境使用注入时钟验证。网页的通用控件位于 `apps/web/src/components/ReplayViewer.vue`，可信游戏注册位于 `apps/web/src/games/replays.ts`。圈地包的 renderer 绘制领地、尾迹与带 P1/P2 编号的棋子，按事件绘制移动插值、圈地、切断、淘汰的瞬态动画并为当 tick 出错的玩家显示头部徽标，不依赖平台账号或数据库。
+通用入口 `@si-arena/player` 导出会话和 Vue composable，可在无 DOM 环境使用注入时钟验证。网页的通用控件位于 `apps/web/src/components/ReplayViewer.vue`，可信游戏注册位于 `apps/web/src/games/replays.ts`。圈地包的 renderer 绘制领地、尾迹与带 P1/P2 编号的棋子，按事件绘制移动插值、圈地、切断、重置的瞬态动画并为当 tick 出错的玩家显示头部徽标，不依赖平台账号或数据库。
 
 ## 验证
 

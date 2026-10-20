@@ -22,6 +22,10 @@ test("initial state has fixed seats, symmetric homes and seeded xorshift32 place
     { x: 5, y: 14 },
     { x: 34, y: 14 },
   ]);
+  expect(state.spawns, "the spawn is the reset target of a slot").toStrictEqual([
+    { x: 5, y: 14 },
+    { x: 34, y: 14 },
+  ]);
   expect(state.rngState).toBe(540738);
   expect(state.tick).toBe(0);
   expect(state.territory.length).toBe(1200);
@@ -44,6 +48,10 @@ test("initial state has fixed seats, symmetric homes and seeded xorshift32 place
   expect(swapped.rngState).toBe(270369);
   expect(swapped.players.map((player) => player.id)).toStrictEqual(["alpha", "beta"]);
   expect(swapped.players.map((player) => player.position)).toStrictEqual([
+    { x: 34, y: 14 },
+    { x: 5, y: 14 },
+  ]);
+  expect(swapped.spawns).toStrictEqual([
     { x: 34, y: 14 },
     { x: 5, y: 14 },
   ]);
@@ -196,6 +204,18 @@ test("state schema rejects malformed worlds and inconsistent living/dead ownersh
     },
     (s) => {
       s.trails[0] = 0;
+    },
+    (s) => {
+      s.spawns = [] as unknown as PaperState["spawns"];
+    },
+    (s) => {
+      s.spawns[0] = { x: 40, y: 14 };
+    },
+    (s) => {
+      s.spawns[1] = { ...s.spawns[0] };
+    },
+    (s) => {
+      s.spawns[0] = { x: 5 } as unknown as PaperState["spawns"][0];
     },
     (s) => {
       s.extra = 1;

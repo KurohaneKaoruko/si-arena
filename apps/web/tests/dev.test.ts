@@ -1,4 +1,3 @@
-import { webcrypto } from "node:crypto";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { loadRegisteredReplay } from "@si-arena/player/browser";
@@ -9,7 +8,6 @@ import { replayFixture } from "./replay-fixture";
 
 enableAutoUnmount(afterEach);
 beforeEach(() => {
-  vi.stubGlobal("crypto", webcrypto);
   vi.stubGlobal(
     "requestAnimationFrame",
     vi.fn(() => 1),
@@ -43,7 +41,8 @@ test("the memory card only appears in live sessions and follows the executed tic
   expect(wrapper.text()).toContain("提交后");
   expect(wrapper.text()).toContain('"n": 0');
   expect(wrapper.text()).toContain('"n": 1');
-});
+  // Loading a Paper replay validates every tick of the match.
+}, 20000);
 
 interface Call {
   url: string;
@@ -62,7 +61,7 @@ test("the dev page polls the session, loads the replay and restarts on demand", 
     { id: "other", name: "Official", official: true },
   ];
   const result = {
-    reason: "elimination",
+    reason: "tick-limit",
     completedTicks: 3,
     players: [
       { id: "constructor", rank: 1, score: 30 },
@@ -114,10 +113,14 @@ test("the dev page polls the session, loads the replay and restarts on demand", 
   expect(wrapper.text()).toContain("比赛进行中");
   expect(wrapper.find('[aria-label="比赛回放"]').exists()).toBe(false);
 
-  await vi.waitFor(() => {
-    if (!wrapper.find('[aria-label="比赛回放"]').exists())
-      throw new Error("replay viewer not mounted");
-  });
+  await vi.waitFor(
+    () => {
+      if (!wrapper.find('[aria-label="比赛回放"]').exists())
+        throw new Error("replay viewer not mounted");
+    },
+    // Loading a Paper replay validates every tick of the match.
+    { timeout: 10000 },
+  );
   await flushPromises();
   expect(wrapper.text()).toContain("本局已完成");
   expect(wrapper.text()).toContain("第 1 名 · bot.js · 30 分");
@@ -145,4 +148,5 @@ test("the dev page polls the session, loads the replay and restarts on demand", 
   const seedValue = Number(JSON.parse(reseedCall!.body!).seed);
   expect(seedValue).toBeGreaterThanOrEqual(0);
   expect(seedValue).toBeLessThanOrEqual(0xffffffff);
-});
+  // Loading a Paper replay validates every tick of the match.
+}, 20000);

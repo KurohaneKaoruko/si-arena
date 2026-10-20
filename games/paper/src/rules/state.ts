@@ -12,7 +12,7 @@ function readGrid(grid: unknown, label: string): number[] {
 export function parsePaperState(raw: unknown): PaperState {
   const value = readRecord(
     raw,
-    ["tick", "width", "height", "maxTicks", "territory", "trails", "players", "rngState"],
+    ["tick", "width", "height", "maxTicks", "territory", "trails", "players", "spawns", "rngState"],
     "Paper state",
   );
   if (
@@ -24,20 +24,19 @@ export function parsePaperState(raw: unknown): PaperState {
   }
   const players = readArray(value.players, 2, "players").map((rawPlayer, slot): PaperPlayer => {
     const player = readRecord(rawPlayer, ["id", "slot", "alive", "position"], "player");
-    if (player.slot !== slot || typeof player.alive !== "boolean") {
-      throw new TypeError("Players must be ordered by slot with a boolean alive flag");
+    if (player.slot !== slot || player.alive !== true) {
+      throw new TypeError("Paper players keep their seat and stay in the match");
     }
-    let position: PaperPlayer["position"] = null;
-    if (player.alive) {
-      const point = readRecord(player.position, ["x", "y"], "position");
-      position = {
+    const point = readRecord(player.position, ["x", "y"], "position");
+    return {
+      id: readId(player.id),
+      slot: slot === 0 ? 0 : 1,
+      alive: true,
+      position: {
         x: readInteger(point.x, 0, PAPER_CONFIG.width - 1, "position.x"),
         y: readInteger(point.y, 0, PAPER_CONFIG.height - 1, "position.y"),
-      };
-    } else if (player.position !== null) {
-      throw new TypeError("An eliminated player must have a null position");
-    }
-    return { id: readId(player.id), slot: slot === 0 ? 0 : 1, alive: player.alive, position };
+      },
+    };
   });
   const first = players[0];
   const second = players[1];
@@ -51,6 +50,16 @@ export function parsePaperState(raw: unknown): PaperState {
   ) {
     throw new TypeError("Living heads cannot share a cell");
   }
+  const spawns = readArray(value.spawns, 2, "spawns").map((rawSpawn) => {
+    const point = readRecord(rawSpawn, ["x", "y"], "spawn");
+    return {
+      x: readInteger(point.x, 0, PAPER_CONFIG.width - 1, "spawn.x"),
+      y: readInteger(point.y, 0, PAPER_CONFIG.height - 1, "spawn.y"),
+    };
+  }) as [{ x: number; y: number }, { x: number; y: number }];
+  if (spawns[0].x === spawns[1].x && spawns[0].y === spawns[1].y) {
+    throw new TypeError("Paper spawn points must differ");
+  }
   const state: PaperState = {
     tick: readInteger(value.tick, 0, PAPER_MAX_TICKS, "tick"),
     width: PAPER_CONFIG.width,
@@ -59,20 +68,17 @@ export function parsePaperState(raw: unknown): PaperState {
     territory: readGrid(value.territory, "territory"),
     trails: readGrid(value.trails, "trails"),
     players: [first, second],
+    spawns,
     rngState: readInteger(value.rngState, 1, 0xffffffff, "rngState"),
   };
   for (const player of state.players) {
     const hasTrail = state.trails.includes(player.slot);
-    if (!player.alive) {
-      if (hasTrail || state.territory.includes(player.slot))
-        throw new TypeError("An eliminated player cannot own cells");
-    } else if (player.position) {
-      const index = player.position.y * state.width + player.position.x;
-      if (state.territory[index] === player.slot) {
-        if (hasTrail) throw new TypeError("A head inside its territory cannot retain a trail");
-      } else if (state.trails[index] !== player.slot) {
-        throw new TypeError("A head outside its territory must be on its own trail");
-      }
+    if (!player.position) throw new TypeError("A player in the match keeps its head position");
+    const index = player.position.y * state.width + player.position.x;
+    if (state.territory[index] === player.slot) {
+      if (hasTrail) throw new TypeError("A head inside its territory cannot retain a trail");
+    } else if (state.trails[index] !== player.slot) {
+      throw new TypeError("A head outside its territory must be on its own trail");
     }
   }
   return state;
@@ -107,6 +113,11 @@ export function initPaper(input: InitInput): PaperState {
     alive: true,
     position: { x: (slot === 0) !== swap ? 5 : 34, y: 14 },
   });
+  const seats = [createPlayer(first.id, 0), createPlayer(second.id, 1)];
+  const spawns = seats.map((player) => {
+    if (!player.position) throw new Error("Initial position is missing");
+    return { ...player.position };
+  }) as [{ x: number; y: number }, { x: number; y: number }];
   const state: PaperState = {
     tick: 0,
     width: PAPER_CONFIG.width,
@@ -114,15 +125,15 @@ export function initPaper(input: InitInput): PaperState {
     maxTicks: PAPER_MAX_TICKS,
     territory: Array<number>(CELL_COUNT).fill(-1),
     trails: Array<number>(CELL_COUNT).fill(-1),
-    players: [createPlayer(first.id, 0), createPlayer(second.id, 1)],
+    players: [seats[0]!, seats[1]!],
+    spawns,
     rngState,
   };
   for (const player of state.players) {
-    if (!player.position) throw new Error("Initial position is missing");
+    const spawn = spawns[player.slot];
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
-        state.territory[(player.position.y + dy) * state.width + player.position.x + dx] =
-          player.slot;
+        state.territory[(spawn.y + dy) * state.width + spawn.x + dx] = player.slot;
       }
     }
   }

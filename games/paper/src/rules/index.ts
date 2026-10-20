@@ -9,22 +9,22 @@ export { parsePaperAction } from "./actions";
 export { parsePaperState } from "./state";
 
 type Position = { x: number; y: number };
-const ELIMINATION_CAUSES = [
+const RESET_CAUSES = [
   "boundary",
   "head-collision",
   "head-swap",
   "self-trail",
   "trail-cut",
 ] as const;
-export type PaperEliminationCause = (typeof ELIMINATION_CAUSES)[number];
+export type PaperResetCause = (typeof RESET_CAUSES)[number];
 export type PaperEvent =
   | { type: "move"; playerId: string; from: Position; to: Position }
   | { type: "trail-cut"; playerId: string; attackerId: string; position: Position }
   | { type: "capture"; playerId: string; cells: number[] }
-  | { type: "elimination"; playerId: string; causes: PaperEliminationCause[] };
+  | { type: "reset"; playerId: string; from: Position; to: Position; causes: PaperResetCause[] };
 
 export interface PaperResult extends GameResult {
-  reason: "mutual-elimination" | "last-survivor" | "tick-limit";
+  reason: "tick-limit";
   players: Array<{ id: string; rank: number; score: number; alive: boolean }>;
 }
 export interface PaperStepResult {
@@ -58,7 +58,7 @@ function targetPosition(from: Position, action: PaperAction): Position {
   return { x: from.x + dx, y: from.y + dy };
 }
 function terminal(state: DeepReadonly<PaperState>): boolean {
-  return state.tick >= state.maxTicks || state.players.some((player) => !player.alive);
+  return state.tick >= state.maxTicks;
 }
 function findPlayer(state: DeepReadonly<PaperState>, playerId: string) {
   const player = state.players.find((entry) => entry.id === playerId);
@@ -68,20 +68,9 @@ function findPlayer(state: DeepReadonly<PaperState>, playerId: string) {
 function outcome(state: PaperState): PaperResult | undefined {
   if (!terminal(state)) return undefined;
   const scores = paperScores(state);
-  const [first, second] = state.players;
-  let reason: PaperResult["reason"];
-  let winner: 0 | 1 | null = null;
-  if (!first.alive && !second.alive) {
-    reason = "mutual-elimination";
-  } else if (!first.alive || !second.alive) {
-    reason = "last-survivor";
-    winner = first.alive ? 0 : 1;
-  } else {
-    reason = "tick-limit";
-    if (scores[0] !== scores[1]) winner = scores[0] > scores[1] ? 0 : 1;
-  }
+  const winner: 0 | 1 | null = scores[0] === scores[1] ? null : scores[0] > scores[1] ? 0 : 1;
   return {
-    reason,
+    reason: "tick-limit",
     completedTicks: state.tick,
     players: state.players.map((player) => ({
       id: player.id,
@@ -90,6 +79,12 @@ function outcome(state: PaperState): PaperResult | undefined {
       alive: player.alive,
     })),
   };
+}
+/** Remove every trail cell of one slot; the territory of that slot is untouched. */
+function clearTrail(state: PaperState, slot: 0 | 1): void {
+  for (let cell = 0; cell < state.trails.length; cell++) {
+    if (state.trails[cell] === slot) state.trails[cell] = -1;
+  }
 }
 
 function step(
@@ -114,7 +109,7 @@ function step(
     targetPosition(origins[0], actions[0]),
     targetPosition(origins[1], actions[1]),
   ] as const;
-  const causes: [Set<PaperEliminationCause>, Set<PaperEliminationCause>] = [new Set(), new Set()];
+  const causes: [Set<PaperResetCause>, Set<PaperResetCause>] = [new Set(), new Set()];
   const events: PaperEvent[] = [];
   for (const player of nextState.players) {
     const slot = player.slot;
@@ -153,34 +148,46 @@ function step(
     causes[0].add("head-swap");
     causes[1].add("head-swap");
   }
-  // Do not clear a victim until every old trail and target has been examined.
+  // A reset player keeps its territory, loses its trail and returns to its spawn
+  // instead of moving, so the head of the tick is the spawn cell.
+  const heads: [Position, Position] = [
+    causes[0].size > 0 ? { ...nextState.spawns[0] } : { ...targets[0] },
+    causes[1].size > 0 ? { ...nextState.spawns[1] } : { ...targets[1] },
+  ];
+  // A spawn cell that the opponent reaches in the same tick would end on one cell
+  // with two heads, so both heads reset instead.
+  if (samePosition(heads[0], heads[1])) {
+    causes[0].add("head-collision");
+    causes[1].add("head-collision");
+    heads[0] = { ...nextState.spawns[0] };
+    heads[1] = { ...nextState.spawns[1] };
+  }
   for (const player of nextState.players) {
-    if (causes[player.slot].size === 0) continue;
-    player.alive = false;
-    player.position = null;
+    const slot = player.slot;
+    if (causes[slot].size === 0) continue;
+    player.position = { ...heads[slot] };
+    clearTrail(nextState, slot);
     events.push({
-      type: "elimination",
+      type: "reset",
       playerId: player.id,
-      causes: ELIMINATION_CAUSES.filter((cause) => causes[player.slot].has(cause)),
+      from: { ...origins[slot] },
+      to: { ...heads[slot] },
+      causes: RESET_CAUSES.filter((cause) => causes[slot].has(cause)),
     });
-    for (let index = 0; index < nextState.territory.length; index++) {
-      if (nextState.territory[index] === player.slot) nextState.territory[index] = -1;
-      if (nextState.trails[index] === player.slot) nextState.trails[index] = -1;
-    }
   }
   const closing = new Set<0 | 1>();
   for (const player of nextState.players) {
-    if (!player.alive) continue;
     const slot = player.slot;
-    player.position = { ...targets[slot] };
+    if (causes[slot].size > 0) continue;
+    player.position = { ...heads[slot] };
     if (actions[slot].type === "move")
       events.push({
         type: "move",
         playerId: player.id,
         from: { ...origins[slot] },
-        to: { ...targets[slot] },
+        to: { ...heads[slot] },
       });
-    const index = targets[slot].y * nextState.width + targets[slot].x;
+    const index = heads[slot].y * nextState.width + heads[slot].x;
     if (nextState.territory[index] !== slot) {
       nextState.trails[index] = slot;
     } else if (nextState.trails.includes(slot)) closing.add(slot);
@@ -202,15 +209,14 @@ function step(
   for (const player of nextState.players) {
     if (closing.has(player.slot))
       events.push({ type: "capture", playerId: player.id, cells: gained[player.slot] });
-    if (!player.alive) continue;
     const position = positionOf(player);
     const index = position.y * nextState.width + position.x;
     if (closing.has(player.slot) || nextState.territory[index] === player.slot) {
-      for (let cell = 0; cell < nextState.trails.length; cell++)
-        if (nextState.trails[cell] === player.slot) nextState.trails[cell] = -1;
+      clearTrail(nextState, player.slot);
     }
-    if (nextState.territory[index] !== player.slot && !nextState.trails.includes(player.slot))
+    if (nextState.territory[index] !== player.slot && !nextState.trails.includes(player.slot)) {
       nextState.trails[index] = player.slot;
+    }
   }
   nextState.tick++;
   const result = outcome(nextState);

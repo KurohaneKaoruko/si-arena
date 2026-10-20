@@ -18,6 +18,8 @@ export interface PaperState {
   territory: number[];
   trails: number[];
   players: [PaperPlayer, PaperPlayer];
+  /** Initial head cell per slot; a reset player returns to it. */
+  spawns: [{ x: number; y: number }, { x: number; y: number }];
   rngState: number;
 }
 

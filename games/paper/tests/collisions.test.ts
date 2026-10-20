@@ -1,20 +1,7 @@
-import type { PaperStepResult } from "@si-arena/game-paper/rules";
-import type { Slot } from "./helpers";
 import { test, expect } from "vitest";
-import { paperRules, parsePaperState } from "@si-arena/game-paper/rules";
-import { actions, idle, indexAt, move, outside, stepFrozen, world } from "./helpers";
-import { resultOf, eventOf } from "./helpers";
-
-function assertEliminated(output: PaperStepResult, slots: Slot[]) {
-  for (const slot of slots) {
-    expect(output.nextState.players[slot].alive).toBe(false);
-    expect(output.nextState.players[slot].position).toBe(null);
-    expect(!output.nextState.territory.includes(slot)).toBeTruthy();
-    expect(!output.nextState.trails.includes(slot)).toBeTruthy();
-    expect(resultOf(output).players[slot].score).toBe(0);
-  }
-  expect(parsePaperState(output.nextState)).toStrictEqual(output.nextState);
-}
+import { paperRules } from "@si-arena/game-paper/rules";
+import { actions, assertReset, idle, indexAt, move, outside, stepFrozen, world } from "./helpers";
+import { areaOf, eventOf } from "./helpers";
 
 for (const [direction, position] of [
   ["left", { x: 0, y: 5 }],
@@ -22,24 +9,37 @@ for (const [direction, position] of [
   ["right", { x: 39, y: 5 }],
   ["down", { x: 5, y: 29 }],
 ] as const) {
-  test(`moving ${direction} across the edge eliminates only that player`, () => {
+  test(`moving ${direction} across the edge resets that player to its spawn`, () => {
     const state = world([position, { x: 20, y: 20 }]);
     const output = stepFrozen(state, actions(move(direction)));
-    assertEliminated(output, [0]);
-    expect(resultOf(output).reason).toBe("last-survivor");
-    expect(resultOf(output).completedTicks).toBe(1);
-    expect(resultOf(output).players[1].rank).toBe(1);
-    expect(
-      resultOf(output).players[1].score,
-      "the attacker does not inherit eliminated territory",
-    ).toBe(1);
+    assertReset(output, [0]);
+    expect(output.nextState.players[1].position).toStrictEqual({ x: 20, y: 20 });
+    expect(output.result, "a reset never ends the match").toBe(undefined);
     expect(output.events).toStrictEqual([
-      { type: "elimination", playerId: "alpha", causes: ["boundary"] },
+      {
+        type: "reset",
+        playerId: "alpha",
+        from: position,
+        to: output.nextState.spawns[0],
+        causes: ["boundary"],
+      },
     ]);
   });
 }
 
-test("two targets in the same neutral cell eliminate both heads", () => {
+test("a reset keeps the territory of the reset player", () => {
+  const state = world([
+    { x: 0, y: 5 },
+    { x: 20, y: 20 },
+  ]);
+  state.territory[indexAt(7, 7)] = 0;
+  state.territory[indexAt(8, 8)] = 0;
+  const output = stepFrozen(state, actions(move("left")));
+  expect(areaOf(output.nextState, 0)).toBe(3);
+  expect(areaOf(output.nextState, 1)).toBe(1);
+});
+
+test("two targets in the same neutral cell reset both heads", () => {
   const output = stepFrozen(
     world([
       { x: 5, y: 5 },
@@ -47,12 +47,16 @@ test("two targets in the same neutral cell eliminate both heads", () => {
     ]),
     actions(move("right"), move("left")),
   );
-  assertEliminated(output, [0, 1]);
-  expect(resultOf(output).reason).toBe("mutual-elimination");
-  expect(resultOf(output).players.map((player) => player.rank)).toStrictEqual([1, 1]);
+  assertReset(output, [0, 1]);
+  expect(output.result).toBe(undefined);
+  expect(
+    output.events.every(
+      (event) => event.type === "reset" && event.causes.includes("head-collision"),
+    ),
+  ).toBeTruthy();
 });
 
-test("entering an idle head eliminates both, even on the idle player's own territory", () => {
+test("entering an idle head resets both, even on the idle player's own territory", () => {
   const output = stepFrozen(
     world([
       { x: 5, y: 5 },
@@ -60,11 +64,11 @@ test("entering an idle head eliminates both, even on the idle player's own terri
     ]),
     actions(move("right")),
   );
-  assertEliminated(output, [0, 1]);
-  expect(output.events.every((event) => event.type === "elimination")).toBeTruthy();
+  assertReset(output, [0, 1]);
+  expect(output.events.every((event) => event.type === "reset")).toBeTruthy();
 });
 
-test("two moving heads swapping cells are eliminated simultaneously", () => {
+test("two moving heads swapping cells are reset simultaneously", () => {
   const output = stepFrozen(
     world([
       { x: 5, y: 5 },
@@ -72,11 +76,9 @@ test("two moving heads swapping cells are eliminated simultaneously", () => {
     ]),
     actions(move("right"), move("left")),
   );
-  assertEliminated(output, [0, 1]);
+  assertReset(output, [0, 1]);
   expect(
-    output.events.every(
-      (event) => event.type === "elimination" && event.causes.includes("head-swap"),
-    ),
+    output.events.every((event) => event.type === "reset" && event.causes.includes("head-swap")),
   ).toBeTruthy();
 });
 
@@ -97,17 +99,17 @@ test("a departing head can be followed into its old cell when that cell has no o
   expect(output.nextState.trails[indexAt(6, 4)]).toBe(1);
 });
 
-test("moving onto an old self trail is lethal", () => {
+test("moving onto an old self trail resets the player", () => {
   const state = outside(world(), 0, [
     [4, 5],
     [5, 5],
   ]);
   const output = stepFrozen(state, actions(move("left")));
-  assertEliminated(output, [0]);
-  expect(eventOf(output, "elimination").causes).toStrictEqual(["self-trail"]);
+  assertReset(output, [0]);
+  expect(eventOf(output, "reset").causes).toStrictEqual(["self-trail"]);
 });
 
-test("cutting an old enemy trail eliminates its owner without gifting their territory", () => {
+test("cutting an old enemy trail resets its owner and keeps the territory of the victim", () => {
   const state = outside(world(), 1, [
     [6, 5],
     [7, 5],
@@ -116,15 +118,18 @@ test("cutting an old enemy trail eliminates its owner without gifting their terr
     [10, 5],
   ]);
   const output = stepFrozen(state, actions(move("right"), move("down")));
-  assertEliminated(output, [1]);
-  expect(resultOf(output).players[0].score).toBe(1);
-  expect(output.nextState.territory[indexAt(38, 28)]).toBe(-1);
+  assertReset(output, [1]);
+  expect(areaOf(output.nextState, 1), "a reset does not take the territory away").toBe(1);
+  expect(areaOf(output.nextState, 0)).toBe(1);
+  expect(output.nextState.players[0].alive).toBe(true);
+  expect(output.nextState.players[0].position).toStrictEqual({ x: 6, y: 5 });
   expect(output.events[0]).toStrictEqual({
     type: "trail-cut",
     playerId: "beta",
     attackerId: "alpha",
     position: { x: 6, y: 5 },
   });
+  expect(eventOf(output, "reset").causes).toStrictEqual(["trail-cut"]);
 });
 
 test("a vacated head cell is still attackable when it already contained the owner's trail", () => {
@@ -137,7 +142,7 @@ test("a vacated head cell is still attackable when it already contained the owne
     [[6, 5]],
   );
   const output = stepFrozen(state, actions(move("right"), move("up")));
-  assertEliminated(output, [1]);
+  assertReset(output, [1]);
   expect(output.nextState.players[0].alive).toBe(true);
 });
 
@@ -152,7 +157,7 @@ test("mutual trail cuts are calculated before either old trail is erased", () =>
     [8, 5],
   ]);
   const output = stepFrozen(state, actions(move("right"), move("left")));
-  assertEliminated(output, [0, 1]);
+  assertReset(output, [0, 1]);
   expect(output.events.filter((event) => event.type === "trail-cut").length).toBe(2);
 });
 
@@ -161,8 +166,8 @@ test("a head-swap does not suppress either simultaneous trail cut", () => {
   outside(state, 0, [[5, 5]]);
   outside(state, 1, [[6, 5]]);
   const output = stepFrozen(state, actions(move("right"), move("left")));
-  assertEliminated(output, [0, 1]);
-  for (const event of output.events.filter((candidate) => candidate.type === "elimination")) {
+  assertReset(output, [0, 1]);
+  for (const event of output.events.filter((candidate) => candidate.type === "reset")) {
     expect(event.causes).toStrictEqual(["head-swap", "trail-cut"]);
   }
 });
@@ -174,7 +179,7 @@ test("being cut on the return-home tick prevents closure and capture", () => {
   ]);
   outside(state, 0, [[6, 5]], [[5, 5]]);
   const output = stepFrozen(state, actions(move("left"), move("left")));
-  assertEliminated(output, [0]);
+  assertReset(output, [0]);
   expect(!output.events.some((event) => event.type === "capture")).toBeTruthy();
   expect(output.nextState.players[1].position).toStrictEqual({ x: 6, y: 5 });
 });
@@ -187,11 +192,41 @@ test("new trail cells become attackable on later ticks", () => {
   state = stepFrozen(state, actions(idle(), move("up"))).nextState;
   state = stepFrozen(state, actions(move("up"), move("up"))).nextState;
   const output = stepFrozen(state, actions(move("right")));
-  assertEliminated(output, [1]);
+  assertReset(output, [1]);
   expect(eventOf(output, "trail-cut").position).toStrictEqual({ x: 6, y: 4 });
 });
 
-test("finished games cannot be stepped and no player receives another observation", () => {
+test("a reset spawn that the opponent reaches in the same tick resets both heads", () => {
+  const state = world([
+    { x: 0, y: 5 },
+    { x: 6, y: 14 },
+  ]);
+  const output = stepFrozen(state, actions(move("left"), move("left")));
+  assertReset(output, [0, 1]);
+  for (const event of output.events.filter((candidate) => candidate.type === "reset")) {
+    expect(event.causes).toContain("head-collision");
+  }
+  expect(
+    output.nextState.players[0].position,
+    "the reset player keeps its own spawn",
+  ).toStrictEqual(output.nextState.spawns[0]);
+  expect(output.nextState.players[1].position).toStrictEqual(output.nextState.spawns[1]);
+});
+
+test("a reset returns the head to the spawn of its own slot", () => {
+  const state = world([
+    { x: 5, y: 5 },
+    { x: 6, y: 5 },
+  ]);
+  const output = stepFrozen(state, actions(move("right"), move("left")));
+  expect(output.nextState.players[0].position).toStrictEqual(output.nextState.spawns[0]);
+  expect(output.nextState.players[1].position).toStrictEqual(output.nextState.spawns[1]);
+  expect(output.nextState.players[0].position).not.toStrictEqual(
+    output.nextState.players[1].position,
+  );
+});
+
+test("the match only ends at the tick limit, never on a reset", () => {
   const output = stepFrozen(
     world([
       { x: 0, y: 5 },
@@ -199,9 +234,9 @@ test("finished games cannot be stepped and no player receives another observatio
     ]),
     actions(move("left")),
   );
-  expect(() => paperRules.step(output.nextState, actions())).toThrow(/finished/);
-  expect(paperRules.observe(output.nextState, "alpha")).toBe(null);
-  expect(paperRules.observe(output.nextState, "beta")).toBe(null);
+  expect(output.result).toBe(undefined);
+  expect(paperRules.observe(output.nextState, "alpha")).not.toBe(null);
+  expect(paperRules.observe(output.nextState, "beta")).not.toBe(null);
 });
 
 test("an out-of-bounds target cannot wrap its linear index into an enemy trail", () => {
@@ -211,7 +246,7 @@ test("an out-of-bounds target cannot wrap its linear index into an enemy trail",
   ]);
   outside(state, 1, [[39, 4]]);
   const output = stepFrozen(state, actions(move("left")));
-  assertEliminated(output, [0]);
+  assertReset(output, [0]);
   expect(output.nextState.players[1].alive).toBe(true);
   expect(output.nextState.trails[indexAt(39, 4)]).toBe(1);
   expect(!output.events.some((event) => event.type === "trail-cut")).toBeTruthy();

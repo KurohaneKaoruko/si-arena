@@ -189,17 +189,15 @@ export function drawPaperBoard(
         if (attacker) {
           drawCross(context, event.position, attacker, markAlpha, cellWidth, cellHeight);
         }
-      } else if (event.type === "elimination") {
+      } else if (event.type === "reset") {
         const victim = PAPER_PALETTE.players[slotOf(state, event.playerId)];
-        const position = previousState?.players.find(
-          (player) => player.id === event.playerId,
-        )?.position;
-        if (victim && position) {
+        if (victim) {
+          // The head teleports to the spawn, so the ring marks the cell it lost.
           drawRing(
             context,
             {
-              x: (position.x + 0.5) * cellWidth,
-              y: (position.y + 0.5) * cellHeight,
+              x: (event.from.x + 0.5) * cellWidth,
+              y: (event.from.y + 0.5) * cellHeight,
             },
             transient ? (0.175 + 0.325 * progress) * span : 0.3 * span,
             victim,
@@ -229,8 +227,8 @@ export function drawPaperBoard(
   }
   if (animation !== undefined) {
     for (const playerId of animation.erroredPlayers) {
-      // The badge follows the drawn head; players eliminated this tick fall back
-      // to their last position in the previous world.
+      // The badge follows the drawn head; a player reset this tick falls back
+      // to its last position in the previous world.
       const head = headPoints.get(playerId);
       const fallback = previousState?.players.find((player) => player.id === playerId)?.position;
       const point =

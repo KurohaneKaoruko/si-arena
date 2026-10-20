@@ -53,6 +53,7 @@ export const paperGame = {
         "territory",
         "trails",
         "players",
+        "spawns",
         "rngState",
         "selfId",
         "selfSlot",

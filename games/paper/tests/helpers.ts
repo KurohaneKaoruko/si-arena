@@ -2,7 +2,7 @@ import { expect } from "vitest";
 import type { InitInput } from "@si-arena/protocol";
 import { paperManifest } from "@si-arena/game-paper";
 import type { PaperAction, PaperDirection, PaperState } from "@si-arena/game-paper/sdk";
-import { paperRules } from "@si-arena/game-paper/rules";
+import { paperRules, parsePaperState } from "@si-arena/game-paper/rules";
 import type { PaperEvent, PaperResult, PaperStepResult } from "@si-arena/game-paper/rules";
 
 export type Slot = 0 | 1;
@@ -37,6 +37,9 @@ export function eventOf<Type extends PaperEvent["type"]>(
 export const idle = (): PaperAction => ({ type: "idle" });
 export const move = (direction: PaperDirection): PaperAction => ({ type: "move", direction });
 export const indexAt = (x: number, y: number) => y * 40 + x;
+/** Territory cells a slot owns in the given world. */
+export const areaOf = (state: PaperState, slot: Slot) =>
+  state.territory.filter((owner) => owner === slot).length;
 export const validInit = (): InitInput => ({
   seed: 2,
   config: { ...paperManifest.config },
@@ -116,6 +119,24 @@ export function stepFrozen(state: PaperState, input: TickActions): PaperStepResu
   expect(JSON.stringify(state)).toBe(before);
   expect(JSON.stringify(input)).toBe(beforeActions);
   return output;
+}
+
+/**
+ * A reset player stays in the match on its spawn cell with an empty trail.
+ * A spawn outside the own territory leaves the one-cell trail the rules require,
+ * so the player can be cut again right away.
+ */
+export function assertReset(output: PaperStepResult, slots: readonly Slot[]) {
+  for (const slot of slots) {
+    const spawn = output.nextState.spawns[slot];
+    const index = indexAt(spawn.x, spawn.y);
+    expect(output.nextState.players[slot].alive, "a reset never ends the match").toBe(true);
+    expect(output.nextState.players[slot].position).toStrictEqual(spawn);
+    const trail = output.nextState.trails.flatMap((owner, cell) => (owner === slot ? [cell] : []));
+    if (output.nextState.territory[index] === slot) expect(trail).toStrictEqual([]);
+    else expect(trail).toStrictEqual([index]);
+  }
+  expect(parsePaperState(output.nextState)).toStrictEqual(output.nextState);
 }
 export function play(initial: PaperState, ticks: readonly TickActions[]) {
   let state = structuredClone(initial);
