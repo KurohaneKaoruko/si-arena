@@ -11,6 +11,9 @@ import { x as extract } from "tar";
  * versioning.fixed 承担（`pnpm change` → `pnpm version -r`），本脚本不修改版本。
  *
  * 用法：pnpm publish:packages [--dry-run] [--otp <code>]
+ *
+ * 支持断点续传：已在 registry 上的同名同版本包直接跳过，浏览器逐个授权
+ * 中途断掉后重跑本脚本即可发完剩余的包。
  */
 
 const PUBLIC_PACKAGES = [
@@ -34,12 +37,12 @@ if (nodeMajor < 26) throw new Error("Publishing requires Node.js 26 or newer");
 const pnpmPath = process.env.npm_execpath;
 if (!pnpmPath) throw new Error("Run this script with pnpm publish:packages");
 const pnpmIsScript = /\.[cm]?js$/.test(pnpmPath);
-const runPnpm = (pnpmArgs: string[], options: { timeoutMs: number }) =>
+const runPnpm = (pnpmArgs: string[], options: { timeoutMs: number; silent?: boolean }) =>
   spawnSync(
     pnpmIsScript ? process.execPath : pnpmPath,
     pnpmIsScript ? [pnpmPath, ...pnpmArgs] : pnpmArgs,
     // 不传 env：子进程继承当前环境，SI_ARENA_SERVER_URL 等变量自然透传给构建。
-    { cwd: root, stdio: "inherit", timeout: options.timeoutMs },
+    { cwd: root, stdio: options.silent ? "pipe" : "inherit", timeout: options.timeoutMs },
   );
 
 // lockstep 防线：publish 前所有公开包版本必须一致（正常由 versioning.fixed 保证）。
@@ -95,6 +98,16 @@ try {
   runPnpm(["build"], { timeoutMs: 10 * 60_000 });
 
   for (const pkg of PUBLIC_PACKAGES) {
+    // 断点续传：registry 上已存在同名同版本（view 退出码非 0 即未发布）则跳过，
+    // 浏览器逐个授权中途断掉后重跑不会撞已发布版本。
+    const onRegistry = runPnpm(["view", `${pkg.name}@${version}`, "version"], {
+      timeoutMs: 60_000,
+      silent: true,
+    });
+    if (onRegistry.status === 0) {
+      console.log(`>>> ${pkg.name}@${version} 已在 registry 上，跳过`);
+      continue;
+    }
     console.log(`\n>>> publishing ${pkg.name}@${version}${dryRun ? " (dry run)" : ""}`);
     const result = runPnpm(
       [
