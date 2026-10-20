@@ -2,6 +2,7 @@ import type {
   AuthTokenBody,
   AuthUserBody,
   GameCatalogEntry,
+  GameCodeInfo,
   GameMeResponse,
   LeaderboardResponse,
   MatchDetail,
@@ -72,12 +73,12 @@ export function parseGames(raw: unknown) {
   check(Array.isArray(v.games));
   return { games: v.games.map(parseGame) };
 }
-export function parseUpload(raw: unknown) {
+export function parseUpload(raw: unknown): Omit<GameCodeInfo, "source"> {
   const v = record(raw);
   integer(v.sourceBytes);
   integer(v.botProtocolVersion);
   date(v.updatedAt);
-  return v;
+  return raw as Omit<GameCodeInfo, "source">;
 }
 export function parseGameMe(raw: unknown): GameMeResponse {
   const v = record(raw);
@@ -88,8 +89,14 @@ export function parseGameMe(raw: unknown): GameMeResponse {
       ["NO_CODE", "PROTOCOL_MISMATCH", "CODE_TOO_LARGE"].includes(String(v.cannotMatchReason)),
   );
   if (v.code !== null) {
-    const code = parseUpload(v.code);
+    parseUpload(v.code);
+    const code = record(v.code);
     string(code.source);
+  }
+  if (v.activeMatch !== null) {
+    const active = record(v.activeMatch);
+    string(active.id);
+    check(active.status === "pending" || active.status === "running");
   }
   return raw as GameMeResponse;
 }

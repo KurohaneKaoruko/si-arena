@@ -38,6 +38,7 @@ export interface BrowserReplaySession {
   replay: DeepReadonly<Omit<Replay<unknown, unknown>, "initialState" | "ticks">>;
   totalTicks: number;
   errorTicks: readonly number[];
+  hasLogs: boolean;
   view(completedTicks: number): ReplayView;
 }
 export interface ReplayGameRegistration {
@@ -78,6 +79,11 @@ export function defineReplayGame<
         replay: session.replay,
         totalTicks: session.replay.ticks.length,
         errorTicks: session.errorTicks,
+        hasLogs: session.replay.ticks.some(
+          (record) =>
+            Object.keys(record.logs ?? {}).length > 0 ||
+            Object.keys(record.logsTruncated ?? {}).length > 0,
+        ),
         view(completedTicks) {
           const frame = session.frame(completedTicks);
           return {

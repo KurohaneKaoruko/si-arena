@@ -119,6 +119,7 @@ dbTest("upload stores code, rejects invalid sources, and preserves the previous 
   expect(emptyBody.code).toBeNull();
   expect(emptyBody.canMatch).toBe(false);
   expect(emptyBody.cannotMatchReason).toBe("NO_CODE");
+  expect(emptyBody.activeMatch).toBeNull();
   expect(emptyBody.entry).toMatchObject({ rating: 1000, matchesPlayed: 0 });
 
   await uploadOfficialBot(user.token);
@@ -534,6 +535,42 @@ dbTest("my matches lists participations newest first", async () => {
   expect(body.matches[0]?.participants).toHaveLength(2);
   const anonymous = await call("GET", "/api/games/paper/me/matches");
   expect(anonymous.statusCode).toBe(401);
+});
+
+dbTest("entry state exposes only the current user's unfinished initiated match", async () => {
+  const initiator = await registerUser();
+  const opponent = await registerUser();
+  await uploadOfficialBot(initiator.token);
+  await uploadOfficialBot(opponent.token);
+  await database.db
+    .update(gameEntries)
+    .set({ rating: "5000.000000" })
+    .where(
+      and(
+        eq(gameEntries.gameId, "paper"),
+        notInArray(gameEntries.userId, [initiator.id, opponent.id]),
+      ),
+    );
+  const created = await call("POST", "/api/games/paper/matches", {
+    token: initiator.token,
+    headers: { "idempotency-key": "active-entry" },
+  });
+  expect(created.statusCode).toBe(201);
+  const id: string = created.json().id;
+  expect(created.json().participants[1].userId).toBe(opponent.id);
+  const pending = await call("GET", "/api/games/paper/me", { token: initiator.token });
+  expect(pending.json().activeMatch).toEqual({ id, status: "pending" });
+  const passive = await call("GET", "/api/games/paper/me", { token: opponent.token });
+  expect(passive.json().activeMatch).toBeNull();
+  expect(passive.json().canMatch).toBe(true);
+  await database.db.update(matches).set({ status: "running" }).where(eq(matches.id, id));
+  const running = await call("GET", "/api/games/paper/me", { token: initiator.token });
+  expect(running.json().activeMatch).toEqual({ id, status: "running" });
+  for (const status of ["completed", "failed"] as const) {
+    await database.db.update(matches).set({ status }).where(eq(matches.id, id));
+    const terminal = await call("GET", "/api/games/paper/me", { token: initiator.token });
+    expect(terminal.json().activeMatch).toBeNull();
+  }
 });
 
 dbTest("uploading preserves rating and match statistics", async () => {

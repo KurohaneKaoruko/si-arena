@@ -76,10 +76,7 @@ onBeforeUnmount(() => loading?.abort());
 
 <template>
   <section>
-    <PageHeader
-      title="回放"
-      description="打开本地比赛回放，重看圈地路线，定位日志与错误。文件只在浏览器中读取。"
-    >
+    <PageHeader title="本地回放">
       <template #actions>
         <input
           id="replay-file"
@@ -98,7 +95,7 @@ onBeforeUnmount(() => loading?.abort());
       </template>
     </PageHeader>
 
-    <div class="mt-8">
+    <div class="mt-5">
       <StateBlock v-if="pending" status="loading" :message="progress">
         <template #action>
           <AppButton size="sm" variant="secondary" @click="cancelLoad">取消加载</AppButton>
@@ -118,10 +115,8 @@ onBeforeUnmount(() => loading?.abort());
         :file-name="fileName"
       />
       <div v-else class="rounded-card border border-line bg-surface p-8">
-        <p class="text-sm font-medium text-ink">选择一场比赛，回到起点</p>
-        <p class="mt-1.5 text-sm leading-6 text-soft">
-          支持 CLI 生成的 .json.gz 文件。完整校验通过后，即可播放、逐 tick 查看和跳转错误。
-        </p>
+        <p class="text-sm font-medium text-ink">打开 .json.gz 回放文件</p>
+        <p class="mt-1.5 text-sm leading-6 text-soft">文件仅在浏览器中读取。</p>
         <p class="mt-6 text-sm text-soft">还没有回放？在项目根目录运行：</p>
         <pre class="code-block mt-2 text-accent"><code>{{ exampleCommand }}</code></pre>
       </div>

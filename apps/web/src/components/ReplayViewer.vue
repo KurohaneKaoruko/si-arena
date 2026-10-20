@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { PLAYBACK_SPEEDS, usePlayback } from "@si-arena/player";
 import type { BrowserReplaySession } from "@si-arena/player/browser";
+import GameCanvas from "./GameCanvas.vue";
 import AppBadge from "./ui/AppBadge.vue";
 import AppButton from "./ui/AppButton.vue";
 import AppSelect from "./ui/AppSelect.vue";
@@ -10,6 +11,9 @@ import AppSlider from "./ui/AppSlider.vue";
 const props = defineProps<{
   session: BrowserReplaySession;
   fileName: string;
+  sourceKind?: "online" | "file" | "live";
+  detailsTarget?: HTMLElement | null;
+  fit?: boolean;
   /** Live dev sessions only: Memory committed around the executed input tick. */
   memory?: (
     tick: number,
@@ -41,10 +45,14 @@ const view = computed(() => props.session.view(tick.value));
 const participants = computed(() =>
   props.session.replay.players.toSorted((a, b) => a.slot - b.slot),
 );
+const logsAvailable = computed(
+  () =>
+    props.sourceKind !== "online" &&
+    (props.memory !== undefined || props.sourceKind === "live" || props.session.hasLogs),
+);
 const playerId = ref(participants.value[0]!.id),
   level = ref("all");
-const canvas = ref<HTMLCanvasElement | null>(null);
-const canvasError = ref("");
+const surface = ref<InstanceType<typeof GameCanvas> | null>(null);
 const observationOpen = ref(false);
 function own<T>(map: Readonly<Record<string, T>> | undefined, id: string): T | undefined {
   return map && Object.hasOwn(map, id) ? map[id] : undefined;
@@ -107,21 +115,10 @@ const canvasLabel = computed(
   () =>
     `比赛地图，已完成 ${tick.value} tick。${view.value.players.map((p) => `${p.label} 得分 ${p.score} ${props.session.scoreUnit}，${p.alive ? "存活" : "淘汰"}`).join("；")}`,
 );
-let observer: ResizeObserver | undefined;
 function draw() {
-  const element = canvas.value;
-  if (!element) return;
-  const context = element.getContext("2d");
-  if (!context) {
-    canvasError.value = "当前浏览器无法显示 Canvas 地图，请使用支持 Canvas 的浏览器。";
-    return;
-  }
-  const width = Math.max(1, element.getBoundingClientRect().width || 800);
-  const height = width / props.session.aspectRatio;
-  const ratio = Math.min(2, window.devicePixelRatio || 1);
-  element.width = Math.round(width * ratio);
-  element.height = Math.round(height * ratio);
-  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  surface.value?.redraw();
+}
+function drawView(context: CanvasRenderingContext2D, width: number, height: number) {
   view.value.draw(context, width, height, {
     progress: playback.progress.value,
     reducedMotion: reducedMotionQuery?.matches ?? false,
@@ -139,17 +136,10 @@ function handleVisibility() {
   if (document.hidden) playback.pause();
 }
 onMounted(() => {
-  if (typeof ResizeObserver !== "undefined") {
-    observer = new ResizeObserver(draw);
-    observer.observe(canvas.value!);
-  }
-  window.addEventListener("resize", draw);
   document.addEventListener("visibilitychange", handleVisibility);
   draw();
 });
 onBeforeUnmount(() => {
-  observer?.disconnect();
-  window.removeEventListener("resize", draw);
   document.removeEventListener("visibilitychange", handleVisibility);
 });
 function toggle() {
@@ -188,42 +178,32 @@ function keyboard(event: KeyboardEvent) {
 </script>
 
 <template>
-  <section class="min-w-0" aria-label="比赛回放" @keydown="keyboard">
-    <div class="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
-      <div class="min-w-0">
-        <p class="truncate text-sm font-medium text-ink" :title="fileName">{{ fileName }}</p>
-        <p class="mt-0.5 break-all font-mono text-xs text-faint">
-          {{ session.replay.game.release }} · {{ session.replay.matchId }}
-        </p>
-      </div>
-      <AppBadge tone="success">回放校验通过</AppBadge>
-    </div>
-    <div class="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
-      <div class="min-w-0">
-        <div class="overflow-hidden rounded-card border border-line bg-surface shadow-card">
-          <div
-            class="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-subtle px-4 py-2.5"
-          >
-            <span class="font-mono text-sm tracking-tight" data-testid="tick-count"
-              >已完成 {{ tick }} / {{ session.totalTicks }} tick</span
-            >
-            <span class="text-xs text-soft">{{
-              tick === session.totalTicks ? "比赛结束" : playing ? "播放中" : "已暂停"
-            }}</span>
-          </div>
-          <canvas
-            ref="canvas"
-            class="block w-full"
-            :style="{ aspectRatio: session.aspectRatio }"
-            tabindex="0"
-            role="img"
-            :aria-label="canvasLabel"
-            aria-describedby="playback-help"
-            >{{ canvasLabel }}</canvas
-          >
-          <p v-if="canvasError" role="alert" class="p-4 text-sm text-danger">{{ canvasError }}</p>
-        </div>
-        <div class="mt-4 rounded-card border border-line bg-surface p-4 shadow-card">
+  <section
+    class="min-w-0"
+    :class="{ 'replay-workspace': fit }"
+    aria-label="比赛回放"
+    @keydown="keyboard"
+  >
+    <details v-if="sourceKind !== 'online'" class="mb-3 min-w-0 text-xs text-soft">
+      <summary class="w-fit max-w-full cursor-pointer break-all py-1">{{ fileName }}</summary>
+      <p class="mt-1 break-all font-mono">
+        {{ session.replay.game.release }} · {{ session.replay.matchId }}
+      </p>
+      <AppBadge class="mt-2" tone="success">回放校验通过</AppBadge>
+    </details>
+    <div
+      class="replay-layout"
+      :class="
+        fit
+          ? 'replay-layout--fit'
+          : 'grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_19rem]'
+      "
+    >
+      <div class="min-w-0" :class="{ 'replay-stage': fit }">
+        <div
+          class="replay-controls rounded-card border border-line bg-surface px-4 py-3 shadow-card"
+          :class="fit ? 'shrink-0' : 'sticky top-14 z-20 mb-3'"
+        >
           <AppSlider
             :model-value="tick"
             :min="0"
@@ -271,13 +251,12 @@ function keyboard(event: KeyboardEvent) {
                 @update:model-value="setSpeed"
               />
             </span>
-          </div>
-          <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+
             <label class="flex items-center gap-2 text-sm text-soft" for="replay-tick"
               >跳转 tick
               <input
                 id="replay-tick"
-                class="input w-24"
+                class="input min-h-8 w-20"
                 type="number"
                 min="0"
                 :max="session.totalTicks"
@@ -288,6 +267,7 @@ function keyboard(event: KeyboardEvent) {
             <AppButton
               variant="secondary"
               size="sm"
+              v-if="session.errorTicks.length"
               :disabled="previousError === undefined"
               @click="jumpError(-1)"
               >上一处错误</AppButton
@@ -295,153 +275,181 @@ function keyboard(event: KeyboardEvent) {
             <AppButton
               variant="secondary"
               size="sm"
+              v-if="session.errorTicks.length"
               :disabled="nextError === undefined"
               @click="jumpError(1)"
               >下一处错误</AppButton
             >
           </div>
-          <p id="playback-help" class="mt-3 text-xs leading-6 text-faint">
+          <p id="playback-help" class="sr-only">
             聚焦地图：空格播放 / 暂停，← → 逐步查看，Home / End 跳转首尾。
           </p>
         </div>
+        <div
+          class="overflow-hidden rounded-card border border-line bg-surface shadow-card"
+          :class="{ 'replay-map': fit }"
+        >
+          <div
+            class="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-subtle px-4 py-2.5"
+          >
+            <span class="font-mono text-sm tracking-tight" data-testid="tick-count"
+              >已完成 {{ tick }} / {{ session.totalTicks }} tick</span
+            >
+            <span class="text-xs text-soft">{{
+              tick === session.totalTicks ? "比赛结束" : playing ? "播放中" : "已暂停"
+            }}</span>
+          </div>
+          <GameCanvas
+            ref="surface"
+            described-by="playback-help"
+            :aspect-ratio="session.aspectRatio"
+            :label="canvasLabel"
+            :draw="drawView"
+            :fit="fit"
+          />
+        </div>
       </div>
-      <aside class="min-w-0 space-y-4" aria-label="选手与诊断">
-        <div class="rounded-card border border-line bg-surface p-4 shadow-card">
-          <h2 class="text-sm font-semibold">选手与得分</h2>
-          <div v-for="player in view.players" :key="player.id" class="mt-3.5 min-w-0">
-            <div class="flex min-w-0 items-start gap-3">
-              <span
-                class="flex size-8 shrink-0 items-center justify-center rounded-control border font-mono text-xs font-bold"
-                :style="{
-                  color: player.color,
-                  borderColor: player.color,
-                  backgroundColor: tint(player.color),
-                }"
-                >{{ player.label }}</span
-              >
-              <div class="min-w-0 flex-1">
-                <p
-                  class="truncate text-sm"
-                  :title="participants.find((p) => p.id === player.id)?.name"
+      <Teleport :to="detailsTarget ?? 'body'" :disabled="!detailsTarget">
+        <aside class="min-w-0 space-y-4" aria-label="选手与诊断" @keydown="keyboard">
+          <slot name="summary" />
+          <div class="rounded-card border border-line bg-surface p-4 shadow-card">
+            <h2 class="text-sm font-semibold">当前比分</h2>
+            <div v-for="player in view.players" :key="player.id" class="mt-3.5 min-w-0">
+              <div class="flex min-w-0 items-start gap-3">
+                <span
+                  class="flex size-8 shrink-0 items-center justify-center rounded-control border font-mono text-xs font-bold"
+                  :style="{
+                    color: player.color,
+                    borderColor: player.color,
+                    backgroundColor: tint(player.color),
+                  }"
+                  >{{ player.label }}</span
                 >
-                  {{ participants.find((p) => p.id === player.id)?.name }}
-                </p>
-                <p class="mt-0.5 text-xs text-faint">
-                  {{ participants.find((p) => p.id === player.id)?.official ? "官方 · " : ""
-                  }}{{ player.alive ? "存活" : "已淘汰" }}
+                <div class="min-w-0 flex-1">
+                  <p
+                    class="truncate text-sm"
+                    :title="participants.find((p) => p.id === player.id)?.name"
+                  >
+                    {{ participants.find((p) => p.id === player.id)?.name }}
+                  </p>
+                  <p class="mt-0.5 text-xs text-faint">
+                    {{ participants.find((p) => p.id === player.id)?.official ? "官方 · " : ""
+                    }}{{ player.alive ? "存活" : "已淘汰" }}
+                  </p>
+                </div>
+                <p class="shrink-0 text-right font-mono text-lg" :style="{ color: player.color }">
+                  {{ player.score
+                  }}<span class="ml-1 text-xs text-faint">{{ session.scoreUnit }}</span>
                 </p>
               </div>
-              <p class="shrink-0 text-right font-mono text-lg" :style="{ color: player.color }">
-                {{ player.score
-                }}<span class="ml-1 text-xs text-faint">{{ session.scoreUnit }}</span>
+            </div>
+            <div v-if="tick === session.totalTicks" class="mt-4 border-t border-line pt-3.5">
+              <h3 class="text-sm font-semibold">终局排名</h3>
+              <p
+                v-for="result in session.replay.result.players"
+                :key="result.id"
+                class="mt-1.5 break-words text-sm text-soft"
+              >
+                第 {{ result.rank }} 名 · {{ participants.find((p) => p.id === result.id)?.name }} ·
+                {{ result.score }} 分
               </p>
             </div>
           </div>
-          <div v-if="tick === session.totalTicks" class="mt-4 border-t border-line pt-3.5">
-            <h3 class="text-sm font-semibold">终局排名</h3>
-            <p
-              v-for="result in session.replay.result.players"
-              :key="result.id"
-              class="mt-1.5 break-words text-sm text-soft"
-            >
-              第 {{ result.rank }} 名 · {{ participants.find((p) => p.id === result.id)?.name }} ·
-              {{ result.score }} 分
-            </p>
-          </div>
-        </div>
-        <div class="rounded-card border border-line bg-surface p-4 shadow-card">
-          <h2 class="text-sm font-semibold">Tick 诊断</h2>
-          <p class="mt-1.5 text-xs leading-6 text-soft">
-            {{
-              view.record
-                ? `执行 tick ${view.record.tick} → 世界 S${tick}`
-                : "初始世界 S0，还没有执行记录"
-            }}
-          </p>
-          <p class="mt-3 text-xs text-soft">选手</p>
-          <AppSelect
-            id="diagnostic-player"
-            class="mt-1 w-full"
-            label="选手"
-            :model-value="playerId"
-            :options="playerOptions"
-            @update:model-value="playerId = $event"
-          />
-          <div
-            v-if="selectedError"
-            class="mt-3 min-w-0 rounded-control border border-danger/25 bg-danger-soft p-3"
-            role="note"
-            aria-label="玩家执行错误"
-          >
-            <p class="break-words font-mono text-xs font-semibold text-danger">
-              {{ selectedError.type }}
-            </p>
-            <p class="mt-1.5 break-words text-sm text-danger">{{ selectedError.message }}</p>
-            <details v-if="selectedError.stack" class="mt-1.5">
-              <summary class="cursor-pointer py-1.5 text-xs text-soft">错误堆栈</summary>
-              <pre
-                class="max-h-48 overflow-auto overscroll-contain whitespace-pre-wrap break-all font-mono text-xs leading-6 text-soft"
-                >{{ selectedError.stack }}</pre>
-            </details>
-          </div>
-          <div class="mt-3 text-xs leading-6 text-soft">
-            <p>有效动作</p>
-            <pre
-              class="mt-1 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-ink"
-              >{{
-                selectedAction === undefined ? "无执行动作" : JSON.stringify(selectedAction)
-              }}</pre>
-            <p class="mt-2">
-              CPU：{{
-                selectedResources?.cpuUsedUs === undefined
-                  ? "未记录"
-                  : `${(selectedResources.cpuUsedUs / 1000).toFixed(2)} ms`
+          <div class="rounded-card border border-line bg-surface p-4 shadow-card">
+            <h2 class="text-sm font-semibold">Tick 诊断</h2>
+            <p class="mt-1.5 text-xs leading-6 text-soft">
+              {{
+                view.record
+                  ? `执行 tick ${view.record.tick} → 世界 S${tick}`
+                  : "初始世界 S0，还没有执行记录"
               }}
             </p>
-          </div>
-          <div
-            v-if="memory"
-            class="mt-3 min-w-0 border-t border-line pt-3"
-            aria-label="Memory 提交"
-          >
-            <p class="text-xs font-semibold">Memory 提交</p>
-            <p v-if="!view.record" class="mt-1.5 text-xs leading-6 text-faint">
-              前进一步后可查看 tick 0 的 Memory 提交。
-            </p>
-            <p v-else-if="memoryPending" class="mt-1.5 text-xs leading-6 text-faint">加载中…</p>
-            <template v-else-if="memoryState">
-              <p class="mt-1.5 text-xs text-faint">提交前</p>
-              <pre
-                class="mt-1 max-h-40 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-ink"
-                >{{ formatMemory(memoryState.before) }}</pre>
-              <p class="mt-1.5 text-xs text-faint">提交后</p>
-              <pre
-                class="mt-1 max-h-40 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-ink"
-                >{{ formatMemory(memoryState.after) }}</pre>
-            </template>
-            <p v-else class="mt-1.5 text-xs leading-6 text-faint">
-              该选手在此 tick 没有 Memory 记录。
-            </p>
-          </div>
-          <details
-            class="mt-2 min-w-0 border-t border-line pt-2"
-            @toggle="observationOpen = ($event.target as HTMLDetailsElement).open"
-          >
-            <summary
-              class="flex min-h-9 cursor-pointer items-center text-sm text-soft transition hover:text-ink"
+            <p class="mt-3 text-xs text-soft">选手</p>
+            <AppSelect
+              id="diagnostic-player"
+              class="mt-1 w-full"
+              label="选手"
+              :model-value="playerId"
+              :options="playerOptions"
+              @update:model-value="playerId = $event"
+            />
+            <div
+              v-if="selectedError"
+              class="mt-3 min-w-0 rounded-control border border-danger/25 bg-danger-soft p-3"
+              role="note"
+              aria-label="玩家执行错误"
             >
-              查看执行前的观察
-            </summary>
-            <pre
-              v-if="observationOpen"
-              class="mt-2 max-h-60 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-soft"
-              >{{ selectedObservation }}</pre>
-          </details>
-        </div>
-      </aside>
+              <p class="break-words font-mono text-xs font-semibold text-danger">
+                {{ selectedError.type }}
+              </p>
+              <p class="mt-1.5 break-words text-sm text-danger">{{ selectedError.message }}</p>
+              <details v-if="selectedError.stack" class="mt-1.5">
+                <summary class="cursor-pointer py-1.5 text-xs text-soft">错误堆栈</summary>
+                <pre
+                  class="max-h-48 overflow-auto overscroll-contain whitespace-pre-wrap break-all font-mono text-xs leading-6 text-soft"
+                  >{{ selectedError.stack }}</pre>
+              </details>
+            </div>
+            <div class="mt-3 text-xs leading-6 text-soft">
+              <p>有效动作</p>
+              <pre
+                class="mt-1 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-ink"
+                >{{
+                  selectedAction === undefined ? "无执行动作" : JSON.stringify(selectedAction)
+                }}</pre>
+              <p class="mt-2">
+                CPU：{{
+                  selectedResources?.cpuUsedUs === undefined
+                    ? "未记录"
+                    : `${(selectedResources.cpuUsedUs / 1000).toFixed(2)} ms`
+                }}
+              </p>
+            </div>
+            <div
+              v-if="memory"
+              class="mt-3 min-w-0 border-t border-line pt-3"
+              aria-label="Memory 提交"
+            >
+              <p class="text-xs font-semibold">Memory 提交</p>
+              <p v-if="!view.record" class="mt-1.5 text-xs leading-6 text-faint">
+                前进一步后可查看 tick 0 的 Memory 提交。
+              </p>
+              <p v-else-if="memoryPending" class="mt-1.5 text-xs leading-6 text-faint">加载中…</p>
+              <template v-else-if="memoryState">
+                <p class="mt-1.5 text-xs text-faint">提交前</p>
+                <pre
+                  class="mt-1 max-h-40 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-ink"
+                  >{{ formatMemory(memoryState.before) }}</pre>
+                <p class="mt-1.5 text-xs text-faint">提交后</p>
+                <pre
+                  class="mt-1 max-h-40 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-ink"
+                  >{{ formatMemory(memoryState.after) }}</pre>
+              </template>
+              <p v-else class="mt-1.5 text-xs leading-6 text-faint">
+                该选手在此 tick 没有 Memory 记录。
+              </p>
+            </div>
+            <details
+              class="mt-2 min-w-0 border-t border-line pt-2"
+              @toggle="observationOpen = ($event.target as HTMLDetailsElement).open"
+            >
+              <summary
+                class="flex min-h-9 cursor-pointer items-center text-sm text-soft transition hover:text-ink"
+              >
+                查看执行前的观察
+              </summary>
+              <pre
+                v-if="observationOpen"
+                class="mt-2 max-h-60 overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-control border border-line bg-subtle px-3 py-2 font-mono text-xs leading-6 text-soft"
+                >{{ selectedObservation }}</pre>
+            </details>
+          </div>
+        </aside>
+      </Teleport>
     </div>
     <section
-      class="mt-5 min-w-0 rounded-card border border-line bg-surface p-4 shadow-card"
+      v-if="logsAvailable"
+      class="mt-5 min-w-0 rounded-card border border-line bg-surface p-4"
       aria-labelledby="logs-title"
     >
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -503,5 +511,6 @@ function keyboard(event: KeyboardEvent) {
         }}
       </p>
     </section>
+    <p v-else-if="sourceKind !== 'online'" class="mt-3 text-xs text-soft">此回放未包含玩家日志。</p>
   </section>
 </template>

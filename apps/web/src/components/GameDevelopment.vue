@@ -10,6 +10,7 @@ import StateBlock from "./ui/StateBlock.vue";
 
 const props = defineProps<{ game: GameCatalogEntry }>();
 const toast = useToast();
+const promptOpen = ref(false);
 const base = computed(() => `/api/games/${encodeURIComponent(props.game.id)}`);
 const { data, status, error, reload } = useApiResource(
   () => `${base.value}/development`,
@@ -40,6 +41,7 @@ async function copy(text: string, label: string) {
     await navigator.clipboard.writeText(text);
     toast.success(`${label}已复制。`);
   } catch {
+    promptOpen.value = true;
     toast.warning("无法访问剪贴板，请手动选择并复制下方文本。");
   }
 }
@@ -49,37 +51,25 @@ function sourceLink(source: string) {
 </script>
 
 <template>
-  <section
-    id="development"
-    class="mt-8 scroll-mt-20 rounded-card border border-line bg-surface shadow-card"
-    aria-labelledby="development-title"
-  >
-    <header class="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
+  <section id="development" class="max-w-4xl scroll-mt-20" aria-labelledby="development-title">
+    <header class="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
       <div class="min-w-0">
-        <h2 id="development-title" class="text-[15px] font-semibold tracking-tight">
-          开发资料与本地工具
-        </h2>
-        <p class="mt-1 text-sm leading-6 text-soft">
-          把提示词交给你选择的 AI，在本地编写、运行和改进策略。
-        </p>
+        <h2 id="development-title" class="text-[15px] font-semibold tracking-tight">开发资料</h2>
       </div>
       <AppBadge mono>{{ game.release }} · 接口 v{{ game.botProtocolVersion }}</AppBadge>
     </header>
 
-    <div class="border-b border-line px-5 py-5">
-      <h3 class="text-sm font-semibold">获取独立开发包</h3>
-      <p class="mt-1.5 text-sm leading-6 text-soft">
-        包含引擎、沙箱、游戏、SDK、官方 bot 和回放播放器。需要 Node.js 26+ 与 pnpm
-        12，安装后可离线对战。
-      </p>
+    <div class="border-b border-line py-5">
+      <h3 class="text-sm font-semibold">快速开始</h3>
+      <p class="mt-1.5 text-sm leading-6 text-soft">Node.js 26+ · pnpm 12</p>
       <StateBlock v-if="releaseStatus === 'loading'" class="mt-4" status="loading" />
       <div v-else-if="release" class="mt-4">
         <div class="flex flex-wrap items-center gap-2">
-          <AppButton variant="primary" :href="`${releasePath}/download`" download
-            >下载开发包 ZIP</AppButton
-          >
-          <AppButton variant="secondary" @click="copy(command, '初始化命令')"
+          <AppButton variant="primary" @click="copy(command, '初始化命令')"
             >复制初始化命令</AppButton
+          >
+          <AppButton variant="secondary" :href="`${releasePath}/download`" download
+            >下载开发包 ZIP</AppButton
           >
           <span class="font-mono text-xs text-faint"
             >{{ (release.archive.bytes / 1024 / 1024).toFixed(1) }} MiB</span
@@ -97,31 +87,37 @@ function sourceLink(source: string) {
       </div>
     </div>
 
-    <div class="px-5 py-5">
+    <div class="py-4">
       <StateBlock v-if="status === 'loading'" status="loading" />
       <StateBlock v-else-if="status === 'error'" status="error" :message="error" @retry="reload" />
       <div v-else-if="data" class="space-y-4">
-        <details open class="border-t border-line pt-4">
-          <summary
-            class="flex min-h-9 cursor-pointer items-center text-sm font-semibold transition marker:text-faint hover:text-accent"
-          >
-            统一参赛提示词
-          </summary>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <AppButton variant="secondary" @click="copy(data.prompt, '参赛提示词')"
-              >复制提示词</AppButton
-            >
-            <AppButton variant="secondary" :href="sourceLink(data.prompt)" download="PROMPT.md"
-              >下载提示词</AppButton
-            >
+        <section>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h3 class="text-sm font-semibold">统一参赛提示词</h3>
+            <div class="flex flex-wrap gap-2">
+              <AppButton variant="secondary" @click="copy(data.prompt, '参赛提示词')"
+                >复制提示词</AppButton
+              >
+              <AppButton variant="secondary" :href="sourceLink(data.prompt)" download="PROMPT.md"
+                >下载提示词</AppButton
+              >
+            </div>
           </div>
-          <textarea
-            aria-label="统一参赛提示词"
-            class="input mt-3 min-h-64 resize-y p-3.5 font-mono text-[13px] leading-6"
-            readonly
-            :value="data.prompt"
-          />
-        </details>
+          <details
+            :open="promptOpen"
+            @toggle="promptOpen = ($event.target as HTMLDetailsElement).open"
+          >
+            <summary class="w-fit cursor-pointer py-3 text-xs text-soft hover:text-ink">
+              查看提示词全文
+            </summary>
+            <textarea
+              aria-label="统一参赛提示词"
+              class="input min-h-64 resize-y p-3.5 font-mono text-[13px] leading-6"
+              readonly
+              :value="data.prompt"
+            />
+          </details>
+        </section>
         <details class="border-t border-line pt-4">
           <summary
             class="flex min-h-9 cursor-pointer items-center text-sm font-semibold transition marker:text-faint hover:text-accent"

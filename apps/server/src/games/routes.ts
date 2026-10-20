@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
@@ -7,7 +7,7 @@ import {
   type GameMeResponse,
 } from "@si-arena/protocol";
 import { requireSession } from "../auth/session";
-import { gameEntries, users } from "@si-arena/db";
+import { gameEntries, matches, users } from "@si-arena/db";
 import { sendError } from "../http/errors";
 import { parsePagination } from "../http/pagination";
 import { gameCatalog } from "../games";
@@ -62,6 +62,17 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
         .limit(1);
       const entry = rows[0];
       const reason = cannotMatchReason(entry, game);
+      const [active] = await db
+        .select({ id: matches.id, status: matches.status })
+        .from(matches)
+        .where(
+          and(
+            eq(matches.gameId, game.id),
+            eq(matches.initiatorId, session.userId),
+            inArray(matches.status, ["pending", "running"]),
+          ),
+        )
+        .limit(1);
       const response: GameMeResponse = {
         entry: {
           rating: entry === undefined ? 1000 : Number(entry.rating),
@@ -81,6 +92,10 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
               },
         canMatch: reason === null,
         cannotMatchReason: reason,
+        activeMatch:
+          active && (active.status === "pending" || active.status === "running")
+            ? { id: active.id, status: active.status }
+            : null,
       };
       return response;
     });

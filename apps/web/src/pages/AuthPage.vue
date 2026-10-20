@@ -71,11 +71,8 @@ onUnmounted(() => current?.abort());
 <template>
   <section class="mx-auto max-w-sm">
     <h1 class="text-[26px] leading-tight font-semibold tracking-tight sm:text-[32px]">
-      {{ register ? "创建账号" : "欢迎回来" }}
+      {{ register ? "创建账号" : "登录" }}
     </h1>
-    <p class="lead mt-3">
-      {{ register ? "上传策略，让你的代码加入赛场。" : "继续改进策略，开始下一场对决。" }}
-    </p>
     <form class="mt-8 space-y-5" @submit.prevent="submit">
       <AppField
         v-slot="{ describedBy }"

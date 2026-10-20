@@ -58,7 +58,8 @@ test("missing logs for prototype-named participants remain empty rather than inh
   const session = await loadRegisteredReplay(raw, replayGames);
   const wrapper = mount(ReplayViewer, { props: { session, fileName: "match.json.gz" } });
   await wrapper.get('[aria-label="前进一个 tick"]').trigger("click");
-  expect(wrapper.text()).toContain("没有符合筛选条件的日志");
+  expect(wrapper.text()).toContain("此回放未包含玩家日志");
+  expect(wrapper.find("#log-level").exists()).toBe(false);
   expect(wrapper.find('[aria-label="玩家执行错误"]').exists()).toBe(false);
 });
 
@@ -111,7 +112,7 @@ test("the timeline slider seeks the replay without starting playback", async () 
 
 test("file opening failures show an error without an old or partially verified match", async () => {
   const wrapper = mount(ReplayPage);
-  expect(wrapper.text()).toContain("选择一场比赛");
+  expect(wrapper.text()).toContain("打开 .json.gz 回放文件");
   const input = wrapper.get('input[type="file"]');
   Object.defineProperty(input.element, "files", {
     value: [new File(["bad gzip"], "bad.json.gz")],
@@ -121,4 +122,18 @@ test("file opening failures show an error without an old or partially verified m
   await flushPromises();
   expect(wrapper.get('[role="alert"]').text()).toContain("无法播放");
   expect(wrapper.find('[aria-label="比赛回放"]').exists()).toBe(false);
+});
+
+test("online replays omit console tools while preserving execution errors and observation", async () => {
+  const session = await loadRegisteredReplay(await replayFixture(), replayGames);
+  const wrapper = mount(ReplayViewer, {
+    props: { session, fileName: "online.json.gz", sourceKind: "online" },
+  });
+  expect(wrapper.find("#log-level").exists()).toBe(false);
+  expect(wrapper.text()).not.toContain("玩家日志");
+  expect(wrapper.text()).not.toContain("online.json.gz");
+  const nextError = wrapper.findAll("button").find((button) => button.text() === "下一处错误")!;
+  await nextError.trigger("click");
+  expect(wrapper.text()).toContain("test failure");
+  expect(wrapper.text()).toContain("查看执行前的观察");
 });

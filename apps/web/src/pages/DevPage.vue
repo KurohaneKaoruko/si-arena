@@ -266,6 +266,7 @@ onBeforeUnmount(() => {
       :session="session"
       file-name="本地调试会话"
       :memory="memory"
+      source-kind="live"
     />
   </section>
 </template>

@@ -26,6 +26,7 @@ export interface ApiResource<T> {
   /** 成功结果是否为空，用于统一空状态。 */
   empty: ComputedRef<boolean>;
   reload: () => Promise<void>;
+  cancel: () => void;
 }
 
 /**
@@ -141,5 +142,5 @@ export function useApiResource<T>(
     return "loading";
   });
   const empty = computed(() => data.value !== null && (options.isEmpty?.(data.value) ?? false));
-  return { data, pending, error, refreshError, status, empty, reload };
+  return { data, pending, error, refreshError, status, empty, reload, cancel: stop };
 }

@@ -70,6 +70,8 @@ export interface GameMeResponse {
   code: GameCodeInfo | null;
   canMatch: boolean;
   cannotMatchReason: CannotMatchReason | null;
+  /** Only the user's unfinished initiated request; passive participations do not block matching. */
+  activeMatch: { id: string; status: "pending" | "running" } | null;
 }
 
 export interface LeaderboardPlayer {

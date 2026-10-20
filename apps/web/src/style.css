@@ -13,7 +13,7 @@
   --color-line-strong: #d4d4d8;
   --color-ink: #18181b;
   --color-soft: #52525b;
-  --color-faint: #a1a1aa;
+  --color-faint: #71717a;
   --color-accent: #4f46e5;
   --color-accent-strong: #4338ca;
   --color-accent-soft: #eef2ff;
@@ -76,6 +76,9 @@
 }
 
 @layer components {
+  .workspace {
+    @apply mx-auto w-full max-w-[96rem] px-4 sm:px-6 lg:px-8;
+  }
   /* 元信息：版本、tick、ID、时间戳等 */
   .meta {
     @apply font-mono text-xs text-faint;
@@ -96,9 +99,9 @@
   .field-error {
     @apply mt-1.5 block text-xs leading-5 text-danger;
   }
+  /* 代码块多数场景不设高度，不能因 overscroll-behavior 把滚轮困在无溢出的滚动容器里 */
   .code-block {
     @apply overflow-x-auto rounded-control border border-line bg-subtle px-4 py-3 font-mono text-[13px] leading-6 text-soft;
-    overscroll-behavior: contain;
   }
   .skip-link {
     @apply fixed top-3 left-3 z-50 -translate-y-24 rounded-control bg-accent px-5 py-3 text-sm font-medium text-white shadow-pop focus:translate-y-0;
@@ -112,6 +115,193 @@
   }
   .data-cell {
     @apply px-4 py-3;
+  }
+}
+
+@media (pointer: coarse) {
+  button,
+  .touch-target,
+  summary,
+  select,
+  a[role="button"] {
+    min-height: 44px;
+  }
+}
+
+/* Game workbench: one persistent stage and a separately scrolling sidebar. */
+.game-workbench {
+  min-width: 0;
+  padding-bottom: calc(var(--game-actions-height, 10rem) + 1rem);
+}
+.game-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+.game-columns {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+.game-preview,
+.game-match {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.game-preview {
+  padding: 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  background: var(--color-subtle);
+}
+.game-canvas {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
+}
+.game-sidebar {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+.game-tabs {
+  display: flex;
+  flex-shrink: 0;
+  overflow-x: auto;
+  padding-inline: 0.5rem;
+  border-bottom: 1px solid var(--color-line);
+}
+.game-content {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+.game-panel {
+  min-width: 0;
+  padding: 1rem;
+}
+.game-actions {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 35;
+  max-height: 45dvh;
+  overflow-y: auto;
+  border-top: 1px solid var(--color-line);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--color-surface);
+}
+.game-match-pending {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+.game-match-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.game-match-overlay > * {
+  width: min(100%, 28rem);
+}
+.replay-stage {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.replay-workspace .replay-controls {
+  order: 2;
+}
+
+@media (min-width: 1024px) {
+  body:has(.app-shell--game) {
+    overflow: hidden;
+  }
+  .app-shell--game {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .app-shell--game > main {
+    min-height: 0;
+    max-width: none;
+    overflow: hidden;
+    padding: 0.75rem 1rem;
+  }
+  .game-workbench {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    padding-bottom: 0;
+  }
+  .game-heading {
+    flex-shrink: 0;
+  }
+  .game-columns {
+    min-height: 0;
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr) clamp(24rem, 35vw, 30rem);
+  }
+  .game-content {
+    position: relative;
+    overflow: hidden;
+  }
+  .game-panel {
+    height: 100%;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  .game-actions {
+    position: static;
+    flex-shrink: 0;
+    max-height: 45%;
+  }
+  .game-canvas--fit {
+    min-height: 0;
+    flex: 1;
+    aspect-ratio: auto !important;
+  }
+  .game-match-pending > .game-preview {
+    height: 100%;
+  }
+  .replay-workspace,
+  .replay-layout--fit,
+  .replay-stage,
+  .replay-map {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+  .replay-map {
+    align-items: stretch;
+  }
+  .replay-map > :first-child {
+    flex-shrink: 0;
+  }
+  .replay-workspace .replay-controls {
+    max-height: 45%;
+    overflow-y: auto;
   }
 }
 

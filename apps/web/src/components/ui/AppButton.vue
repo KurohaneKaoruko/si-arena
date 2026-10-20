@@ -41,7 +41,7 @@ const inert = computed(() => props.disabled || props.loading);
 const isLink = computed(() => Boolean(props.to || props.href));
 
 const classes = computed(() => [
-  "inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap transition",
+  "touch-target inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap transition",
   props.variant === "link" ? "min-h-0 px-0" : sizes[props.size].box,
   sizes[props.size].text,
   variants[props.variant],

@@ -88,7 +88,7 @@ server 与 worker 共用 `REPLAYS_DIR`（默认 `data/replays`），相对路径
 
 ### 游戏参赛与匹配 API 契约
 
-`GET /games/:gameId/me`（认证）返回 `{ "entry": { rating, matchesPlayed, wins, draws, losses }, "code": { source, sourceBytes, botProtocolVersion, updatedAt } | null, canMatch, cannotMatchReason }`；`cannotMatchReason` 取 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`，可为 null。
+`GET /games/:gameId/me`（认证）返回 `{ "entry": { rating, matchesPlayed, wins, draws, losses }, "code": { source, sourceBytes, botProtocolVersion, updatedAt } | null, canMatch, cannotMatchReason, activeMatch: { id, status } | null }`；`cannotMatchReason` 取 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`，可为 null。`activeMatch` 仅查询本人在此游戏发起且状态为 `pending` 或 `running` 的比赛，被动参赛和终态比赛不包含在内。此字段用于恢复「查看当前比赛」入口，不代替匹配接口的幂等检查和数据库唯一约束。
 
 `PUT /games/:gameId/me/code`（认证）请求体为 `text/plain` 的源码文本，请求字节上限为当前发行 `resolvedLimits.codeBytes`。请求体必须是合法 UTF-8 文本，解码失败或空请求体返回 400 `VALIDATION_ERROR`。服务端运行沙箱静态校验（受限 AST 检查 + 同版 QuickJS compileOnly），同时校验数每进程最多 2，饱和返回 429。成功覆盖最新源码并返回 `{ sourceBytes, botProtocolVersion, updatedAt }`，排位分与比赛统计保持不变；校验失败返回 400 `CODE_INVALID`，原代码不变；超限返回 413。
 
