@@ -4,6 +4,7 @@ import { parseGameDevelopment, parseGameReleaseMetadata } from "@si-arena/protoc
 import { computed, ref } from "vue";
 import { useApiResource } from "../composables/useApiResource";
 import { useToast } from "../composables/useToast";
+import { copyText } from "../utils/clipboard";
 import AppBadge from "./ui/AppBadge.vue";
 import AppButton from "./ui/AppButton.vue";
 import StateBlock from "./ui/StateBlock.vue";
@@ -37,13 +38,12 @@ const command = computed(
     `npx @si-arena/cli@latest init ${props.game.id} ./${props.game.id}-bot --server ${JSON.stringify(window.location.origin)}`,
 );
 async function copy(text: string, label: string) {
-  try {
-    await navigator.clipboard.writeText(text);
+  if (await copyText(text)) {
     toast.success(`${label}已复制。`);
-  } catch {
-    promptOpen.value = true;
-    toast.warning("无法访问剪贴板，请手动选择并复制下方文本。");
+    return;
   }
+  promptOpen.value = true;
+  toast.warning("无法访问剪贴板，请手动选择并复制下方文本。");
 }
 function sourceLink(source: string) {
   return `data:text/plain;charset=utf-8,${encodeURIComponent(source)}`;
