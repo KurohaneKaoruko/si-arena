@@ -14,8 +14,8 @@ export interface SandboxOptions<Action extends JsonValue> {
   matchId: string;
   playerId: string;
   source: string;
-  /** Trusted, self-contained ESM that exports the SDK object as default. */
-  sdkSource?: string;
+  /** Trusted guest ESM: default (observation, { submit, reject }) => game view. */
+  sdkSource: string;
   limits: ResourceLimits;
   isolation: ProcessIsolation;
   parseAction(raw: JsonValue): ActionParseResult<Action>;

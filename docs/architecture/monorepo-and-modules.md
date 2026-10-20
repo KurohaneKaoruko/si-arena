@@ -28,7 +28,7 @@ games/
     src/
       manifest.ts        游戏信息、人数与限制配置
       rules/             纯规则逻辑
-      sdk/               类型、辅助函数、提示词
+      sdk/               玩家视图、基础动作 API、提示词
       renderer/          Vue 面板、Canvas 绘制与动画
     bots/official.js     官方源码
     README.md            游戏使用说明
@@ -80,7 +80,7 @@ TypeScript 的 paths、include、exclude 和 rootDir 按声明它们的配置文
 ```ts
 interface GameRules<State, Observation, Action, Event> {
   init(input: InitInput): State
-  observe(state: DeepReadonly<State>, playerId: string): Observation | null
+  observe(state: DeepReadonly<State>, playerId: string, context?: { events: DeepReadonly<Event[]> }): Observation | null
   parseAction(raw: JsonValue): ActionParseResult<Action>
   defaultAction(state: DeepReadonly<State>, playerId: string): Action
   step(
@@ -95,7 +95,7 @@ interface GameRules<State, Observation, Action, Event> {
 ```
 
 - `init` 接收固定玩家席位、游戏配置、种子，生成完整初始世界和随机数状态。
-- `observe` 返回玩家可见数据；已淘汰或本 tick 不行动时可返回 `null`。
+- `observe` 返回玩家可见数据；context.events 是上一 tick 结算的冻结事件数组，首 tick 为空，由游戏筛选公开信息；已淘汰或本 tick 不行动时可返回 `null`。
 - `parseAction` 验证不可信输入，生成规范动作；格式失败交由运行器记录诊断。
 - `defaultAction` 由游戏定义，不允许平台一律假设“向前移动”。
 - `step` 一次接收本 tick 所有有效动作与默认动作，生成确定性的下一世界和事件。
@@ -128,21 +128,25 @@ CLI 与 worker 通过 sandbox 的 `createSandboxExecutor` 共用延迟启动与�
 玩家代码采用单文件 ESM，同步导出默认函数：
 
 ```js
-export default function tick({ observation, Memory, sdk }) {
+export default function tick({ game, Memory }) {
   Memory.turns = (Memory.turns ?? 0) + 1
-  return { type: 'move', direction: 'right' }
+  game.self.move('right')
 }
 ```
 
-`observation` 是当 tick 数据，`Memory` 是本场上一成功 tick 的 JSON 数据，`sdk` 是游戏公开辅助接口。函数返回动作，包装器在同一资源预算中序列化动作和 Memory。
+`game` 是当前游戏定义的公开视图与基础动作方法，`Memory` 是本场上一成功 tick 的 JSON 数据。圈地仅提供自己的 move/idle；平台不规定地图、方向、角色或动作种类。每个游戏负责自己的命令收集、同单位/动作类型冲突规则及规范 JSON 格式，支持一个玩家控制多个角色；寻路、威胁评估和策略不属于正式 API。
 
-普通全局变量不跨 tick 保留。Memory 初始为 `{}`，每场独立，不能读取其他场次或其他用户的 Memory。上下文根对象只读，Memory 根引用不可替换；玩家通过增删改其属性更新记忆。普通局部变量重新赋值不会替换已注入的 Memory。
+可信 SDK 是沙箱内初始化的自包含 ESM，默认导出 `(observation, { submit, reject }) => game`。每 tick 在玩家执行前调用工厂，以冻结的独立 JSON 观察构建视图并初始化该游戏的默认意图。submit 只保存本 tick 候选规范动作，不跨进程、不立即推进世界；SDK 可在私有集合中累积多角色命令再提交集合。reject 锁定 INVALID_ACTION，catch 后不能恢复提交。动作方法必须使用当前 tick 的提交闭包，旧 tick 的调用不能修改当前候选命令。调用方法和最终序列化属于玩家 CPU；工厂与可信视图构建不计入玩家 CPU，仍受墙钟限制。工厂失败属于系统错误。
+
+入口返回 undefined，包装器在预算内一次性序列化收集到的动作与 Memory；不支持同时返回动作。任何非 undefined 返回值，包括 Promise，均为 ENTRYPOINT_ERROR。所有输出通过原有动作解析器后才提交。
+
+玩家接口 v2 沿用常驻执行：允许全局变量、闭包和 SDK 状态在本场成功 tick 间保留，受同一个常驻堆预算限制；任一执行失败后全部清空，模块重新加载。只有已提交 Memory 是恢复检查点。观察和 Memory 每 tick 独立注入，旧引用不会指向下一 tick 的输入。Memory 初始为 `{}`，每场独立，不能读取其他场次或其他用户的 Memory。上下文根对象只读，Memory 根引用不可替换；玩家通过增删改其属性更新记忆。普通局部变量重新赋值不会替换已注入的 Memory。
 
 Memory 根必须是普通对象或无原型对象，其可枚举数据由有限数字、字符串、布尔值、null、稠密数组和普通对象组成。拒绝循环、undefined、BigInt、函数、Symbol、非有限数字、访问器和 Date/Map 等实例，不允许 JSON.stringify 的静默丢弃或转换替代协议校验。相同对象被多处引用可按 JSON 值展开，展开后的实际字节数受限。
 
-入口同步返回动作；返回 Promise 为 `ENTRYPOINT_ERROR`。禁止静态 import、导出转发、动态 import 与顶层 await，模块加载器也拒绝导入。运行器不执行玩家排队的 Promise job，不提供定时器或网络。JS 语法先做 AST 约束检查，再用同版 QuickJS 的 compileOnly 模式校验，编译不执行顶层代码。[上游 compileOnly 接口](https://github.com/justjake/quickjs-emscripten/blob/main/packages/quickjs-emscripten-core/src/types.ts)
+入口同步结束且返回 undefined；返回动作对象、Promise 或其他值为 `ENTRYPOINT_ERROR`。禁止静态 import、导出转发、动态 import 与顶层 await，模块加载器也拒绝导入。运行器不执行玩家排队的 Promise job，不提供定时器或网络。JS 语法先做 AST 约束检查，再用同版 QuickJS 的 compileOnly 模式校验，编译不执行顶层代码。[上游 compileOnly 接口](https://github.com/justjake/quickjs-emscripten/blob/main/packages/quickjs-emscripten-core/src/types.ts)
 
-SDK 由类型定义和纯函数组成。运行时 SDK 在沙箱内部初始化，不把宿主对象、引擎引用或业务服务方法直接交给玩家。首版上传文件需要自包含，除默认入口外不开放任意模块导入；用户可在本地打包自己的辅助代码。
+SDK 定义游戏的公开事实、基础动作方法与私有意图收集器，不包含寻路或具体策略算法。运行时 SDK 在沙箱内部初始化，不把宿主对象、引擎引用或业务服务方法直接交给玩家。首版上传文件需要自包含，除默认入口外不开放任意模块导入；用户可在本地打包自己的辅助代码。
 
 游戏状态和观察使用同一组严格 JSON 值类型，必须通过游戏 schema。规则引擎检查初始 tick 为 0、每次 step 只推进 1 tick、终局参与者完整且名次与分数合法。每个游戏必须在自己的 maxTicks 内返回 result，越界或违反状态协议视为系统错误，不由平台猜测胜负。
 

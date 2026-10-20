@@ -157,7 +157,10 @@ export async function createReplaySession<
     frame,
     observation(completedTicks: number, playerId: string): Observation | null {
       const current = frame(completedTicks);
-      return game.rules.observe(current.previousState, playerId);
+      const inputTick = current.previousState.tick;
+      const events = inputTick === 0 ? freezeJson([] as Event[]) : frame(inputTick).events;
+      last = current;
+      return game.rules.observe(current.previousState, playerId, { events });
     },
     get cacheInfo() {
       return { count: cache.size, bytes: cachedBytes };

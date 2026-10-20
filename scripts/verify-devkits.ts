@@ -189,7 +189,7 @@ try {
     // Editing the starter and removing bot sources must not prevent replay or SDK consumption.
     await writeFile(
       join(project, "consumer.ts"),
-      `import type { ${registration.sdkInputType} as TickInput } from '${registration.packageName}/sdk'; import type { ${registration.sdkInputType} as LocalTickInput } from './sdk/index.d.ts'; export type Observation = TickInput['observation']; export type LocalObservation = LocalTickInput['observation'];`,
+      `import type { ${registration.sdkInputType} as TickInput } from '${registration.packageName}/sdk'; import type { ${registration.sdkInputType} as LocalTickInput } from './sdk/index.d.ts'; export type Observation = TickInput['game']; export type LocalObservation = LocalTickInput['game'];`,
     );
     await writeFile(
       join(project, "tsconfig.json"),

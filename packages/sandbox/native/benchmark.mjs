@@ -1,10 +1,10 @@
 import { cpus, platform, arch } from "node:os";
-import { initializeRuntime, runGuest } from "../dist/runtime.js";
+import { initializeRuntime, GuestSession } from "../dist/runtime.js";
 import { SandboxPlayer } from "../dist/index.js";
 import { resolveResourceLimits } from "@si-arena/protocol";
 
 const limits = resolveResourceLimits();
-const source = "export default ({Memory})=>{Memory.n=(Memory.n??0)+1;return {type:'idle'}}";
+const source = "export default ({Memory})=>{Memory.n=(Memory.n??0)+1;}";
 // Approximate the two 40x30 Paper grids, without importing a game into the sandbox package.
 const observation = {
   tick: 0,
@@ -13,8 +13,9 @@ const observation = {
 };
 await initializeRuntime();
 const samples = [];
+const session = new GuestSession();
 for (let tick = 0; tick < 105; tick++) {
-  const output = runGuest(
+  const output = session.execute(
     {
       matchId: "benchmark",
       playerId: "one",
@@ -26,7 +27,7 @@ for (let tick = 0; tick < 105; tick++) {
       limits,
       captureLogs: false,
     },
-    "export default {}",
+    "export default (o,{submit})=>{submit({type:'idle'});return o}",
     0,
     () => {},
     () => {},
@@ -35,10 +36,12 @@ for (let tick = 0; tick < 105; tick++) {
   if (!result.ok) throw new Error(JSON.stringify(result));
   if (tick >= 5) samples.push(output);
 }
+session.close();
 const player = await SandboxPlayer.create({
   matchId: "benchmark",
   playerId: "one",
   source,
+  sdkSource: "export default (o,{submit})=>{submit({type:'idle'});return o}",
   limits,
   isolation: { kind: "local" },
   defaultAction: { type: "idle" },
@@ -84,7 +87,7 @@ console.log(
           summary(samples.map((sample) => sample.profile[key])),
         ]),
       ),
-      note: "Local microbenchmark, 5 warm-up ticks excluded. playerCpu is the billed player CPU: source evaluation, entry call and action/Memory serialization, SDK calls included; the trusted sandbox setup is platform overhead and is not billed against the player budget. phases is the thread CPU breakdown of the in-process run and still contains that trusted setup. roundTripWall includes IPC, host validation, scheduling and teardown; it is not player CPU.",
+      note: "Local microbenchmark, 5 warm-up ticks excluded. playerCpu is the billed player CPU: source evaluation on initialization/rebuild only, entry call and action/Memory serialization, SDK calls included; the trusted sandbox setup is platform overhead and is not billed against the player budget. phases is the thread CPU breakdown of the in-process run and still contains that trusted setup. roundTripWall includes IPC, host validation, scheduling and teardown; it is not player CPU.",
     },
     null,
     2,

@@ -34,7 +34,7 @@ try {
       return SandboxPlayer.create({
         ...context,
         playerId: player.id,
-        source: player.official ? source : `export default ()=>({type:'idle'})`,
+        source: player.official ? source : `export default ()=>{}`,
         sdkSource: PAPER_SDK_SOURCE,
         isolation: { kind: "local" },
         parseAction: paperGame.rules.parseAction,

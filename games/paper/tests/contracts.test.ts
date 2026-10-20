@@ -6,6 +6,8 @@ import { paperManifest } from "@si-arena/game-paper";
 import { paperRules, parsePaperState } from "@si-arena/game-paper/rules";
 import { actions, deepFreeze, idle, init, move, outside, stepFrozen, world } from "./helpers";
 import { required, eventOf } from "./helpers";
+import { paperGame } from "@si-arena/game-paper/game";
+import { cloneJson } from "@si-arena/protocol";
 
 const validInit = () => ({
   seed: 2,
@@ -14,6 +16,60 @@ const validInit = () => ({
     { id: "alpha", slot: 0 },
     { id: "beta", slot: 1 },
   ],
+});
+
+test("public observations validate independent schemas, identity, grids and previous event data", () => {
+  const initial = init();
+  const output = stepFrozen(initial, actions(move("right")));
+  const raw = required(paperRules.observe(output.nextState, "alpha", { events: output.events }));
+  const context = {
+    config: { ...paperManifest.config },
+    players: initial.players,
+    playerId: "alpha",
+    tick: 1,
+  };
+  expect(paperGame.parseObservation(raw, context)).toEqual(raw);
+  expect(raw.events).toEqual(output.events);
+  raw.events.length = 0;
+  expect(output.events.length).toBeGreaterThan(0);
+  const corruptions: Array<(copy: typeof raw) => void> = [
+    (c) => {
+      c.selfSlot = 1;
+    },
+    (c) => {
+      c.players[0].id = "other";
+    },
+    (c) => {
+      c.tick = 2;
+    },
+    (c) => {
+      c.board.territory[0] = 99;
+    },
+    (c) => {
+      c.players[0].position.x = -1;
+    },
+    (c) => {
+      c.events = [{ type: "move", playerId: "unknown", from: { x: 1, y: 1 }, to: { x: 2, y: 1 } }];
+    },
+    (c) => {
+      c.events = [{ type: "capture", playerId: "alpha", cells: [0, 0] }];
+    },
+  ];
+  for (const corrupt of corruptions) {
+    const copy = cloneJson(raw);
+    corrupt(copy);
+    expect(() => paperGame.parseObservation(copy, context)).toThrow();
+  }
+  expect(() => paperGame.parseObservation({ ...raw, rngState: 1 }, context)).toThrow();
+  expect(() =>
+    paperGame.parseObservation(
+      { ...raw, players: raw.players.map((p) => ({ ...p, alive: true })) },
+      context,
+    ),
+  ).toThrow();
+  expect(() =>
+    paperGame.parseObservation({ ...raw, tick: 0, events: output.events }, { ...context, tick: 0 }),
+  ).toThrow();
 });
 
 test("initial state has fixed seats, symmetric homes and seeded xorshift32 placement", () => {
@@ -240,14 +296,36 @@ test("observations are detached JSON copies with fixed self identity and no priv
   expect(first.selfId).toBe("alpha");
   expect(JSON.parse(JSON.stringify(first))).toStrictEqual(first);
   required(first.players[1].position).x = 0;
-  first.territory[0] = 1;
-  first.trails[0] = 0;
-  expect(second.players).toStrictEqual(state.players);
+  first.board.territory[0] = 1;
+  first.board.trails[0] = 0;
+  expect(second.players[1].position).toStrictEqual(state.players[1].position);
+  expect(first).not.toHaveProperty("rngState");
+  expect(first.players[0]).not.toHaveProperty("alive");
   expect(state.territory[0]).toBe(-1);
-  expect(second.trails[0]).toBe(-1);
+  expect(second.board.trails[0]).toBe(-1);
   expect(() => paperRules.observe(state, "nobody")).toThrow(/Unknown/);
   expect(() => paperRules.defaultAction(state, "nobody")).toThrow(/Unknown/);
   expect(paperRules.defaultAction(state, "alpha")).toStrictEqual(idle());
+});
+
+test("cached frozen grids stay detached and never admit invalid immutable or changed mutable grids", () => {
+  const frozen = deepFreeze(init());
+  const first = parsePaperState(frozen);
+  const second = parsePaperState(frozen);
+  expect(first).toStrictEqual(second);
+  first.territory[0] = 1;
+  expect(second.territory[0]).toBe(-1);
+  expect(parsePaperState(frozen).territory[0]).toBe(-1);
+  const invalid = init();
+  invalid.territory[0] = 99;
+  Object.freeze(invalid.territory);
+  expect(() => parsePaperState(invalid)).toThrow();
+  const mutable = init();
+  parsePaperState(mutable);
+  mutable.trails[0] = 99;
+  expect(() => parsePaperState(mutable)).toThrow();
+  const inconsistent = { ...frozen, players: frozen.players.map((p) => ({ ...p, id: "same" })) };
+  expect(() => parsePaperState(inconsistent)).toThrow();
 });
 
 test("step requires every active player's canonical action and rejects extras", () => {

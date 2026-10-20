@@ -36,7 +36,11 @@ export type ActionParseResult<Action> =
 
 export interface GameRules<State, Observation, Action, Event> {
   init(input: InitInput): State;
-  observe(state: DeepReadonly<State>, playerId: string): Observation | null;
+  observe(
+    state: DeepReadonly<State>,
+    playerId: string,
+    context?: { events: DeepReadonly<Event[]> },
+  ): Observation | null;
   parseAction(raw: JsonValue): ActionParseResult<Action>;
   defaultAction(state: DeepReadonly<State>, playerId: string): Action;
   step(

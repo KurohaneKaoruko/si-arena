@@ -1,0 +1,235 @@
+# 玩家脚本执行性能调研与优化方案
+
+调研日期：2026-10-20。代码基线：`af8bab107f3d58107541b3c713027d8ecb923d8d`。
+
+实施更新：后续讨论接受了易失全局缓存，已将默认执行调整为每场常驻 QuickJS、失败重建、仅 Memory 恢复（paper@0.2.0 / 玩家接口 v2）。下文保留初次调研与当时方案，现行契约见[沙箱设计](../architecture/sandbox.md)。基准脚本现对比冷 Runtime 与常驻 Runtime；原始 JSON 保留升级前结果。
+
+后续基础动作 API 也合并进同一未发布的 0.2.0，当前契约见[API 实施记录](player-api-implementation.md)。本文与旧脚本保留为内部阶段的调研证据，旧入口/SDK 脚本不直接适用于当前 API。
+
+## 结论与决策
+
+当前慢的问题成立，但不是“每 tick 启动 Node”导致的。子进程和 WASM 实例已经在单场内复用；每 tick 重建的是 QuickJS Runtime/Context，并重新解析包装器、SDK 和玩家模块。
+
+优先优化 **宿主的数据校验与复制、沙箱的 Memory 序列化、可信代码的重复编译**。保留每玩家独立进程、每 tick 全新 Runtime、仅 JSON Memory 延续状态和线上/本地共用执行器。当前证据不足以支持立即更换 V8 或原生 QuickJS，也不足以承诺整场提速某个倍数。
+
+本次交付是调研、可复现基准和实施设计；未修改生产执行链路、预算、玩家协议或发行。下文的优化均是后续实现方案，现行行为仍以架构文档和实际代码为准。
+
+## 1. 实际执行链路
+
+```text
+worker / CLI
+  └─ engine.runMatch 持有权威世界
+      ├─ 生成双方观察、校验并复制
+      ├─ 同时分派双方 SandboxPlayer.execute
+      │   └─ 每位玩家独立且在本场复用的 Node 子进程
+      │       └─ 每 tick：新 Runtime/Context
+      │           → 可信 BOOTSTRAP + 输入 + SDK
+      │           → 玩家模块解析/初始化 + 入口 + 严格序列化
+      │           → 结果、日志 + 销毁 Runtime/Context
+      └─ 收齐动作 → 一次 rules.step → 世界校验 → 回放写入
+```
+
+关键证据：
+
+| 位置 | 当前行为及性能影响 |
+| --- | --- |
+| [runtime.ts](../../packages/sandbox/src/runtime.ts) | `initializeRuntime` 初始化 WASM；`withRuntime` 每 tick 新建并销毁 Runtime/Context；`runGuest` 每次 `evalCode` 包装器、输入表达式、SDK、玩家模块 |
+| [source.ts](../../packages/sandbox/src/source.ts)、[runtime.ts](../../packages/sandbox/src/runtime.ts) | 合法源码的 AST 检查已有进程内单源码缓存；重复 AST 解析不是正常 tick 的主要瓶颈 |
+| [player.ts](../../packages/sandbox/src/player.ts)、[framing.ts](../../packages/sandbox/src/framing.ts) | 每 tick 重发 source、sdkSource、limits；父进程先 `JSON.stringify` 检查信封大小，发送层再次编码 |
+| [runner.ts](../../packages/engine/src/runner.ts) | 双方通过 `Promise.allSettled` 执行，已经并行；观察在分派前串行生成，世界在收齐后串行结算 |
+| [json-data.ts](../../packages/protocol/src/json-data.ts) | `cloneJson = JSON.parse(stringifyJson(...))`；严格编码逐属性读取描述符、检查、生成片段并拼接，再重新解析 |
+| [game.ts](../../games/paper/src/game.ts)、[规则](../../games/paper/src/rules/index.ts) | observe、parseObservation、step、parseState 多次遍历完整棋盘；parseObservation 又调用 parseState |
+| [bootstrap.ts](../../packages/sandbox/src/bootstrap.ts) | Memory、动作与日志在 QuickJS 内严格编码；UTF-8 字节计数逐字符调用 `Reflect.apply(charCodeAt, text, [i])`，产生大量小数组与调用 |
+| [local-game.ts](../../packages/cli/src/local-game.ts) | 本地准备阶段按玩家顺序启动独立进程做语法校验，比赛阶段再启动双方进程；批量比赛源码读取和校验已有批次复用 |
+
+仅观察路径，每位玩家每 tick 就经过引擎解析前 `cloneJson`、解析后 `cloneJson`、沙箱入口 `toJsonValue` 三次完整严格 JSON 复制，另有游戏解析器的数组检查/复制。世界 `checkedState` 还有解析前后两次完整复制。这个成本不能仅靠优化 QuickJS 消除。
+
+## 2. 实测方法与结果
+
+### 2.1 环境和可复现性
+
+Apple M4，10 个逻辑 CPU，macOS arm64，Node.js 26.11.1，pnpm 12.14.0。沙箱固定 quickjs-emscripten 0.32.0、Bellard QuickJS 2025-09-13、Emscripten 5.0.1；自定义分配与栈失败标记保留。当前 WASM 已使用 `-O2 -flto`，不是未优化的 debug 构建。
+
+新增 [基准脚本](player-execution-benchmark.mjs) 和 [原始结果](player-execution-baseline.json)。从仓库根执行：
+
+```sh
+pnpm build:packages
+node docs/research/player-execution-benchmark.mjs > /tmp/arena-execution-benchmark.json
+```
+
+脚本使用构建产物和内部阶段诊断，属于开发研究工具，不是公开包导入方式。它只在 QuickJS 中执行玩家源码，不在宿主求值源码；不访问数据库、不创建排位、不保存玩家代码历史。A/B 使用临时目录里的可信运行器副本，结束后清理，不修改 dist。
+
+单进程微基准：10 次预热、200 次采样；输入表达式实验 300 对交替顺序采样。观察为真实初始 Paper 观察，7,477 字节，SDK 3,225 字节，官方 bot 17,033 字节。完整比赛每场 600 tick、每种场景 3 次、固定 seed 42，使用有界内存回放，逐场重新重演核验摘要。日志关闭，采用默认 20ms 玩家 CPU 预算。
+
+这是开发机样本，机器后台负载没有做实验室级隔离；没有低配机器、Linux cgroup 或生产队列测量。脚本结果可用于定位和 A/B，不是生产 SLA。终态摘要一致只证明这些样本的重演一致，不证明所有策略或安全边界已经验证。
+
+### 2.2 完整比赛
+
+下表取最后一轮原始记录的三个样本；中位数是三场总耗时的中位数，不是生产 P95。
+
+| 600 tick 场景 | 墙钟中位数 | 样本范围 | 父进程线程 CPU 中位数 |
+| --- | ---: | ---: | ---: |
+| 纯引擎，可信测试适配器直接返回 idle | 1.73s | 1.72–1.74s | 1.73s |
+| 双方空脚本，真实沙箱和 Paper SDK | 3.00s | 2.96–3.49s | 2.24s |
+| 双方官方 bot，真实沙箱和 Paper SDK | 4.11s | 4.07–4.15s | 2.38s |
+
+三组共 9 场全部完成，沙箱场景无执行错误，重演摘要均匹配。同一场景三次终态摘要相同。纯引擎场景只用于测量引擎成本，不是允许不可信代码直接执行的产品方案。
+
+双方官方 bot 的全部玩家计费 CPU 合计约 1.77–1.80 CPU 秒；每个玩家调用平均约 1.47–1.50ms。父进程 CPU 不包含玩家子进程，不能相加当作墙钟，也不能把“空脚本 3 秒减去纯引擎 1.73 秒”解释成纯 IPC 开销。
+
+每玩家冷启动约 32–49ms，双方同时启动。它值得在短局和高频重开中关注，但解释不了数秒甚至数十秒的长局。
+
+官方对局的回放读取/复制与完整重演验证另需约 1.82–2.13s，未计入比赛墙钟。用户感受到的等待还可能包含语法校验、gzip、排队、诊断收集、回放验证和页面绘制。真实 CLI 另做过一次官方对战冒烟，600 tick、无执行错误；该次与基准短暂共享机器负载，不作为性能对照。
+
+### 2.3 沙箱阶段微基准
+
+以下阶段使用线程 CPU，单位 μs，列出均值；完整值和 P95 见原始 JSON。官方 bot 微基准反复从空 Memory 和初始观察开始，每次都重新规划，因此不是实际整局平均策略成本。
+
+| 场景 | Runtime/Context | 包装与输入 | SDK | 玩家模块加载 | 入口与序列化 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 空脚本、空 Memory | 70 | 569 | 147 | 15 | 22 |
+| 官方 bot、初始观察 | 67 | 560 | 139 | 421 | 2,117 |
+| 空脚本、60KiB 字符串 Memory | 79 | 1,246 | 153 | 14 | 7,388 |
+| 空脚本、240KiB 注释源码 | 56 | 525 | 130 | 1,414 | 17 |
+
+Runtime 创建本身较小。值得缓存的是可信代码的编译产物；仅复用 Runtime 去掉几十微秒，收益与状态污染风险不成比例。大源码的反复解析也确有成本，不过“大段注释”只测试扫描长度，不能代表复杂 AST。
+
+### 2.4 受控实验
+
+| 改动/对照 | 原实现均值 | 对照均值 | 结论 |
+| --- | ---: | ---: | --- |
+| 输入从 `evalCode(JSON.parse(...))` 改成 `newString` + 捕获的 JSON.parse | 792μs | 763μs | 此样本约改善 4%，可以简化输入路径，不能作为核心提速方案 |
+| UTF-8 计数改用预绑定的 charCodeAt，空 Memory | 783μs | 788μs | 无可见收益 |
+| 同上，60KiB 字符串 Memory | 9,307μs | 5,779μs | 整次沙箱调用减少约 38%，输出逐样本一致；热点在逐字符宿主式调用模式 |
+| 单次真实观察严格 clone 与普通 JSON 往返下界对比 | 291μs | 19μs | 严格检查成本显著；普通 JSON 会执行 getter/toJSON 并改变拒绝规则，不能直接替换 |
+
+第三行只修改可信包装器：初始化时捕获 `Function.prototype.call.bind(String.prototype.charCodeAt)`，计数循环直接调用绑定函数，避免每字符创建参数数组。它没有实现完整优化，也没有通过全部恶意原型、Unicode 和超限测试，不能直接据此上线。
+
+额外对纯引擎 600 tick 做 Node CPU profile：样本约 2.08 秒，协议 JSON 的 `visit`、`stringifyJson`、`emit`、`cloneJson`、`utf8Bytes` 自身采样合计约 58%，游戏 `readArray` 约 30%。这是单独带 profiler 的样本，与表中无 profiler 的时间不直接比较。它支持“重复数据处理是宿主热点”的判断，不能解释成官方沙箱整局的百分比分布。
+
+复现纯宿主 profile（不跑微基准或沙箱）：
+
+```sh
+node --cpu-prof --cpu-prof-dir=/tmp docs/research/player-execution-benchmark.mjs --host-profile
+```
+
+## 3. 推荐目标架构
+
+```text
+父比赛运行器：世界 + 已提交 Memory + 规则 + 回放
+  ├─ 一次绑定：源码、可信 SDK、冻结限额、完整身份
+  │     ↓ 有界 IPC，校验并确认 bound
+  └─ 每 tick：身份 + 规范观察 + 已提交 Memory + 日志剩余额度
+        ↓
+每玩家独立执行进程
+  ├─ 常驻：WASM、可信编译缓存、当前比赛不可变配置
+  └─ 每 tick 全新 Runtime/Context
+       加载可信编译产物 → 注入纯数据
+       → 计费玩家模块初始化/入口/输出序列化
+       → 返回候选结果 → 销毁
+        ↓
+父进程校验动作/Memory → 原子提交二者 → 收齐双方后 step
+```
+
+### 3.1 P1：先优化宿主校验与复制
+
+实施位置：`protocol/json-data.ts`、`engine/runner.ts`、`engine/validation.ts`、Paper 解析器。
+
+1. 将 `cloneJson` 改为一次描述符遍历完成严格校验、精确编码字节计数和新对象构造，避免完整文本拼接后再 `JSON.parse`。保留所有现有拒绝语义，包括隐藏属性、访问器、符号键、额外数组属性、稀疏数组、循环、非有限数和 -0 归一化。字符串转义和数值编码仍以 JSON 的实际编码计算预算。使用数据属性写入，确保 `__proto__` 不触发原型赋值。
+2. 明确世界、观察的所有权：规则产出的值经一次规范快照建立边界，解析器验证该独立快照，引擎持有冻结结果；当前世界不能回传给可修改它的钩子。审计解析器是否会保留引用、返回别名或修改输入，再删除重复快照。不能仅因 TypeScript 类型或 `Object.isFrozen` 就跳过边界检查，也不增加调用方可随意声明 trusted 的开关。
+3. 游戏结构校验保留维度、席位、tick 和世界不变量；让已经建立的规范快照在当前 tick 内复用，减少 observe → parseObservation → parseState 对两份网格的重复完整验证。需要调整解析器契约时同步更新 `GameDefinition` 和游戏测试，通用引擎不出现 Paper 分支。
+4. 小动作、错误和回放记录上的零散复制不是第一优先；先消除 2,400 格数组上的重复遍历。禁止用关闭整个状态校验的方式提速。
+
+验收重点：输入输出完全分离、嵌套数据不能被下一 tick 或 renderer 改写、JSON 接受/拒绝集合与字节边界一致、原型属性安全、碰撞与重演一致。单项 helper 的微基准改善不能替代整局改善。
+
+### 3.2 P1：降低沙箱序列化成本
+
+实施位置：`sandbox/bootstrap.ts`。
+
+第一步采用受控实验验证过的预绑定字符访问，所有 intrinsics 在玩家代码加载前捕获；保持计数、截断和 strict JSON 算法一致。继续检查 `size(text)` 对相同日志前缀的重复扫描，使用局部累计字节数，避免长日志中的反复扫描。
+
+第二步用不同 Memory 形状验证剩余热点：长字符串、稠密数字数组、深层对象、中文、emoji、孤立代理项和大量转义字符。不要将 `JSON.stringify(玩家对象)` 当作严格编码器；它会调用玩家 getter/toJSON。也不要把玩家对象 dump 到宿主逐属性处理。完整受控序列化仍在沙箱内、计入玩家预算，CPU/堆/栈失败标记仍不可清除。
+
+如 JS 级优化后仍有显著成本，再考虑只对已生成的受限字符串提供原生 UTF-8 长度/截断绑定；增加一个 C/WASM ABI 也要维护失败标记与限额。先以小改动实测，不先实现一套新的原生 JSON 库。
+
+### 3.3 P2：常量一次绑定，IPC 一次编码
+
+实施位置：`sandbox/player.ts`、`process.ts`、`child.ts`、`framing.ts` 和内部协议。
+
+在 WASM ready 后增加当前比赛绑定阶段，携带 `executionId`、`matchId`、`playerId`、source、sdkSource、完整 resolvedLimits、captureLogs，校验成功才返回 bound。每 tick 只发送变化数据。进程重建必须重新绑定；初次绑定失败属于系统失败。游戏预算不能由客户端扩大，cgroup 必须在 WASM 初始化前建立。
+
+序列化帧时生成一次 Buffer，同时完成字节检查、长度前缀和队列上限检查，避免父层预编码和 channel 二次编码。接收侧仍先查长度再解析，不减少身份、代次、tick 或迟到消息校验。单进程仍只能有一个 pending tick。
+
+父进程继续持有权威 Memory，每次向全新环境传入已提交值。只有动作、Memory、资源状态全部通过时才提交；不能为了省 IPC 把权威 Memory 迁到可能被杀死的子进程。
+
+默认不做跨比赛玩家源码缓存或跨比赛进程复用。若冷启动以后成为主要成本，可以维护受容量约束、尚未接触玩家数据的预热进程，分配一次后在比赛结束销毁；当前样本中该工作优先级低。
+
+### 3.4 P2：可信包装器与 SDK 字节码缓存
+
+新 Runtime 下不能直接复用前一 Runtime 的 QuickJS handle、函数或 module namespace。正确的缓存对象是宿主持有的字节序列，每个新 Runtime 反序列化并重新求值。
+
+当前 0.32.0 TS 接口提供 `compileOnly`，但没有可直接使用的完整“导出字节码 → 新 Runtime 读取 → 求值”公开 API；compileOnly 返回的 handle 不是跨 Runtime 缓存。[固定版 TS 源码](https://github.com/justjake/quickjs-emscripten/blob/v0.32.0/packages/quickjs-emscripten-core/src/context.ts) 和 [固定版 C 接口](https://raw.githubusercontent.com/justjake/quickjs-emscripten/v0.32.0/c/interface.c)可核查该边界。
+
+方案是在现有原生构建中增加最小编译、写出、读入和求值绑定。先只缓存 BOOTSTRAP、SDK：这些阶段本来就不计玩家 CPU，跨 tick 节省编译不会改变玩家顶层执行的计费定义。初始化仍在新环境里执行，可信 SDK 初始化失败仍是系统失败，输入 JSON 不写进缓存。
+
+缓存按引擎修订、原生补丁/ABI、编译选项、包装器摘要和 SDK 摘要区分，只存当前发行所需的有限产物，不以任意源码无限增长。反序列化分配仍受 Runtime 堆/栈限制；宿主字节缓存占用纳入进程容量。损坏、错版本或来源不明的缓存拒绝使用。
+
+QuickJS 官方明确指出字节码绑定具体版本，读取时不执行安全检查，因此只接收可信构建/可信编译器生成的缓存；不接收玩家上传字节码或回放携带的代码。[官方说明](https://bellard.org/quickjs/quickjs.html#Script-evaluation)
+
+**玩家源码字节码缓存后置。** 当前玩家源码编译/模块初始化均计 CPU；缓存源码编译会改变接近 20ms 边界的策略能否成功，而且不同缓存命中状态不能产生不同的计分规则。要做时按新发行统一定义 CPU 计量，冷编译必须有独立、受限且明确分类的准备阶段，顶层副作用每 tick 重跑；不能用“第一次实测编译耗时以后固定扣回”冒充公平计费。缓存生命周期至多当前比赛和当前源码，不增加玩家历史版本。
+
+## 4. 其他架构路线的取舍
+
+| 路线 | 能改善什么 | 主要代价/结论 |
+| --- | --- | --- |
+| 原生 QuickJS 独立 helper | 可能降低解释器与 JS/WASM 边界开销；保留全新 Runtime 和 Memory 模型 | 本次未实测速度。失去 WASM 内存隔离层，需强化进程/系统调用边界；维护 OS/架构二进制和相同失败标记，开发包分发更复杂。P1/P2 后若纯玩家计算仍主导，再做独立原型 |
+| 每玩家独立进程内的 V8/isolated-vm | 可能提高计算密集脚本吞吐 | 新鲜 Context/Isolate 每 tick 不一定获得充分 JIT 热身；共享 Isolate 下的堆、后台 JIT/GC 与计费需要重设契约。isolated-vm 的内存限制是指导值，严重错误仍需结束进程，不能取消外部 OS 限制 |
+| 长寿命玩家 VM，只调用入口 | 避免重新加载，允许 JIT 热身 | 不采用。闭包、原型、模块级变量、Promise 队列都成为隐式 Memory；执行失败后回滚 JSON 不能回滚这些状态，重启后行为也不同，直接违背现行契约 |
+| 复用 Runtime、只换 Context | 节省一小部分创建开销 | 不优先。同 Runtime 共用堆/资源与任务生命周期，可能残留引用和预算状态；本次测得 Runtime 创建很小，收益不足以抵消额外证明成本 |
+| Worker threads 替代独立玩家进程 | 降低进程启动/通信成本的可能性 | 不采用为默认边界。线程共享进程失效域，无法保留当前每玩家独立 cgroup 进程内存隔离，Node resourceLimits 也不覆盖所有外部内存 |
+| WASM 全内存快照/恢复 | 理论上省初始化 | 不优先。Emscripten 的函数表、全局状态、JS 回调注册、内存增长与句柄映射不等于线性内存；复制内存不能证明恢复了整个执行器，工程复杂度明显高于字节码缓存 |
+| 减少 tick、跨 tick 批处理动作 | 直接缩短总运行时间 | 不采用。下一 tick 观察依赖双方动作统一结算，不能预先调用；减少 tick 或降低决策频率会改玩法与策略协议 |
+
+isolated-vm 当前官方仓库标注维护模式，并说明软内存限制及灾难性错误处理；这使它更适合作为带完整外部进程约束的候选原型，不能据产品宣传直接替换现有实现。[项目与 API](https://github.com/laverdet/isolated-vm)
+
+Node 官方说明 Worker 的 resourceLimits 只约束 JS 引擎，不包含 ArrayBuffer 等外部数据，进程仍可能因全局内存耗尽终止。[Worker 文档](https://nodejs.org/api/worker_threads.html#new-workerfilename-options) Node vm 官方也明确声明它不是安全机制，不能用来直接执行不可信选手代码。[vm 文档](https://nodejs.org/api/vm.html)
+
+单纯把 `-O2` 改成 `-O3`、升级 QuickJS-NG 或使用 qjsc 都不是已有性能结果。qjsc 编译产物仍包含 QuickJS 字节码及运行时，不会自动获得 V8 式 JIT。编译参数实验应固定上游与工具链，单独比较计算、序列化、冷启动、RSS 和资源失败路径。[QuickJS 编译器说明](https://bellard.org/quickjs/quickjs.html#Executable-generation)、[Emscripten 优化说明](https://emscripten.org/docs/optimizing/Optimizing-Code.html)
+
+## 5. 低配机器与执行预算
+
+固定 CPU 时间不是跨硬件固定指令数。低配机器执行同一段策略也会消耗更多 CPU 时间；去掉不计费的可信启动开销能缩短等待，却不能保证所有策略仍在 20ms 内成功。
+
+600 tick 双方都消耗完整 20ms 时，仅玩家部分就需要约 **24 CPU 秒**；理想双核并行约 12 秒，单核约 24 秒，还不包括规则和数据处理。如果双方每 tick 都触发 500ms 墙钟看门狗，600 tick 的等待量级可达到约 **300 秒**，重建和宿主开销还会增加。当前协议要求失败后下一 tick 继续调用，不能暗中跳过后续调用或提前替换策略来缩短比赛。
+
+因此还需按实际现象区分：
+
+- 固定开销主导：按 P1/P2 优化，收益对弱 CPU 同样有价值。
+- 玩家 CPU 主导：优化策略/SDK 算法，或在评估新引擎后发布新发行；SDK 的调用计算也属于玩家 CPU，不能移到宿主免计费。
+- 大量 CPU_LIMIT：统计每类错误和失败 tick，检查是否在反复丢弃 Memory 后重做昂贵规划，避免将退化误判成进程启动慢。
+- 大量 EXECUTION_TIMEOUT/EXECUTOR_ERROR：检查进程重建、主机超售和事件循环延迟；不能盲目抬高所有人的 cpuMs/wallMs。
+- 排队主导：调低单机并发或增加 worker 容量，而不是给同一 tick 启动更多线程。圈地双玩家已并行，worker 默认 2 场；低核数/内存机器不一定适合提高并发。
+
+保持正式预算不变。CLI 当前没有已实现的通用 `--concurrency` 或预算覆盖参数，不把设计文档里的能力当作可用命令。后续若增加本地预算诊断功能，应显式标记与发行的差异，仍共用沙箱；不引入平台试跑或线上/本地两套执行引擎。
+
+## 6. 分阶段交付与验收
+
+| 顺序 | 交付范围 | 放行条件 |
+| --- | --- | --- |
+| 1 | 固化本基准；在真实低配设备补跑；优化严格 clone 与重复棋盘遍历 | JSON/身份/世界不变量和引用隔离测试通过，同输入动作与重演摘要一致；完整比赛确有收益 |
+| 2 | 预绑定字符访问、日志字节累计 | ASCII/中文/emoji/孤立代理项/转义边界、恶意原型/getter、失败标记与旧 Memory 保留验证通过；大 Memory 明显改善、小 Memory 无显著退化 |
+| 3 | 一次绑定配置、单次 IPC 编码 | 超长/分片帧、背压上限、身份不匹配、迟到日志/结果、取消和重建全部通过；重建恢复最近提交 Memory |
+| 4 | BOOTSTRAP/SDK 字节码缓存和固定 ABI | 新 Runtime 仍无跨 tick 状态；缓存错版/损坏拒绝；可信初始化错误仍归系统；堆/栈/CPU/墙钟失败路径一致 |
+| 5 | 只有剩余瓶颈证明需要时比较原生 QuickJS/V8 | Linux 生产和本地工具跑同组策略及失败语料；量化额外打包/隔离/计费成本后再决策 |
+
+性能评估矩阵：小脚本/官方 bot/近源码上限/Memory 0、4、32、60KiB，不同 Memory 形状；日志关闭/接近上限；单场与双场并发；冷启动与热 tick；至少 Linux x64 与现有 macOS arm64，再补真实低配设备。记录墙钟、父/子线程 CPU、RSS/cgroup 峰值、每类错误、重建次数和回放核验耗时。不要用多核高负载或人为 sleep 冒充低配 CPU 实测。
+
+性能目标作为实现门槛：以同机同条件交替重复对照，P1/P2 合并后争取空脚本完整比赛墙钟降低至少 30%，官方对局降低至少 20%；大字符串 Memory 单次调用至少降低 30%，小 Memory 无持续超过 5% 的退化。**这些是后续验收目标，不是已经实现的结果，也不保证不同 Memory 形状同幅度改善。** 未达标则按阶段数据重新排序，避免为微基准数字扩大系统复杂度。
+
+每个生产代码变更运行受影响测试及 `pnpm check`。涉及构建、公开 exports、WASM/CLI 或开发包时再执行 `pnpm build`、`pnpm test:artifacts`；Linux cgroup/OOM 必须在受支持环境单独验证，macOS 不能替代。
+
+发布时区分游戏发行与玩家协议：执行成本/计费变化可能改变成功与失败边界，应固定新执行器组合并发布新的游戏发行，保留旧规则回放能力；只在玩家接口不兼容时递增 botProtocolVersion。同步沙箱、资源、分发文档及 SDK/提示词中相关描述。当前 sandbox README 仍将 SDK 初始化写为计费，与实现和资源设计不一致，实施时一并纠正，不能依据该旧句子改变实际计费。
+
+## 7. 本次交付验证
+
+已执行 `pnpm build:packages`、原有 sandbox benchmark、新增完整基准及 A/B 实验、真实 CLI 冒烟、纯宿主 CPU profile；新增脚本通过 Node 语法检查，文档中的 27 个本地链接均可解析。`pnpm check` 通过：45 个测试文件通过、4 个跳过，365 项测试通过、35 项按环境条件跳过；lint 保留 3 条既有的 web 副作用导入警告。没有执行全量生产 `pnpm build`、`pnpm test:artifacts`、低配硬件或 Linux cgroup 验证。本次没有生产构建/exports/执行行为变更。

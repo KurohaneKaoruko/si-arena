@@ -145,14 +145,19 @@ if (result?.completedTicks !== 600 || result.players.some(p => p.rank !== 1 || p
   throw new Error("Standalone match returned an unexpected result");
 }
 const bot = await SandboxPlayer.create({
-  matchId: "artifact", playerId: "alpha", source: "export default ({Memory})=>{Memory.n=(Memory.n??0)+1;return {type:'idle'}}",
+  matchId: "artifact", playerId: "alpha", source: "let calls=0;export default ({game,Memory})=>{calls++;Memory.n=(Memory.n??0)+1;Memory.calls=calls;game.act()}",
+  sdkSource: "export default (o,{submit})=>{submit({type:'idle'});return {act(){submit({type:o.fail?'invalid':'idle'})}}}",
   limits: resolveResourceLimits({cpuMs:100}), isolation: {kind:"local"},
   parseAction: paperRules.parseAction, defaultAction: {type:"idle"},
 });
 try {
-  const first = await bot.execute(0, paperRules.observe(state, "alpha"));
+  const first = await bot.execute(0, {});
   const second = await bot.execute(1, {});
-  if (!first.ok || !second.ok || second.memory.n !== 2) throw new Error("Packed sandbox failed");
+  const failed = await bot.execute(2, {fail:true});
+  const recovered = await bot.execute(3, {});
+  if (!first.ok || !second.ok || second.memory.n !== 2 || second.memory.calls !== 2 || failed.ok ||
+      failed.memory.n !== 2 || !recovered.ok || recovered.memory.n !== 3 || recovered.memory.calls !== 1)
+    throw new Error("Packed persistent sandbox or checkpoint recovery failed");
 } finally { await bot.close(); }
 const sink = new MemoryReplaySink<PaperState,PaperAction>();
 const played = await runMatch({
@@ -160,13 +165,20 @@ const played = await runMatch({
   players:[{id:"alpha",slot:0,name:"Alpha",official:false},{id:"beta",slot:1,name:"Beta",official:true}],
   async createExecutor(player,context) {
     return createSandboxExecutor({...context,playerId:player.id,
-      source:player.id==="alpha"?"export default ()=>({type:'move',direction:'left'})":"export default ()=>({type:'idle'})",
+      source:player.id==="alpha"?"export default ({game})=>{game.self.move('left')}":"export default ()=>{}",
+      sdkSource:PAPER_SDK_SOURCE,
       isolation:{kind:"local"},parseAction:paperRules.parseAction,
     });
   },
 });
 const replayed = await replayMatch(sink.replay,paperGame);
 if(played.result.reason!=="tick-limit" || replayed.finalStateHash!==played.finalStateHash)throw new Error("Packed engine/replay mismatch");
+const legacyReplay = sink.replay;
+legacyReplay.game.release = "paper@0.1.0";
+legacyReplay.game.botProtocolVersion = 1;
+let rejectedLegacy = false;
+try { await registration.verify(legacyReplay); } catch { rejectedLegacy = true; }
+if(!rejectedLegacy)throw new Error("Unregistered legacy release was accepted");
 const playback = await createReplaySession(sink.replay,paperGame);
 if(playback.frame(played.result.completedTicks).state.tick!==played.result.completedTicks || playback.frame(0).record!==null)throw new Error("Packed playback seek failed");
 `,
@@ -211,9 +223,9 @@ export default [defineLocalGame({game:paperGame,sdkSource:PAPER_SDK_SOURCE,offic
   );
   await writeFile(
     join(temporary, "bot.js"),
-    `export default ({Memory})=>{Memory.n=(Memory.n??0)+1;console.log(Memory.n);return {type:"move",direction:"left"}}`,
+    "export default ({game,Memory})=>{Memory.n=(Memory.n??0)+1;console.log(Memory.n);game.self.move('left')}",
   );
-  await writeFile(join(temporary, "opponent.js"), `export default ()=>({type:"idle"})`);
+  await writeFile(join(temporary, "opponent.js"), "export default ()=>{}");
   const cliRun = runNode(
     [
       join(cliDirectory, "dist/main.js"),

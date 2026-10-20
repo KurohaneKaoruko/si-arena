@@ -26,13 +26,6 @@ const DELTAS = [
   [0, 1],
   [-1, 0],
 ];
-/** The same steps, keyed by the direction name of an action. */
-const DIRECTION_DELTA = new Map([
-  ["up", DELTAS[0]],
-  ["right", DELTAS[1]],
-  ["down", DELTAS[2]],
-  ["left", DELTAS[3]],
-]);
 /** Side lengths a sweep may use; the planner scores every combination. */
 const SWEEP_SIZES = [1, 2, 3, 4, 6, 8, 10, 13, 16, 20];
 /** Longest walk inside the own territory before a sweep is started. */
@@ -163,7 +156,7 @@ function planSweep(o, margin) {
   const prefix = minePrefix(o);
   const owned = ownedMap(o);
   const opponent = o.players[1 - o.selfSlot];
-  const enemy = opponent.alive && opponent.position ? opponent.position : null;
+  const enemy = opponent.position ? opponent.position : null;
   const ex = enemy ? enemy.x : -1;
   const ey = enemy ? enemy.y : -1;
   const enemyCell = enemy ? cellOf(o, ex, ey) : -1;
@@ -307,7 +300,7 @@ function planSweep(o, margin) {
  */
 function sweepStillSafe(o, sweep) {
   const opponent = o.players[1 - o.selfSlot];
-  if (!opponent.alive || !opponent.position) return true;
+  if (!opponent.position) return true;
   const ex = opponent.position.x;
   const ey = opponent.position.y;
   let x = o.players[o.selfSlot].position.x;
@@ -326,35 +319,32 @@ function sweepStillSafe(o, sweep) {
   return false;
 }
 
-export default function tick(input) {
-  const action = decide(input.observation, input.Memory, input.sdk);
-  // Remember where this action leaves the head, so the next tick can tell a
-  // reset apart from the move the bot asked for.
-  input.Memory.expect = expectedHead(input.observation, action);
-  return action;
+export default function tick({ game, Memory }) {
+  const players = [];
+  players[game.self.slot] = game.self;
+  players[game.opponent.slot] = game.opponent;
+  const o = {
+    ...game.board,
+    tick: game.tick,
+    maxTicks: game.maxTicks,
+    selfSlot: game.self.slot,
+    players,
+  };
+  if (game.events.some((e) => e.type === "reset" && e.playerId === game.self.id))
+    Memory.plan = null;
+  const action = decide(o, Memory);
+  if (action.type === "move") game.self.move(action.direction);
+  else game.self.idle();
 }
 
-/** Where the head of the own player ends up after the action was applied. */
-function expectedHead(o, action) {
+function decide(o, Memory) {
   const self = o.players[o.selfSlot];
-  if (!self.position) return null;
-  if (action.type !== "move") return { x: self.position.x, y: self.position.y };
-  const delta = DIRECTION_DELTA.get(action.direction) ?? [0, 0];
-  return { x: self.position.x + delta[0], y: self.position.y + delta[1] };
-}
-
-function decide(o, Memory, sdk) {
-  const self = o.players[o.selfSlot];
-  if (!self.alive || !self.position) return { type: "idle" };
+  if (!self.position) return { type: "idle" };
   // A reset sends the head back to the spawn, so a plan that was built for the
   // previous position no longer applies.
-  const expected = Memory.expect ?? null;
-  if (expected && (expected.x !== self.position.x || expected.y !== self.position.y)) {
-    Memory.plan = null;
-  }
-  const home = sdk.homePath(o);
-  const threat = sdk.threatDistance(o);
-  const safe = sdk.safeMoves(o);
+  const home = homePath(o);
+  const threat = threatDistance(o);
+  const safe = safeMoves(o);
   const plan = Memory.plan ?? null;
 
   // Outside the territory and without a way home: only a cut can help.
@@ -449,4 +439,76 @@ function cutOpponent(o, safe) {
     return { type: "move", direction: DIRECTIONS[dir] };
   }
   return null;
+}
+
+// Player-owned algorithms; not part of the public game API.
+
+function ownPlayer(o) {
+  return o.players[o.selfSlot];
+}
+function homePath(o) {
+  const p = ownPlayer(o);
+  if (!p.position) return null;
+  const start = cellOf(o, p.position.x, p.position.y);
+  if (o.territory[start] === o.selfSlot) return [];
+  const seen = new Uint8Array(o.width * o.height),
+    parent = new Int32Array(seen.length),
+    move = new Int8Array(seen.length);
+  const queue = [start];
+  seen[start] = 1;
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const cell = queue[cursor];
+    for (let d = 0; d < 4; d++) {
+      const target = stepFrom(o, cell, d);
+      if (target < 0 || seen[target] || o.trails[target] === o.selfSlot) continue;
+      seen[target] = 1;
+      parent[target] = cell;
+      move[target] = d;
+      if (o.territory[target] === o.selfSlot) {
+        const path = [];
+        let current = target;
+        while (current !== start) {
+          path.push(DIRECTIONS[move[current]]);
+          current = parent[current];
+        }
+        return path.toReversed();
+      }
+      queue.push(target);
+    }
+  }
+  return null;
+}
+function threatDistance(o) {
+  const enemy = o.players[1 - o.selfSlot];
+  if (!enemy.position) return null;
+  const start = cellOf(o, enemy.position.x, enemy.position.y),
+    distance = new Int32Array(o.width * o.height);
+  distance.fill(-1);
+  const queue = [start];
+  distance[start] = 0;
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const cell = queue[cursor];
+    if (o.trails[cell] === o.selfSlot) return distance[cell];
+    for (let d = 0; d < 4; d++) {
+      const target = stepFrom(o, cell, d);
+      if (target < 0 || distance[target] >= 0 || o.trails[target] === enemy.slot) continue;
+      distance[target] = distance[cell] + 1;
+      queue.push(target);
+    }
+  }
+  return null;
+}
+function safeMoves(o) {
+  const p = ownPlayer(o);
+  if (!p.position) return [];
+  const start = cellOf(o, p.position.x, p.position.y),
+    enemy = o.players[1 - o.selfSlot];
+  const result = [];
+  for (let d = 0; d < 4; d++) {
+    const target = stepFrom(o, start, d);
+    if (target < 0 || o.trails[target] === o.selfSlot) continue;
+    if (enemy.position && target === cellOf(o, enemy.position.x, enemy.position.y)) continue;
+    result.push(DIRECTIONS[d]);
+  }
+  return result;
 }

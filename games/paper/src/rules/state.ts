@@ -4,9 +4,19 @@ import type { PaperPlayer, PaperState } from "../sdk";
 import { readArray, readId, readInteger, readRecord } from "./validation";
 
 const CELL_COUNT = PAPER_CONFIG.width * PAPER_CONFIG.height;
+// Cache only after validating an immutable grid. Other state invariants are
+// always checked; callers receive a detached copy, never the cached array.
+const frozenGrids = new WeakMap<object, readonly number[]>();
 
-function readGrid(grid: unknown, label: string): number[] {
-  return readArray(grid, CELL_COUNT, label).map((cell) => readInteger(cell, -1, 1, label));
+export function readPaperGrid(grid: unknown, label: string): number[] {
+  const immutable = Array.isArray(grid) && Object.isFrozen(grid);
+  if (immutable) {
+    const cached = frozenGrids.get(grid);
+    if (cached) return cached.slice();
+  }
+  const parsed = readArray(grid, CELL_COUNT, label).map((cell) => readInteger(cell, -1, 1, label));
+  if (immutable) frozenGrids.set(grid, Object.freeze(parsed.slice()));
+  return parsed;
 }
 
 export function parsePaperState(raw: unknown): PaperState {
@@ -65,8 +75,8 @@ export function parsePaperState(raw: unknown): PaperState {
     width: PAPER_CONFIG.width,
     height: PAPER_CONFIG.height,
     maxTicks: PAPER_MAX_TICKS,
-    territory: readGrid(value.territory, "territory"),
-    trails: readGrid(value.trails, "trails"),
+    territory: readPaperGrid(value.territory, "territory"),
+    trails: readPaperGrid(value.trails, "trails"),
     players: [first, second],
     spawns,
     rngState: readInteger(value.rngState, 1, 0xffffffff, "rngState"),

@@ -10,7 +10,7 @@ test("health and game metadata work without a database or player executor", asyn
     const game = (await app.inject("/api/games/paper")).json();
     expect(game.id).toBe("paper");
     expect(game.resolvedLimits.cpuMs).toBe(20);
-    expect(game.botProtocolVersion).toBe(1);
+    expect(game.botProtocolVersion).toBe(2);
     expect(game).toStrictEqual(list.games[0]);
     expect((await app.inject("/api/games/missing")).statusCode).toBe(404);
     expect((await app.inject("/api/games/__proto__")).statusCode).toBe(404);

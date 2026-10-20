@@ -50,12 +50,22 @@ type PaperState = {
   rngState: number
 }
 
-type PaperObservation = PaperState & { selfId: string; selfSlot: 0 | 1 }
+// Public observation is a separate schema; see SDK.md for the runtime game view.
+type PaperObservation = {
+  tick: number
+  maxTicks: 600
+  selfId: string
+  selfSlot: 0 | 1
+  board: { width: 40; height: 30; territory: number[]; trails: number[] }
+  players: [{id:string; slot:0; position:{x:number;y:number}; spawn:{x:number;y:number}},
+            {id:string; slot:1; position:{x:number;y:number}; spawn:{x:number;y:number}}]
+  events: PaperEvent[]
+}
 ```
 
-players 按 slot 固定顺序保存。**双方永不淘汰**：`alive` 恒为 `true`、`position` 恒不为 `null`，字段保留是为了让既有选手代码继续可用。`spawns[slot]` 是该席位的初始头部格，也就是被重置时回到的位置；它开局写入世界，之后不再变化。双方的面积从 territory 计算，不另存一份可能失配的权威计数。
+players 按 slot 固定顺序保存。**双方永不淘汰**：`alive` 恒为 `true`、`position` 恒不为 `null`，这些字段仅属于内部世界；当前玩家视图不暴露 alive 或 null 位置。`spawns[slot]` 是该席位的初始头部格，也就是被重置时回到的位置；它开局写入世界，之后不再变化。双方的面积从 territory 计算，不另存一份可能失配的权威计数。
 
-每个玩家获得同一结算阶段的完整观察，并附上自己的席位与公开用户 ID。观察为数据副本，不含对手源码、Memory 或日志。引擎使用整数网格，动画坐标不参与规则。
+每个玩家获得同一结算阶段的完整观察，并附上自己的席位、公开用户 ID 和上一 tick 公开事件（首 tick 为空）。内部 PRNG 状态不包含在玩家观察中。观察为数据副本，不含对手源码、Memory 或日志。引擎使用整数网格，动画坐标不参与规则。
 
 随机数统一使用 xorshift32：状态为无符号 32 位整数，依次执行 `x ^= x << 13`、`x ^= x >>> 17`、`x ^= x << 5`，结果按无符号整数保存。初始化种子必须是 0–4294967295 范围内的整数。种子为 0 时使用 `0x9e3779b9`。用初始化的首个输出最低位决定是否交换席位，保存更新后的随机数状态；圈地结算不额外使用随机数。
 
@@ -67,9 +77,9 @@ type PaperAction =
   | { type: 'idle' }
 ```
 
-玩家可以主动选择 `idle`。它表示不移动，仍可被碰撞和切断尾迹，不会因留在自己当前头部格的尾迹上而自杀。
+玩家通过 `game.self.move(direction)` 或 `game.self.idle()` 登记意图，入口返回 undefined；上面的 PaperAction 是内部结算与回放格式。未调用默认 idle，多次调用以最后一次为准，调用不立即改变本 tick 世界。寻路和策略由玩家实现。玩家可以主动选择 `idle`。它表示不移动，仍可被碰撞和切断尾迹，不会因留在自己当前头部格的尾迹上而自杀。
 
-移动方向必须属于以上枚举，不允许额外字段；返回值不符合格式时记录 `INVALID_ACTION`。执行异常、非法动作、CPU、内存及 Memory 超限统一产生 `idle`，同时丢弃当 tick 的 Memory 修改。
+移动方向必须属于以上枚举，不允许额外字段；命令不符合格式时记录 `INVALID_ACTION`；入口返回非 undefined 值为 `ENTRYPOINT_ERROR`。执行异常、非法动作、CPU、内存及 Memory 超限统一产生 `idle`，同时丢弃当 tick 的 Memory 修改。
 
 ## 同时结算
 
@@ -163,13 +173,13 @@ type PaperAction =
 
 ## 官方示例 bot
 
-官方 bot 使用公开 SDK 与公开观察，执行以下可读策略：
+官方 bot 使用相同基础 API 与公开观察，寻路和风险判断算法全部包含在 bot 自身源码中，执行以下可读策略：
 
 1. 领地把尾迹围成闭环就能圈出面积，所以 bot 在自有领地内走到边界格，再沿边界拉出一个矩形扫掠：沿 d1 出去、沿 d2 折返、沿 -d1 回来、沿 -d2 回到起点。
 2. 扫掠矩形贴着自有领地展开，闭合时矩形内部与边界上的格子一并归入该席位；扫掠途中若先撞到自有领地则就地闭合，圈出的范围以实际走过的尾迹为准。
 3. 尾迹只在头部位于领地外时存在，对手只要踏上任意一格尾迹就能重置扫掠者。因此只有当对手在扫掠闭合前够不到整条尾迹时 bot 才会出发；对手逼近时放弃扫掠，按 `homePath` 回城。
 4. 头部相邻的对手尾迹会被直接切断，这会立刻把对手送回起点；每一步只使用 `safeMoves` 里的方向，对手头部所在格与自身尾迹都不进入，回到领地的路线同样绕开对手头部；没有安全移动时选择 `idle`。
-5. bot 用 Memory 记录自己请求的落点，若下一 tick 的实际位置与之不符，说明自己被重置，就丢弃原计划并重新规划。
+5. bot 读取上一 tick 的公开 reset 事件，若自己被重置，就丢弃原计划并重新规划。
 
 官方 bot 不读取隐藏信息、不使用额外预算，也不保证始终获胜或永不出错。
 

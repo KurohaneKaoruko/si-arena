@@ -32,38 +32,33 @@
 
 ## 玩家接口
 
-默认导出同步函数，每 tick 调用一次：
+默认导出同步函数，每 tick 调用一次；通过方法登记意图，入口不返回动作：
 
 ```js
-export default function tick({ observation, Memory, sdk }) {
-  return { type: "idle" };
+export default function tick({ game, Memory }) {
+  game.self.idle();
 }
 ```
 
-- 返回 `{ type: "idle" }`（原地不动，仍会被碰撞、被切断）或 `{ type: "move", direction: "up" | "right" | "down" | "left" }`；不要返回额外字段。
-- 不要修改 observation，世界不受你的观察对象影响。
+- `game.self.move("up" | "right" | "down" | "left")` 移动一格，`game.self.idle()` 停留；方法均返回 undefined。
+- 不调用默认停留；同 tick 多次调用以最后一次为准。位置和地图本 tick 不变，双方命令收齐后同时结算。
+- 入口只能返回 undefined；返回对象或 Promise 为 ENTRYPOINT_ERROR。错误方向为 INVALID_ACTION，catch 后也不能继续提交该 tick。
+- game 及嵌套数据只读；旧 tick 的角色方法不能用于新 tick。
 
-## observation：每 tick 的完整地图
+## game：当前完整公开视图
 
-- `territory` 与 `trails`：长度 width×height 的一维数组，索引为 `y * width + x`；-1 表示无主或无尾迹，0、1 表示席位编号。
-- `players` 按席位排列，每项含 `id`、`slot`、`alive`、`position: { x, y }`；`alive` 恒为 true（永不淘汰），`position` 是该方当前头部格。
-- `spawns` 按席位排列，是该席位的出生点（开局 3×3 的中心），重置回到这里。
-- `selfSlot`、`selfId` 标明你是哪一方；另有 `tick`、`width`、`height`、`maxTicks`、`rngState`。
-
-## sdk：随参数提供的辅助函数（无需导入，均不预测对手动作）
-
-- `directions`：方向常量数组。
-- `homePath(observation)`：不经过自己尾迹的最短回城方向序列；已在领地内为 `[]`，无可达路线为 `null`。
-- `threatDistance(observation)`：对手头部到你尾迹的最短步数，不可达为 `null`。
-- `safeMoves(observation)`：不越界、不进自己尾迹、不进对手当前头部格的方向。
-- `expansion(observation)`：从领地边界起步的矩形扩张方向序列。
-
-这些都只是基础辅助，可以不用，自行实现更好的算法。
+- `self` 与 `opponent`：各自的 id、slot、position（当前头部坐标）、spawn（出生点）；只有 self 有动作方法。
+- `board.width`、`board.height` 为 40、30；`board.territory` 与 `board.trails` 是长度 1200 的数组，下标 `y * width + x`，-1 为无主/无尾迹，0、1 为所属席位。
+- `tick` 为当前输入 tick，`maxTicks` 为 600。
+- `events` 是上一 tick 结算产生的公开事件，首 tick 为空。包括 move、capture、trail-cut、reset；reset 的 playerId 是被重置者，causes 包含重置原因。可据此清除失效计划，无需靠预期位置猜测重置。
+- 双方永不淘汰，位置始终存在；没有 alive 字段，不暴露内部 rngState。
+- 不提供寻路、安全方向、威胁判断或扩张策略 API；自行实现算法。全部字段和事件结构见随包 SDK.md。
 
 ## Memory 与资源
 
-- 每 tick 重建 JavaScript 环境，全局变量不跨 tick 保留；只有 JSON 对象 `Memory` 延续，把计划与状态写进 Memory。
-- 默认预算：源码 256KiB、每 tick CPU 20ms、QuickJS 堆 32MiB、栈 256KiB、Memory 64KiB、动作输出 1KiB；以开发包 release.json 的 `resolvedLimits` 为准。
+- 当前发行 paper@0.2.0、玩家接口 v2：源码和 SDK 在环境创建时加载一次，成功 tick 间复用 JavaScript 环境。全局变量、闭包、Map 与 TypedArray 可跨 tick 缓存，均占用 32MiB 堆预算。
+- 任一 tick 执行失败后重建环境，全局缓存和 API 模块状态清空，顶层代码重新运行；下一 tick 从上次成功的 JSON `Memory` 恢复。把恢复所需的计划与状态写进 Memory，不保留旧 tick 的观察引用作为当前世界。
+- 默认预算：源码 256KiB、每 tick CPU 20ms（首次与重建后的 tick 包含玩家模块初始化）、QuickJS 常驻堆 32MiB、栈 256KiB、Memory 64KiB、动作输出 1KiB；以开发包 release.json 的 `resolvedLimits` 为准。
 - 抛错、超时、非法动作或超限时：该 tick 按 idle 处理，本次对 Memory 的修改丢弃（上次成功的 Memory 保留），下一 tick 继续调用你。持续出错不会出局，只会一直浪费回合。
 
 ## 语言限制

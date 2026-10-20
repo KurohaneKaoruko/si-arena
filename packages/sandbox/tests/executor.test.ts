@@ -11,12 +11,10 @@ function options(): Omit<SandboxOptions<JsonValue>, "defaultAction"> {
   return {
     matchId: "executor-match",
     playerId: "bot",
-    source: `export default ({observation,Memory,sdk})=>{
-      Memory.n=(Memory.n??0)+1;console.log(Memory.n);
-      if(observation.fail)throw new Error('tick failed');
-      return sdk.move(Memory.n);
-    }`,
-    sdkSource: "export default {move(n){return {type:'move',n}}}",
+    source:
+      "export default ({game,Memory})=>{\n      Memory.n=(Memory.n??0)+1;console.log(Memory.n);\n      if(game.fail)throw new Error('tick failed');\n      return game.move(Memory.n);\n    }",
+    sdkSource:
+      "export default (o,{submit})=>{submit({type:'move'});return {...o,submit,move(n){submit({type:'move',n})}}}",
     limits: resolveResourceLimits({ cpuMs: 100, wallMs: 1000 }),
     isolation: { kind: "local" },
     captureLogs: true,

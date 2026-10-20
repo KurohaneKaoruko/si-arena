@@ -172,9 +172,11 @@ export function defineLocalGame<
     },
     async verify(raw, settings = {}) {
       checkCancelled(settings.signal);
+      raw = cloneJson(raw, MAX_REPLAY_BYTES);
       const stats = counters();
       const diagnostics: LocalDiagnostic[] = [];
       const summary = await replayMatch(raw, game, {
+        detached: true,
         maxBytes: MAX_REPLAY_BYTES,
         onTick({ record }) {
           checkCancelled(settings.signal);

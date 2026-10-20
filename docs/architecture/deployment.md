@@ -43,7 +43,7 @@ pnpm build:devkits
 docker compose --env-file .env.prod -f deploy/compose.prod.yaml --profile tools run --rm seed-releases
 ```
 
-`seed-releases` 把宿主 `./data/releases` 拷入 `releases_data` 卷，供 server 的发行下载路由读取。发行目录不可变：更新开发包内容时先删 `data/releases/paper` 重建（保持 `paper@0.1.0` 不递增，见 [分发设计](distribution-and-development.md)），再重跑上面的 seed 命令。
+`seed-releases` 把宿主 `./data/releases` 拷入 `releases_data` 卷，供 server 的发行下载路由读取。发行目录不可变：修改开发包内容时递增游戏 release，保留旧目录，再重跑上面的 seed 命令。当前圈地发行为 `paper@0.2.0` / 玩家接口 v2。v1 没有用户，不提供旧执行或旧回放兼容；网页和开发包仅注册当前发行，发行或协议不匹配时拒绝回放。
 
 日常更新：`git pull && docker compose --env-file .env.prod -f deploy/compose.prod.yaml up -d --build`，迁移服务会在启动前自动应用新的数据库变更。
 

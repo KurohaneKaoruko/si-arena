@@ -24,9 +24,9 @@
 | `@si-arena/game-paper/renderer` | 页面展示数据与配色                                                               |
 | `@si-arena/game-paper/game`     | `paperGame`、`PAPER_SDK_SOURCE`、`officialBotUrl`                                |
 
-SDK 入口还导出 `PaperSdk` 与 `PAPER_SDK_SOURCE`，由运行器在双方沙箱内部初始化。SDK 提供 `homePath`（避开自身尾迹的 BFS 最短回城路线）、`threatDistance`（对手到己方尾迹的最短合法距离）、`safeMoves`（不越界、不自撞或撞入当前对手头部的方向）和 `expansion`（领地内起步的矩形扩张路线）。回城或威胁不可达时返回 null，已在领地内时回城路线为空。
+SDK 入口导出 `PaperTickInput`、`PaperGameView`、公开事件类型与 `PAPER_SDK_SOURCE`。玩家入口接收 `{ game, Memory }`，以 `game.self.move(direction)` 或 `game.self.idle()` 登记意图，返回 undefined；同 tick 最后一次调用生效。game 提供冻结地图、自己和对手的公开信息与上一 tick 事件，不暴露内部 rngState、alive 或可空头部位置。仅圈地定义上述方向与动作，平台没有统一角色或地图 API。正式接口不包含寻路、威胁判断、安全方向或扩张策略，算法由玩家实现。
 
-`bots/official.js` 使用同一 SDK、观察、Memory 与预算：沿自有领地边界拉出矩形扫掠圈地（沿 d1 出去、沿 d2 折返、沿 -d1 回来、沿 -d2 回到起点），只在对手来不及切断整条尾迹时出发，对手逼近时放弃扫掠、按 `homePath` 回城；头部相邻的对手尾迹会被直接切断，把对手送回它的出生点，这是一笔好交易但不再结束比赛。每一步只使用 `safeMoves` 里的方向，回领地的路线也绕开对手头部，没有安全移动时停留；bot 通过对比自己预期的落点与当前头部位置识别被重置，并丢弃旧计划重新规划。运行器通过可信 officialBotUrl 读取文本后送入沙箱，不在宿主 import 执行 bot。game 入口不加载 Vue、Node 模块或 bot 源码。
+`bots/official.js` 使用同一 SDK、观察、Memory 与预算：沿自有领地边界拉出矩形扫掠圈地（沿 d1 出去、沿 d2 折返、沿 -d1 回来、沿 -d2 回到起点），只在对手来不及切断整条尾迹时出发，对手逼近时放弃扫掠、按 `homePath` 回城；头部相邻的对手尾迹会被直接切断，把对手送回它的出生点，这是一笔好交易但不再结束比赛。每一步只使用 `safeMoves` 里的方向，回领地的路线也绕开对手头部，没有安全移动时停留；bot 通过上一 tick 的公开 reset 事件识别被重置，并丢弃旧计划重新规划。运行器通过可信 officialBotUrl 读取文本后送入沙箱，不在宿主 import 执行 bot。game 入口不加载 Vue、Node 模块或 bot 源码。
 
 在根目录运行 `pnpm example:paper --seed 42` 可用真实沙箱运行官方 bot 与 idle 对手，保存回放并验证重演。
 
@@ -38,6 +38,8 @@ SDK 入口还导出 `PaperSdk` 与 `PAPER_SDK_SOURCE`，由运行器在双方沙
 - `defaultAction` 返回 `{ type: "idle" }`。
 - `step` 接收两名选手的规范动作，一次推进一 tick，返回新世界、确定性事件与可选终局结果。输入世界和动作不会被修改。
 - `parsePaperState` 校验 JSON 世界的字段、网格、席位、出生点、位置和归属关系，返回独立副本；不合规数据抛出 `TypeError`。
+
+同一个冻结网格通过完整校验后，以弱引用缓存其规范化数字副本，供同 tick 的后续解析复用。命中仍返回新数组，其他世界不变量每次校验；可变网格和未通过校验的网格不会进入缓存。
 
 命中越界、头部冲突、交换位置、自撞尾迹或尾迹被切断的一方不会被移出比赛，而是被重置：尾迹清空、头部回到自己席位的出生点、领地全部保留，该 tick 不移动也不闭合。规则导出 `move`、`trail-cut`、`capture` 与 `reset` 四类确定性事件。对局固定打满 600 tick，终局原因是 `tick-limit`，按最终领地面积排名，面积相同则双方名次均为 1。
 

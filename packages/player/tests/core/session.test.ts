@@ -2,7 +2,33 @@ import { expect, test } from "vitest";
 import { replayMatch, stateHash } from "@si-arena/engine";
 import { createReplaySession } from "../../src";
 import { counterGame, fixture, type State } from "../fixture";
-import type { DeepReadonly } from "@si-arena/protocol";
+import { cloneJson, type DeepReadonly } from "@si-arena/protocol";
+
+test("live observations, replay verification and checkpoint seeks receive exactly the preceding events", async () => {
+  const base = counterGame(105);
+  const game: typeof base = {
+    ...base,
+    rules: {
+      ...base.rules,
+      observe(state, id, context) {
+        const events = context?.events ?? [];
+        expect(Object.isFrozen(events)).toBe(true);
+        expect(events).toEqual(state.tick === 0 ? [] : [{ tick: state.tick - 1 }]);
+        return { ...base.rules.observe(state, id)!, events: cloneJson(events) };
+      },
+    },
+  };
+  const { replay } = await fixture(105, game);
+  const session = await createReplaySession(replay, game);
+  for (const completed of [0, 1, 2, 50, 51, 105, 49, 2, 100, 1, 105]) {
+    const inputTick = Math.max(0, completed - 1);
+    expect(session.observation(completed, "a")).toMatchObject({
+      tick: inputTick,
+      events: inputTick === 0 ? [] : [{ tick: inputTick - 1 }],
+    });
+    expect(session.frame(completed).state.tick).toBe(completed);
+  }
+});
 
 test("initial worlds and checkpoint seeks use the engine's state normalization and slot context", async () => {
   const base = counterGame(105);

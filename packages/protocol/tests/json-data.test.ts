@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { isDeepStrictEqual } from "node:util";
 import { cloneJson, stringifyJson, utf8Bytes } from "../src";
 
 test("strict JSON rejects silent coercion, hooks, sparse arrays and cycles", () => {
@@ -72,4 +73,88 @@ test("bounded JSON encoding rejects huge sparse arrays and preserves literal pro
   expect(stringifyJson(JSON.parse('{"__proto__":{"x":1}}'), { maxBytes: 64 })).toBe(
     '{"__proto__":{"x":1}}',
   );
+});
+
+test("direct cloning matches JSON encoding, exact byte budgets, and normalizes prototypes and -0", () => {
+  const nullPrototype = Object.assign(Object.create(null), { x: 1 });
+  const values = [
+    null,
+    true,
+    false,
+    -0,
+    -9,
+    -1,
+    1,
+    9,
+    10,
+    -10,
+    1e-7,
+    1e21,
+    Number.MIN_VALUE,
+    Number.MAX_VALUE,
+    "",
+    "你好🌟",
+    "\ud800",
+    "\udc00",
+    '\u0000\n\t"\\',
+    nullPrototype,
+    { "10": "ten", "2": "two", nested: [false, null, -0, { text: "🌟\u0000" }] },
+    JSON.parse('{"__proto__":{"x":1},"constructor":{"prototype":{"y":2}}}'),
+  ];
+  for (const value of values) {
+    const encoded = stringifyJson(value);
+    const bytes = Buffer.byteLength(encoded);
+    const copied = cloneJson(value, bytes);
+    // A literal object-valued "constructor" key is data, not a class identity.
+    expect(isDeepStrictEqual(copied, JSON.parse(encoded))).toBe(true);
+    expect(() => cloneJson(value, bytes - 1)).toThrow(RangeError);
+    expect(stringifyJson(copied)).toBe(encoded);
+  }
+  expect(Object.is(cloneJson(-0), -0)).toBe(false);
+  expect(Object.getPrototypeOf(cloneJson(nullPrototype))).toBe(Object.prototype);
+  expect(Object.getPrototypeOf(cloneJson([1, 2]))).toBe(Array.prototype);
+});
+
+test("direct cloning rejects invalid nested JSON and never calls accessors or toJSON", () => {
+  let calls = 0;
+  const sparse = [1, 2, 3];
+  delete sparse[1];
+  const invalid = [
+    undefined,
+    NaN,
+    Infinity,
+    -Infinity,
+    1n,
+    Symbol("value"),
+    () => 1,
+    new Map(),
+    new Uint8Array([1]),
+    new Date(),
+    sparse,
+    Object.defineProperty([1], "extra", { value: 2, enumerable: true }),
+    Object.defineProperty([1], "0", {
+      get() {
+        calls++;
+        return 1;
+      },
+      enumerable: true,
+    }),
+    {
+      toJSON() {
+        calls++;
+        return "forged";
+      },
+    },
+    {
+      get value() {
+        calls++;
+        return 1;
+      },
+    },
+  ];
+  for (const value of invalid) expect(() => cloneJson({ value })).toThrow();
+  const cycle: { self?: unknown } = {};
+  cycle.self = cycle;
+  expect(() => cloneJson(cycle)).toThrow();
+  expect(calls).toBe(0);
 });

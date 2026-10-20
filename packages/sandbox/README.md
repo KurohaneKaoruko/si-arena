@@ -1,6 +1,6 @@
 # 玩家代码沙箱
 
-`@si-arena/sandbox` 在独立 Node 子进程中使用同步 QuickJS-WASM 执行玩家的单文件 ESM。每位玩家独占一个可复用进程，每 tick 新建 Runtime/Context，只通过 JSON Memory 延续记忆。
+`@si-arena/sandbox` 在独立 Node 子进程中使用同步 QuickJS-WASM 执行玩家的单文件 ESM。每位玩家独占一个可复用进程和常驻 Runtime/Context，成功 tick 间保留源码模块、SDK 和全局缓存；任一执行失败后重建环境，仅从上次成功的 JSON Memory 恢复。
 
 ## 调用
 
@@ -9,6 +9,7 @@ import { MatchLogBudget, SandboxPlayer } from "@si-arena/sandbox";
 import { resolveResourceLimits } from "@si-arena/protocol";
 import { paperRules } from "@si-arena/game-paper/rules";
 import { paperManifest } from "@si-arena/game-paper";
+import { PAPER_SDK_SOURCE } from "@si-arena/game-paper/game";
 
 const limits = resolveResourceLimits();
 const state = paperRules.init({
@@ -24,11 +25,12 @@ const logBudget = new MatchLogBudget(limits.logs.matchBytes);
 const player = await SandboxPlayer.create({
   matchId: "local-match",
   playerId: "alpha",
-  source: `export default ({ Memory }) => {
+  source: `export default ({ game, Memory }) => {
     Memory.turns = (Memory.turns ?? 0) + 1
     console.log('turn', Memory.turns)
-    return { type: 'idle' }
+    game.self.idle()
   }`,
+  sdkSource: PAPER_SDK_SOURCE,
   limits,
   isolation: { kind: "local" },
   parseAction: paperRules.parseAction,
@@ -54,11 +56,16 @@ CLI 与 worker 共用 `createSandboxExecutor(options)`：参数与 `SandboxPlaye
 
 每场双方必须共享同一个 `MatchLogBudget`，以限制整场日志总量。本地启用 `captureLogs`，服务端使用默认的关闭配置：服务端 console 为空实现，不遍历或格式化参数。日志、截断标记和错误可以由引擎直接加入回放记录。
 
-`sdkSource` 可注入可信、自包含的 ESM，通过 `export default` 提供 SDK；默认导出空对象。SDK 与玩家都在 QuickJS 内初始化，不向玩家传递宿主函数或业务对象。SDK 初始化、观察注入、玩家顶层代码、入口、日志格式化与序列化均计入 tick CPU 用量。
+`sdkSource` 必须是可信、自包含的 ESM，默认导出 `(observation, { submit, reject }) => game` 工厂。模块在环境创建时加载一次；工厂每 tick 接收冻结的观察与仅在沙箱内存在的提交闭包，构建 game，并用 submit 初始化该游戏默认意图。返回值必须是对象。游戏自己定义角色、方法、重复命令优先级和规范动作结构；平台不提供统一方向或角色模型，不提供寻路和策略。
+
+玩家入口接收 `{ game, Memory }`，正常返回 undefined。游戏方法可更新私有命令集合后调用 submit，提交任意合规 JSON 动作；每 tick 结束一次性序列化并验证，没有逐命令 IPC。reject 锁定 INVALID_ACTION，catch 后不能恢复；旧 tick 的提交闭包不可用于新 tick。非 undefined 入口返回值为 ENTRYPOINT_ERROR，不能覆盖已登记命令。
+
+SDK 与玩家都在 QuickJS 内初始化，不传递宿主函数或业务对象。可信模块初始化、每 tick 视图构建与输入注入不计入玩家 CPU；首次及重建后的玩家模块加载/顶层代码、每 tick 入口、动作方法、日志格式化与命令/Memory 序列化计入所在 tick 的 CPU。工厂异常属于系统失败，没有额外的免费玩家初始化预算。
 
 ## 失败和生命周期
 
-- 玩家异常、CPU/堆/栈超限、非法动作、Memory 无效或超限返回 `ok: false`，整体丢弃动作和候选 Memory。结果中包含默认动作、旧 Memory、受限错误与可选本地日志。
+- 全局变量、闭包和 SDK 状态为易失缓存，包含历史观察引用在内的存活对象均受同一个 Runtime 堆预算限制；Memory 是每 tick 独立注入的 JSON 检查点，旧引用不会替换下一 tick 的 Memory。
+- 玩家异常、CPU/堆/栈超限、非法动作、Memory 无效或超限返回 `ok: false`，整体丢弃动作、候选 Memory 和易失环境；父进程才检测到的非法游戏动作也会要求下一 tick 重建。结果中包含默认动作、旧 Memory、受限错误与可选本地日志。
 - 线程 CPU 通过 Node.js 26 的 `process.threadCpuUsage()` 计量；墙钟由父进程看门狗独立限制，不用墙钟差值冒充 CPU。
 - 超时或执行器退出后，父进程结束旧代次并异步重建。重建时等待不超过该游戏一个 tick 的墙钟预算，未就绪时返回执行错误，下一 tick 可继续。无法确认的进程退出记为 `EXECUTOR_ERROR`；只有确切的原生失败标记或 cgroup OOM 事件才记内存错误。
 - 启动失败、可信 SDK 错误、无效观察或平台封装超出 IPC 预算会抛出 `SandboxSystemError`。游戏解析器自身抛出的异常同样传播给调用方，不能按玩家失误计分。
@@ -96,3 +103,5 @@ pnpm test:artifacts
 测试覆盖异常回滚、超限后恢复、被 catch 的分配失败、累计小额分配、进程死亡与墙钟终止、Promise、宿主能力隔离、恶意 getter/原型修改、日志预算、长度前缀和发布后实际执行。Linux 主机可设置 `ARENA_TEST_CGROUP_ROOT` 为已委派目录，再运行同一测试命令，验证真实 OOM 终止；未提供 Linux 环境时该项显式跳过。
 
 性能脚本使用两个 1200 格数组模拟观察体积，执行 5 tick 预热与 100 tick 采样；分别报告玩家计费 CPU（`playerCpu`，与 `cpuUsedUs` 上报同源，不含运行时创建与 SDK 初始化等可信引导）、往返墙钟和整 tick 线程 CPU 的内部阶段分解（`phases`，仍包含可信引导）。它只测执行器，不连接平台、不创建排位。
+
+采样针对常驻环境的热 tick，首次 Runtime/Context、SDK 与玩家模块初始化已在预热中发生。冷热对照和真实 Paper 完整比赛见[常驻执行实施记录](../../docs/research/player-execution-implementation.md)；历史基线不代表当前每 tick 成本。

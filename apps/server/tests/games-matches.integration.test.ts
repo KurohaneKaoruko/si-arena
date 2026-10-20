@@ -128,7 +128,7 @@ dbTest("upload stores code, rejects invalid sources, and preserves the previous 
   const uploaded = afterUpload.json();
   expect(uploaded.canMatch).toBe(true);
   expect(uploaded.cannotMatchReason).toBeNull();
-  expect(uploaded.code?.botProtocolVersion).toBe(1);
+  expect(uploaded.code?.botProtocolVersion).toBe(2);
   expect(uploaded.code?.source).toContain("export default");
 
   const invalid = await call("PUT", "/api/games/paper/me/code", {
@@ -237,7 +237,7 @@ dbTest("matching falls back to the official account and is idempotent", async ()
   const match = created.json();
   expect(match.status).toBe("pending");
   expect(match.gameId).toBe("paper");
-  expect(match.release).toBe("paper@0.1.0");
+  expect(match.release).toBe("paper@0.2.0");
   expect(Number.isInteger(match.seed)).toBe(true);
   expect(match.seed).toBeGreaterThanOrEqual(0);
   expect(match.seed).toBeLessThanOrEqual(4294967295);

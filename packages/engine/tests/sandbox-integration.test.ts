@@ -26,12 +26,13 @@ test("real QuickJS matches recover from player errors, preserve Memory and gener
       invocations++;
       const source =
         player.id === "a"
-          ? `export default ({observation,Memory})=>{Memory.n=(Memory.n??0)+1;console.log(Memory.n);if(observation.tick===1)throw new Error('boom');return {add:Memory.n}}`
-          : `export default ()=>({add:0})`;
+          ? "export default ({game,Memory})=>{Memory.n=(Memory.n??0)+1;console.log(Memory.n);if(game.tick===1)throw new Error('boom');return game.submit({add:Memory.n})}"
+          : "export default ({game,Memory})=>{game.submit(({add:0}));}";
       return SandboxPlayer.create({
         ...context,
         playerId: player.id,
         source,
+        sdkSource: "export default (o,{submit})=>{submit({add:0});return {...o,submit}}",
         isolation: { kind: "local" },
         parseAction: game.rules.parseAction,
         defaultAction: { add: 0 },
@@ -73,7 +74,7 @@ test("the published official Paper bot plays under the normal release limits and
       return SandboxPlayer.create({
         ...context,
         playerId: player.id,
-        source: player.official ? source : `export default ()=>({type:'idle'})`,
+        source: player.official ? source : "export default ()=>{}",
         sdkSource: PAPER_SDK_SOURCE,
         isolation: { kind: "local" },
         parseAction: paperGame.rules.parseAction,
@@ -101,7 +102,9 @@ async function cpuSpeedFactor(): Promise<number> {
   const player = await SandboxPlayer.create({
     matchId: "paper-calibration",
     playerId: "calibration",
-    source: `let s=0;for(let i=0;i<200000;i++)s+=i;export default ()=>({type:'idle'})`,
+    source:
+      "export default ({game,Memory})=>{let s=0;for(let i=0;i<200000;i++)s+=i;return game.submit({type:'idle'})}",
+    sdkSource: "export default (o,{submit})=>{submit({type:'idle'});return {...o,submit}}",
     limits: resolveResourceLimits({ cpuMs: 1000, wallMs: 10000 }),
     isolation: { kind: "local" },
     parseAction: paperGame.rules.parseAction,
@@ -198,16 +201,6 @@ test("the official Paper bot keeps to the safe directions when the opponent head
     parseAction: paperGame.rules.parseAction,
     defaultAction: { type: "idle" },
   });
-  const probe = await SandboxPlayer.create({
-    matchId: "paper-bot-safety",
-    playerId: "probe",
-    source: `export default ({observation,Memory,sdk})=>{Memory.safe=sdk.safeMoves(observation);return {type:'idle'}}`,
-    sdkSource: PAPER_SDK_SOURCE,
-    limits,
-    isolation: { kind: "local" },
-    parseAction: paperGame.rules.parseAction,
-    defaultAction: { type: "idle" },
-  });
   try {
     for (const [index, scenario] of scenarios.entries()) {
       const state = paperGame.rules.init({
@@ -226,22 +219,28 @@ test("the official Paper bot keeps to the safe directions when the opponent head
       state.trails[scenario.enemy[1] * width + scenario.enemy[0]] = 1;
       const observation = paperGame.rules.observe(state, "a");
       const action = await bot.execute(index, observation);
-      const safe = await probe.execute(index, observation);
       expect(action.ok).toBe(true);
-      expect(safe.ok).toBe(true);
-      const directions = safe.memory.safe;
-      expect(Array.isArray(directions)).toBe(true);
-      if (action.action.type === "move")
-        expect(directions as string[]).toContain(action.action.direction);
+      if (action.action.type === "move") {
+        const delta = { up: [0, -1], right: [1, 0], down: [0, 1], left: [-1, 0] }[
+          action.action.direction
+        ]!;
+        const x = scenario.head[0] + delta[0]!;
+        const y = scenario.head[1] + delta[1]!;
+        expect(x).toBeGreaterThanOrEqual(0);
+        expect(x).toBeLessThan(40);
+        expect(y).toBeGreaterThanOrEqual(0);
+        expect(y).toBeLessThan(30);
+        expect(state.trails[y * 40 + x]).not.toBe(0);
+        expect([x, y]).not.toEqual(scenario.enemy);
+      }
     }
   } finally {
     await bot.close();
-    await probe.close();
   }
 }, 30000);
 
-test("Paper SDK executes inside the guest and offers a shortest legal route home", async () => {
-  let state = paperGame.rules.init({
+test("Paper exposes only basic commands and immutable facts; commands do not immediately move the head", async () => {
+  const state = paperGame.rules.init({
     seed: 2,
     players: [
       { id: "a", slot: 0 },
@@ -249,27 +248,31 @@ test("Paper SDK executes inside the guest and offers a shortest legal route home
     ],
     config: paperGame.manifest.config,
   });
-  for (let i = 0; i < 2; i++)
-    state = paperGame.rules.step(state, {
-      a: { type: "move", direction: "right" },
-      b: { type: "idle" },
-    }).nextState;
   const player = await SandboxPlayer.create({
-    matchId: "sdk",
+    matchId: "basic-api",
     playerId: "a",
-    source: `export default ({observation,Memory,sdk})=>{Memory.path=sdk.homePath(observation);Memory.distance=sdk.threatDistance(observation);Memory.safe=sdk.safeMoves(observation);return {type:'idle'}}`,
-    sdkSource: PAPER_SDK_SOURCE,
     limits: resolveResourceLimits({ cpuMs: 100 }),
     isolation: { kind: "local" },
-    parseAction: paperGame.rules.parseAction,
+    sdkSource: PAPER_SDK_SOURCE,
     defaultAction: { type: "idle" },
+    parseAction: paperGame.rules.parseAction,
+    source: `export default ({game,Memory})=>{
+      Memory.before=game.self.position.x;
+      game.self.move('up');game.self.idle();game.self.move('right');
+      Memory.after=game.self.position.x;
+      Memory.methods=Object.keys(game.self).filter(k=>typeof game.self[k]==='function');
+      Memory.noStrategies=['homePath','safeMoves','threatDistance','expansion','rngState'].every(k=>!(k in game));
+      Memory.frozen=Object.isFrozen(game.board.territory)&&Object.isFrozen(game.self.position)&&Object.isFrozen(game.opponent);
+    }`,
   });
   try {
     const result = await player.execute(0, paperGame.rules.observe(state, "a"));
-    expect(result.ok).toBe(true);
-    expect(result.memory.path).toEqual(["left"]);
-    expect(result.memory.distance).toBe(27);
-    expect(result.memory.safe).toContain("left");
+    expect(result).toMatchObject({
+      ok: true,
+      action: { type: "move", direction: "right" },
+      memory: { before: 5, after: 5, methods: ["move", "idle"], noStrategies: true, frozen: true },
+    });
+    expect(state.players[0].position).toEqual({ x: 5, y: 14 });
   } finally {
     await player.close();
   }

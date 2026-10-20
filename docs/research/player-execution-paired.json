@@ -1,0 +1,295 @@
+{
+  "collectedAt": "2026-10-20T08:51:43.431Z",
+  "baselineRevision": "af8bab107f3d58107541b3c713027d8ecb923d8d",
+  "currentRevision": "4869793f09ebd5139f05bc873b3e02ed041c20f9",
+  "environment": {
+    "node": "v26.11.1",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "units": "microseconds unless explicitly named otherwise",
+  "game": {
+    "release": "paper@0.2.0",
+    "botProtocolVersion": 2,
+    "limits": {
+      "codeBytes": 262144,
+      "heapBytes": 33554432,
+      "stackBytes": 262144,
+      "cpuMs": 20,
+      "wallMs": 500,
+      "memoryBytes": 65536,
+      "actionBytes": 1024,
+      "observationBytes": 131072,
+      "resultBytes": 98304,
+      "ipcBytes": 1048576,
+      "errorBytes": 4096,
+      "processMemoryBytes": 268435456,
+      "startupMs": 5000,
+      "logs": {
+        "lineBytes": 2048,
+        "tickLines": 32,
+        "tickBytes": 8192,
+        "matchBytes": 1048576
+      }
+    }
+  },
+  "sdkSha256": "6e10663a780b27339dc8f3f89c3202a00c550e94e352451ab54eea7655199294",
+  "botSha256": "abc9ab0851195516e3b4ceacaed5f59822afe817a45ce9ff876a9299827deaa4",
+  "wasm": {
+    "upstream": "df4efb9ef2cb25c417ecb57986da462d11b244ed",
+    "quickjs": "2025-09-13",
+    "emscripten": "5.0.1",
+    "patch": "allocation-accounting-stack-latch-v1",
+    "wasmSha256": "7614e0e6037f8b15c6dee645be4f909e6592bd32e05b0f2ae7986d574b89583d"
+  },
+  "sandboxSourceSha256": {
+    "old": "7b33b2809c78f921f0016c6b59931a24b46cd0e405348950f340d967c9e82712",
+    "current": "f815148c839ce12bc80d32f0a01672859f3fda35c4529f9e9fccb3e67736f60d"
+  },
+  "methodology": "Exact old and working-tree sandbox TS sources transpiled with identical TypeScript settings; common current engine/rules/bot/SDK/WASM/limits. Both players run in parallel, matches sequential. Timed interval includes both process startups, all 600 ticks, rules, gzip replay write+fsync, and player shutdown. Replay read/verification occurs afterward. One full warm-up match per mode excluded; pair order alternates old/new and new/old. No database, queue wait, upload validation, or browser rendering.",
+  "warmups": [
+    {
+      "mode": "old",
+      "seed": 41,
+      "wallUs": 3632852,
+      "verifyWallUs": 1611959,
+      "playerCpuTotalUs": 1573983,
+      "ticks": 600,
+      "errors": {},
+      "finalStateHash": "67febba37a0f1fadd899ef4c66bd2efb23d00f3f3329c84c34e7b175126fd9d2",
+      "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+    },
+    {
+      "mode": "current",
+      "seed": 41,
+      "wallUs": 2845939,
+      "verifyWallUs": 1608707,
+      "playerCpuTotalUs": 1065757,
+      "ticks": 600,
+      "errors": {},
+      "finalStateHash": "67febba37a0f1fadd899ef4c66bd2efb23d00f3f3329c84c34e7b175126fd9d2",
+      "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+    }
+  ],
+  "pairs": [
+    {
+      "index": 0,
+      "seed": 42,
+      "order": [
+        "old",
+        "current"
+      ],
+      "old": {
+        "mode": "old",
+        "seed": 42,
+        "wallUs": 3594798,
+        "verifyWallUs": 1588548,
+        "playerCpuTotalUs": 1578215,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "37da4283575a23d083e75b7f48c473ed7bccc58b40e8a192a1184ec1efc70b78",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "current": {
+        "mode": "current",
+        "seed": 42,
+        "wallUs": 2840556,
+        "verifyWallUs": 1596962,
+        "playerCpuTotalUs": 1059952,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "37da4283575a23d083e75b7f48c473ed7bccc58b40e8a192a1184ec1efc70b78",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "identicalActions": true,
+      "identicalFinalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 20.981484912365033
+    },
+    {
+      "index": 1,
+      "seed": 43,
+      "order": [
+        "current",
+        "old"
+      ],
+      "current": {
+        "mode": "current",
+        "seed": 43,
+        "wallUs": 2883233,
+        "verifyWallUs": 1615271,
+        "playerCpuTotalUs": 1081043,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "f1926325944a8422817e8efd736adf3f10009e75a8640b8ec6183ab5b33644c3",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "old": {
+        "mode": "old",
+        "seed": 43,
+        "wallUs": 3607218,
+        "verifyWallUs": 1630571,
+        "playerCpuTotalUs": 1584121,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "f1926325944a8422817e8efd736adf3f10009e75a8640b8ec6183ab5b33644c3",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "identicalActions": true,
+      "identicalFinalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 20.0704531858069
+    },
+    {
+      "index": 2,
+      "seed": 44,
+      "order": [
+        "old",
+        "current"
+      ],
+      "old": {
+        "mode": "old",
+        "seed": 44,
+        "wallUs": 3615160,
+        "verifyWallUs": 1612122,
+        "playerCpuTotalUs": 1567469,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "1d87a89d199f1134b55d888eeb0371dd69f4206343d420b621e49b0b1079db79",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "current": {
+        "mode": "current",
+        "seed": 44,
+        "wallUs": 2824935,
+        "verifyWallUs": 1605786,
+        "playerCpuTotalUs": 1047946,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "1d87a89d199f1134b55d888eeb0371dd69f4206343d420b621e49b0b1079db79",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "identicalActions": true,
+      "identicalFinalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 21.858645260514052
+    },
+    {
+      "index": 3,
+      "seed": 45,
+      "order": [
+        "current",
+        "old"
+      ],
+      "current": {
+        "mode": "current",
+        "seed": 45,
+        "wallUs": 2851110,
+        "verifyWallUs": 1618215,
+        "playerCpuTotalUs": 1075340,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "60d602ff1dd972ed95152b15be25a25f6aa9375e28a56a6b045863ca54323162",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "old": {
+        "mode": "old",
+        "seed": 45,
+        "wallUs": 3677339,
+        "verifyWallUs": 1598868,
+        "playerCpuTotalUs": 1595565,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "60d602ff1dd972ed95152b15be25a25f6aa9375e28a56a6b045863ca54323162",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "identicalActions": true,
+      "identicalFinalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 22.468121649921315
+    },
+    {
+      "index": 4,
+      "seed": 46,
+      "order": [
+        "old",
+        "current"
+      ],
+      "old": {
+        "mode": "old",
+        "seed": 46,
+        "wallUs": 3601134,
+        "verifyWallUs": 1635039,
+        "playerCpuTotalUs": 1576577,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "92ece476c5f7e2be26bfeb7d68699033620616afe18493c901acd6161d8844c5",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "current": {
+        "mode": "current",
+        "seed": 46,
+        "wallUs": 2932015,
+        "verifyWallUs": 1603763,
+        "playerCpuTotalUs": 1097521,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "92ece476c5f7e2be26bfeb7d68699033620616afe18493c901acd6161d8844c5",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "identicalActions": true,
+      "identicalFinalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 18.58078594131738
+    },
+    {
+      "index": 5,
+      "seed": 47,
+      "order": [
+        "current",
+        "old"
+      ],
+      "current": {
+        "mode": "current",
+        "seed": 47,
+        "wallUs": 2838695,
+        "verifyWallUs": 1618242,
+        "playerCpuTotalUs": 1064265,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "449ae2458cf932f1462e02f6509d7b7669f88493e99273240ceb89d2955f1392",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "old": {
+        "mode": "old",
+        "seed": 47,
+        "wallUs": 3682217,
+        "verifyWallUs": 1594607,
+        "playerCpuTotalUs": 1603244,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "449ae2458cf932f1462e02f6509d7b7669f88493e99273240ceb89d2955f1392",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "identicalActions": true,
+      "identicalFinalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 22.90799265768422
+    }
+  ],
+  "summary": {
+    "measuredMatches": 12,
+    "oldMeanWallUs": 3629644.3333333335,
+    "currentMeanWallUs": 2861757.3333333335,
+    "oldMedianWallUs": 3611189,
+    "currentMedianWallUs": 2845833,
+    "aggregateReductionPercent": 21.155984704837472,
+    "pairedMedianReductionPercent": 21.420065086439543,
+    "speedup": 1.2683270838710758,
+    "allIdenticalActions": true,
+    "allIdenticalFinalStates": true,
+    "allZeroErrors": true
+  }
+}

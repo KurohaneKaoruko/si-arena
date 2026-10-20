@@ -33,7 +33,7 @@ test("development materials and immutable release downloads are public without a
     const docs = await app.inject("/api/games/paper/development");
     expect(docs.statusCode).toBe(200);
     expect(docs.json().prompt).toContain("40×30");
-    expect(docs.json().sdk).toContain("homePath");
+    expect(docs.json().sdk).toContain("game.self.move");
     expect(docs.json().officialBot).toContain("export default");
     expect(docs.json().template).toContain("Memory");
     expect((await app.inject("/api/games/missing/development")).statusCode).toBe(404);

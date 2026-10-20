@@ -9,7 +9,7 @@
 ```sh
 pnpm exec arena init paper ./paper-bot --server http://127.0.0.1:3000
 # 指定历史发行，不读取 current 别名
-pnpm exec arena init paper ./paper-bot --release paper@0.1.0 --server http://127.0.0.1:3000
+pnpm exec arena init paper ./paper-bot --release paper@0.2.0 --server http://127.0.0.1:3000
 ```
 
 对外入口是 `npx @si-arena/cli@latest init paper ./paper-bot --server https://<平台地址>`（需要已发布的 npm 包）。CLI 默认连接 loopback，平台地址由 `--server` 传入；自托管构建可设置 `SI_ARENA_SERVER_URL` 烧入自己的默认地址。`--server` 允许 HTTPS 和 loopback HTTP，下载仅使用同源元数据中的固定发行地址，不跟随 HTTP 重定向。
@@ -42,9 +42,9 @@ pnpm arena run --bot ./my-bot.js --opponent ./another-bot.js --matches 20 --seed
 源码作为 UTF-8 文本读取，先在隔离进程中检查大小和语法，再进入比赛，不作为 Node 模块导入。圈地的玩家入口示例：
 
 ```js
-export default function tick({ observation, Memory, sdk }) {
-  console.log("tick", observation.tick);
-  return { type: "idle" };
+export default function tick({ game, Memory }) {
+  console.log("tick", game.tick);
+  game.self.idle();
 }
 ```
 

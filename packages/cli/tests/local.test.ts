@@ -4,12 +4,13 @@ import { gzipSync } from "node:zlib";
 import { expect, test } from "vitest";
 import { readReplayFile } from "@si-arena/engine/node";
 import type { Replay } from "@si-arena/protocol";
+import { cloneJson } from "@si-arena/protocol";
 import { runCli } from "../src";
-import { fixture } from "./fixture";
+import { fixture, localGame } from "./fixture";
 
 test("batch runs reset Memory, wrap seeds and retain runtime errors/logs", async () => {
   const f = await fixture(
-    `export default ({observation,Memory})=>{Memory.n=(Memory.n??0)+1;console.log(Memory.n);if(observation.tick===1)throw new Error('oops');return {add:Memory.n}}`,
+    "export default ({game,Memory})=>{Memory.n=(Memory.n??0)+1;console.log(Memory.n);if(game.tick===1)throw new Error('oops');return game.submit({add:Memory.n})}",
   );
   try {
     await runCli(
@@ -61,13 +62,13 @@ test("batch runs reset Memory, wrap seeds and retain runtime errors/logs", async
   }
 }, 15000);
 
-test("prepared sessions keep source snapshots, use fresh Memory, and preserve existing destinations", async () => {
+test("prepared sessions keep source snapshots, reset globals and Memory between matches, and preserve destinations", async () => {
   const f = await fixture(
-    "export default ({Memory})=>{Memory.n=(Memory.n??0)+1;return {add:Memory.n}}",
+    "let calls=0;export default ({game,Memory})=>{Memory.n=(Memory.n??0)+1;return game.submit({add:++calls})}",
   );
   try {
     const session = await f.registration.prepare([f.path]);
-    await writeFile(f.path, "export default ()=>({add:9})");
+    await writeFile(f.path, "export default ({game,Memory})=>{game.submit(({add:9}));}");
     const first = await session.run({ seed: 42, replay: join(f.cwd, "first.json.gz") });
     const second = await session.run({ seed: 42, replay: join(f.cwd, "second.json.gz") });
     expect(first.result.players[0]?.score).toBe(6);
@@ -82,11 +83,28 @@ test("prepared sessions keep source snapshots, use fresh Memory, and preserve ex
   }
 }, 15000);
 
+test("CLI replay verification rejects a different release or protocol", async () => {
+  const f = await fixture();
+  try {
+    const prepared = await f.registration.prepare([f.path]);
+    const result = await prepared.run({ seed: 42 });
+    const replay = cloneJson(result.replayData!);
+    expect((await f.registration.verify(replay)).finalStateHash).toBe(result.finalStateHash);
+    replay.game.release = "counter@old";
+    await expect(f.registration.verify(replay)).rejects.toThrow("different trusted game release");
+    replay.game.release = localGame.manifest.release;
+    replay.game.botProtocolVersion++;
+    await expect(f.registration.verify(replay)).rejects.toThrow("different trusted game release");
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("local opponents are ordinary sandboxed players and the CLI supports more than two seats", async () => {
   const f = await fixture();
   try {
     const opponent = join(f.cwd, "opponent.js");
-    await writeFile(opponent, "export default ()=>({add:2})");
+    await writeFile(opponent, "export default ({game,Memory})=>{game.submit(({add:2}));}");
     await runCli(
       ["run", "--bot", f.path, "--opponent", opponent, "--opponent", opponent],
       f.context,
@@ -125,7 +143,7 @@ test("bad source, oversize files and invalid UTF-8 fail before creating matches"
 
 test("untrusted replay failures never emit logs or load bots", async () => {
   const f = await fixture(
-    `export default ()=>{console.log('do not print unverified data');return {add:1}}`,
+    "export default ({game,Memory})=>{console.log('do not print unverified data');return game.submit({add:1})}",
   );
   try {
     await runCli(["run", "--bot", f.path], f.context);
@@ -176,7 +194,9 @@ test("cancelling a batch after a completed match keeps it and starts no further 
 });
 
 test("runtime globals cannot reach the Node host through local bot files", async () => {
-  const f = await fixture("export default ()=>{process.exit(23);return {add:1}}");
+  const f = await fixture(
+    "export default ({game,Memory})=>{process.exit(23);return game.submit({add:1})}",
+  );
   try {
     await runCli(["run", "--bot", f.path], f.context);
     const records = f.lines.map((line) => JSON.parse(line));
@@ -187,7 +207,7 @@ test("runtime globals cannot reach the Node host through local bot files", async
 });
 
 test("cancellation during executor startup/execution removes the unfinished replay", async () => {
-  const f = await fixture("export default ()=>{while(true){}}");
+  const f = await fixture("export default ({game,Memory})=>{while(true){}}");
   const cancellation = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

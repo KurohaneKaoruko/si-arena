@@ -45,6 +45,7 @@ export class SandboxPlayer<Action extends JsonValue> {
   private busy = false;
   private closed = false;
   private lastTick = -1;
+  private resetEnvironment = false;
   private readonly limits: ResourceLimits;
   private readonly source: string;
   private readonly sdkSource: string;
@@ -57,7 +58,7 @@ export class SandboxPlayer<Action extends JsonValue> {
     if (!options.matchId || !options.playerId)
       throw new TypeError("Match and player identities are required");
     this.source = options.source;
-    this.sdkSource = options.sdkSource ?? "export default {}";
+    this.sdkSource = options.sdkSource;
     if (Buffer.byteLength(this.sdkSource) > this.limits.codeBytes)
       throw new SandboxSystemError("Trusted SDK exceeds input budget");
     this.logBudget = options.logBudget ?? new MatchLogBudget(this.limits.logs.matchBytes);
@@ -111,16 +112,19 @@ export class SandboxPlayer<Action extends JsonValue> {
       tick,
       executionId: this.executor?.id ?? randomUUID(),
     };
-    const failed = (error: ExecutionError): TickOutcome<Action> => ({
-      ...identity,
-      ok: false,
-      action: cloneJson(fallback, this.limits.actionBytes),
-      memory: this.memory,
-      error,
-      ...(this.options.captureLogs
-        ? { logs, ...(logsTruncated ? { logsTruncated: true as const } : {}) }
-        : {}),
-    });
+    const failed = (error: ExecutionError): TickOutcome<Action> => {
+      this.resetEnvironment = true;
+      return {
+        ...identity,
+        ok: false,
+        action: cloneJson(fallback, this.limits.actionBytes),
+        memory: this.memory,
+        error,
+        ...(this.options.captureLogs
+          ? { logs, ...(logsTruncated ? { logsTruncated: true as const } : {}) }
+          : {}),
+      };
+    };
     try {
       if (this.rebuilding) {
         await Promise.race([
@@ -150,6 +154,7 @@ export class SandboxPlayer<Action extends JsonValue> {
       };
       const request = {
         kind: "tick",
+        resetEnvironment: this.resetEnvironment,
         input,
         sdkSource: this.sdkSource,
         logBytes: Math.min(this.limits.logs.tickBytes, this.logBudget.remainingBytes),
@@ -218,6 +223,7 @@ export class SandboxPlayer<Action extends JsonValue> {
         Number(message.cpuUsedUs) < 0
       )
         throw new SandboxSystemError("Malformed executor result");
+      this.resetEnvironment = false;
       const output: unknown = JSON.parse(message.payload);
       if (!isRecord(output) || typeof output.ok !== "boolean")
         throw new SandboxSystemError("Invalid execution output");

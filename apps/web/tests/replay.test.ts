@@ -5,6 +5,7 @@ import { replayGames } from "../src/games/replays";
 import ReplayViewer from "../src/components/ReplayViewer.vue";
 import ReplayPage from "../src/pages/ReplayPage.vue";
 import { replayFixture } from "./replay-fixture";
+import { cloneJson } from "@si-arena/protocol";
 
 enableAutoUnmount(afterEach);
 beforeEach(() => {
@@ -17,6 +18,13 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+test("Paper v1 replays are rejected because that release is not registered", async () => {
+  const replay = cloneJson(await replayFixture());
+  replay.game.release = "paper@0.1.0";
+  replay.game.botProtocolVersion = 1;
+  await expect(loadRegisteredReplay(replay, replayGames)).rejects.toThrow("未注册此游戏发行");
 });
 
 test("timeline, keyboard and error navigation preserve S0/input tick semantics and escape player logs", async () => {

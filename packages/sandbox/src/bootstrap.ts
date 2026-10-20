@@ -1,5 +1,5 @@
 /** Trusted guest code. Capture intrinsics before loading the SDK and player module. */
-export const BOOTSTRAP = String.raw`(function(config, emitLog) {
+export const BOOTSTRAP = String.raw`(function(emitLog) {
   const stringify = JSON.stringify;
   const parse = JSON.parse;
   const ownKeys = Reflect.ownKeys;
@@ -7,25 +7,48 @@ export const BOOTSTRAP = String.raw`(function(config, emitLog) {
   const proto = Object.getPrototypeOf;
   const objectProto = Object.prototype;
   const hasOwn = Object.prototype.hasOwnProperty;
-  const promiseProto = Promise.prototype;
   const arrayIsArray = Array.isArray;
   const finite = Number.isFinite;
   const freeze = Object.freeze;
+  const defineProperty = Object.defineProperty;
   const apply = Reflect.apply;
   const slice = String.prototype.slice;
-  const charCodeAt = String.prototype.charCodeAt;
+  const charCodeAt = Function.prototype.call.bind(String.prototype.charCodeAt);
   const setAdd = Set.prototype.add;
   const setHas = Set.prototype.has;
   const setDelete = Set.prototype.delete;
   const SetClass = Set;
+  let config;
+  let game, action, submitted = false, phase = 'closed';
   let failure;
   let logLines = 0, logBytes = 0, logsTruncated = false;
+  function freezeData(value) {
+    if (value && typeof value === 'object') {
+      // Only fresh data from the captured JSON.parse reaches this function:
+      // arrays are dense and every own key is a data property, never a getter.
+      // Avoid descriptors and recursive calls for large primitive grids.
+      if (arrayIsArray(value)) {
+        for (let i = 0; i < value.length; i++) {
+          const child = value[i];
+          if (child && typeof child === 'object') freezeData(child);
+        }
+      } else {
+        const keys = ownKeys(value);
+        for (let i = 0; i < keys.length; i++) {
+          const child = value[keys[i]];
+          if (child && typeof child === 'object') freezeData(child);
+        }
+      }
+      freeze(value);
+    }
+    return value;
+  }
   function size(text) {
     let bytes = 0;
     for (let i = 0; i < text.length; i++) {
-      const c = apply(charCodeAt, text, [i]);
+      const c = charCodeAt(text, i);
       if (c < 128) bytes++; else if (c < 2048) bytes += 2;
-      else if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length && apply(charCodeAt, text, [i+1]) >= 0xdc00 && apply(charCodeAt, text, [i+1]) <= 0xdfff) { bytes += 4; i++; }
+      else if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length && charCodeAt(text, i+1) >= 0xdc00 && charCodeAt(text, i+1) <= 0xdfff) { bytes += 4; i++; }
       else bytes += 3;
     }
     return bytes;
@@ -33,10 +56,10 @@ export const BOOTSTRAP = String.raw`(function(config, emitLog) {
   function cut(text, max) {
     let bytes = 0, end = 0;
     while (end < text.length) {
-      const c = apply(charCodeAt, text, [end]);
+      const c = charCodeAt(text, end);
       let cost = c < 128 ? 1 : c < 2048 ? 2 : 3, units = 1;
       if (c >= 0xd800 && c <= 0xdbff && end + 1 < text.length) {
-        const next = apply(charCodeAt, text, [end + 1]);
+        const next = charCodeAt(text, end + 1);
         if (next >= 0xdc00 && next <= 0xdfff) { cost = 4; units = 2; }
       }
       if (bytes + cost > max) break;
@@ -122,10 +145,9 @@ export const BOOTSTRAP = String.raw`(function(config, emitLog) {
   }
   const consoleObject = {};
   for (const level of ['log','info','warn','error','debug']) {
-    consoleObject[level] = config.captureLogs ? (...args) => log(level, args) : () => {};
+    consoleObject[level] = (...args) => { if (config.captureLogs) log(level, args); };
   }
-  globalThis.console = freeze(consoleObject);
-  const input = freeze({ observation: config.observation, Memory: config.memory, sdk: config.sdk });
+  defineProperty(globalThis, 'console', {value: freeze(consoleObject), writable: false, configurable: false});
   function errorText(error) {
     let name = 'Error', message = 'Player execution failed', stack;
     // Descriptors never invoke guest getters. Proxy traps remain inside the budget.
@@ -158,23 +180,46 @@ export const BOOTSTRAP = String.raw`(function(config, emitLog) {
     return '{"ok":false,"error":' + encoded + ',"logsTruncated":' + logsTruncated + '}';
   }
   return {
-    run(fn, sdk) {
+    begin(text) {
+      config = parse(text);
+      game = action = undefined;
+      submitted = false;
+      phase = 'closed';
       failure = undefined;
+      logLines = logBytes = 0;
+      logsTruncated = false;
+    },
+    prepare(createGame) {
+      const tickConfig = config;
+      function checkActive() {
+        if (config !== tickConfig || phase === 'closed') fail('INVALID_ACTION', 'Commands belong to their current tick only');
+      }
+      const commands = freeze({
+        submit(value) { checkActive(); action = value; submitted = true; },
+        reject(message) { checkActive(); fail('INVALID_ACTION', typeof message === 'string' ? message : 'Invalid game command'); }
+      });
+      phase = 'setup';
+      try {
+        game = createGame(freezeData(config.observation), commands);
+        if (!game || typeof game !== 'object' || !submitted) throw new Error('Trusted game API must initialize its default action and view');
+      } finally { phase = 'closed'; }
+    },
+    run(fn) {
+      failure = undefined;
+      phase = 'player';
       try {
         if (typeof fn !== 'function') fail('ENTRYPOINT_ERROR', 'Default export must be a synchronous function');
-        const args = freeze({observation: input.observation, Memory: input.Memory, sdk});
-        const action = fn(args);
-        if (action && typeof action === 'object') {
-          let p = proto(action);
-          while (p !== null) { if (p === promiseProto) fail('ENTRYPOINT_ERROR', 'Promise results are forbidden'); p = proto(p); }
-        }
+        const args = freeze({game, Memory: config.memory});
+        const result = fn(args);
+        if (result !== undefined) fail('ENTRYPOINT_ERROR', 'Submit commands through the game API; the entrypoint must return undefined');
+        if (failure) return errorResult(failure);
         const a = encode(action, config.limits.actionBytes, 'INVALID_ACTION', 'INVALID_ACTION', false);
-        const m = encode(input.Memory, config.limits.memoryBytes, 'MEMORY_INVALID', 'MEMORY_LIMIT', true);
+        const m = encode(config.memory, config.limits.memoryBytes, 'MEMORY_INVALID', 'MEMORY_LIMIT', true);
         return '{"ok":true,"action":' + a + ',"memory":' + m + ',"logsTruncated":' + logsTruncated + '}';
       } catch (error) {
         const e = failure || { type: 'RUNTIME_ERROR', ...errorText(error) };
         return errorResult(e);
-      }
+      } finally { phase = 'closed'; }
     },
     diagnose(error) { return errorResult({type:'RUNTIME_ERROR', ...errorText(error)}); }
   };

@@ -1,50 +1,77 @@
-# 网格圈地 SDK
+# 网格圈地玩家 API
 
-玩家提交 UTF-8 JavaScript ESM，默认导出一个同步函数，每个 tick 调用一次：
+当前发行为 `paper@0.2.0`、玩家接口 v2。玩家提交自包含的 UTF-8 JavaScript ESM，默认导出同步函数，每 tick 调用一次：
 
 ```js
-export default function tick({ observation, Memory, sdk }) {
-  Memory.turns = (Memory.turns ?? 0) + 1;
-  const route = sdk.homePath(observation);
-  return route?.length ? { type: "move", direction: route[0] } : { type: "idle" };
+/** @param {import("@si-arena/game-paper/sdk").PaperTickInput} input */
+export default function tick({ game, Memory }) {
+  Memory.turns = (typeof Memory.turns === "number" ? Memory.turns : 0) + 1;
+  if (game.self.position.x + 1 < game.board.width) game.self.move("right");
+  else game.self.idle();
 }
 ```
 
-动作是 `{ type: "idle" }` 或 `{ type: "move", direction: "up" | "right" | "down" | "left" }`，不接受额外字段。坐标原点在左上角，向右 x 增大，向下 y 增大。每 tick 同时结算双方动作。
+入口返回 `undefined`，通过角色方法登记动作意图。可以直接结束函数或 `return;`，也可以 `return game.self.move("right")`；不能返回动作对象、Promise 或其他值，否则为 `ENTRYPOINT_ERROR`。JSDoc 的类型引用不会加载模块，玩家运行时禁止 import。
 
-## 观察
+## 圈地的基础动作
 
-`observation` 包含整个地图和双方公开信息，每 tick 都是独立快照：
+| 方法                        | 含义                                                                     |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `game.self.move(direction)` | 登记上、右、下或左移动一格；方向为 `"up"`、`"right"`、`"down"`、`"left"` |
+| `game.self.idle()`          | 登记停留                                                                 |
 
-| 字段                          | 含义                                                              |
-| ----------------------------- | ----------------------------------------------------------------- |
-| `tick`                        | 当前输入 tick，从 0 开始                                          |
-| `width`, `height`, `maxTicks` | 地图宽高和回合上限                                                |
-| `selfId`, `selfSlot`          | 当前玩家身份与席位（0 或 1）                                      |
-| `territory`                   | 按 `y * width + x` 索引的领地数组；-1 为无主，0/1 为所属席位      |
-| `trails`                      | 同样索引的尾迹数组；-1 为无尾迹，0/1 为所属席位                   |
-| `players`                     | 按席位排序的双方玩家：`id`, `slot`, `alive`, `position: { x, y }` |
-| `spawns`                      | 两个席位各自的初始出生点 `{ x, y }`，下标即席位                   |
-| `rngState`                    | 当前规则 PRNG 状态，用于确定性重演                                |
+未调用动作方法时默认停留。同 tick 多次调用采用最后一次，包括 move 与 idle 相互覆盖。这些方法返回 `undefined`，不立即修改位置或地图；双方执行结束后统一结算。方向格式正确但越界或撞到尾迹，属于有效意图，由圈地规则判定重置，不由 API 自动避险。
 
-`players[].alive` 恒为 `true`，含义是仍在比赛中；`position` 始终是当前头部所在格。双方都会留在比赛里：命中越界、头部冲突、交换位置、自撞尾迹或尾迹被切断的一方会被重置——尾迹清空、头部回到 `spawns` 中自己席位的出生点、领地全部保留，该 tick 不移动也不闭合。对局固定打满 `maxTicks`，终局按最终领地面积排名，面积相同则并列。
+方向错误产生 `INVALID_ACTION`，即使玩家 catch 后又调用合法动作，该 tick 也失败。执行异常、超时、CPU/堆/栈、动作或 Memory 超限，同样整体丢弃所有命令和候选 Memory，使用 idle，保留上次成功的 Memory，并在下一 tick 重建环境。
 
-## 辅助函数
+只有 self 提供动作方法，opponent 是公开数据。圈地 API 不提供寻路、回城、威胁距离、安全方向或扩张策略；相关算法由玩家实现，官方 bot 的算法在其自身源码中。
 
-| 函数                              | 返回值                                                            |
-| --------------------------------- | ----------------------------------------------------------------- |
-| `sdk.directions`                  | 固定方向数组 `up, right, down, left`                              |
-| `sdk.homePath(observation)`       | 避开自身尾迹的最短回城方向序列；已在领地内为空数组，不可达为 null |
-| `sdk.threatDistance(observation)` | 对手到己方尾迹的最短合法距离；没有可达目标时为 null               |
-| `sdk.safeMoves(observation)`      | 不越界、不撞自身尾迹或对手当前头部的方向；不保证避开对手下一步    |
-| `sdk.expansion(observation)`      | 从领地内起步的矩形扩张路线；无可用路线时为空数组                  |
+这些动作只属于圈地。其他游戏自行定义角色、方法、规范动作格式与同 tick 冲突规则，平台没有统一的方向或角色模型。
 
-SDK 是沙箱内的可信辅助代码，直接通过参数提供，不需要也不允许 import。开发包 `sdk/` 包含 SDK 的类型和运行源码，安装后的 `@si-arena/game-paper/sdk` 提供 `PaperTickInput` 等类型，JSDoc 的类型引用不会在执行时加载模块。
+## 当前 tick 的公开事实
 
-## 执行与错误
+`game` 每 tick 是全新的只读视图。坐标原点左上，向右 x 增大、向下 y 增大。
 
-每 tick 重建 JS Runtime/Context，全局变量不能跨 tick 保存，只有显式 JSON 对象 `Memory` 延续。直接修改 `Memory`，返回值只包含动作。禁止异步函数、Promise、import、动态 import、require、网络、文件和宿主 API；不依赖现实时间或随机 API。所有随机策略应使用自己的可复现算法并把状态放入 Memory。
+| 字段                         | 含义                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `game.tick`                  | 当前输入 tick，从 0 开始                                                     |
+| `game.maxTicks`              | 本局回合上限，固定 600                                                       |
+| `game.self`                  | 自己的 `id`、`slot`、`position: {x,y}`、`spawn: {x,y}`，以及上述两个动作方法 |
+| `game.opponent`              | 对手的 `id`、`slot`、`position`、`spawn`                                     |
+| `game.board.width`, `height` | 固定 40×30                                                                   |
+| `game.board.territory`       | 长度 1200 的领地数组，索引 `y * width + x`；-1 为无主，0/1 为所属席位        |
+| `game.board.trails`          | 同样编码的尾迹数组，-1 为无尾迹                                              |
+| `game.events`                | 上一 tick 结算产生的公开事件，tick 0 为空数组                                |
 
-当运行异常、CPU/堆/栈、Memory 或动作超限时，丢弃本 tick 的动作和候选 Memory，使用 idle 并保留上次成功的 Memory，下一 tick 再执行。CPU 统计只包含玩家自身：源码求值、入口执行、日志格式化与动作/Memory 序列化（其中调用的 SDK 计入）；沙箱运行时创建与 SDK 初始化属于平台开销，不计入玩家预算。具体预算以游戏页面及开发包 release.json 的 `resolvedLimits` 为准。
+双方始终留在比赛里，头部位置始终存在；没有 alive 字段或 null 位置。内部 `rngState` 不属于玩家 API，策略随机数由玩家用可复现算法维护。
 
-本地 `console.log/info/warn/error/debug` 会在预算内捕获，并关联 tick 保存到回放；线上不收集玩家日志。回放支持查看有效动作、执行错误和资源消耗，不保存玩家源码或 Memory。
+地图数组、坐标、事件及公开对象均冻结；修改它们会失败。保留旧 game 或角色引用不会更新为下一 tick 数据，调用旧引用的动作方法产生 `INVALID_ACTION`，不能向当前 tick 提交。易失缓存可以保存自己的计算结果，但每 tick 应从当前输入获取角色与视图。
+
+## 公开事件
+
+所有事件的 `playerId` 都是事件主体，尾迹切断事件的主体是受害方。事件中的坐标为整数格子，capture.cells 使用地图下标。
+
+| type        | 其他字段                                  |
+| ----------- | ----------------------------------------- |
+| `move`      | `playerId`, `from`, `to`                  |
+| `trail-cut` | `playerId`, `attackerId`, `position`      |
+| `capture`   | `playerId`, `cells`：本次新取得归属的格子 |
+| `reset`     | `playerId`, `from`, `to`, `causes`        |
+
+reset.causes 为一个或多个 `boundary`、`head-collision`、`head-swap`、`self-trail`、`trail-cut`。例如：
+
+```js
+if (game.events.some((e) => e.type === "reset" && e.playerId === game.self.id)) {
+  Memory.plan = null;
+}
+```
+
+事件对应上一世界结算，无论玩家自己的上一次执行是否成功，都不会缺失或积压。原始 JSON 观察包含 `tick`、`maxTicks`、`selfId`、`selfSlot`、`board`、按席位排列的 `players` 和 `events`，供本地调试查看；运行时通过 game 访问，不另行传入 observation 或 sdk。
+
+## Memory、预算与恢复
+
+每场每位玩家独占常驻 QuickJS Runtime/Context，源码和可信 API 模块在环境创建时加载一次。全局变量、闭包、Map、TypedArray 可在成功 tick 间缓存，受同一个堆上限限制；任一失败后缓存丢失，仅恢复上次成功的 JSON Memory。Memory 每 tick 重新注入，通过增删改属性更新；根引用不能替换，不要保存含动作方法的 game 对象。
+
+首次及重建后的玩家模块编译/初始化、每 tick 入口、API 方法调用、日志格式化和命令/Memory 序列化计入玩家 CPU。可信 API 模块加载、当前视图构建与输入注入属于平台开销，墙钟看门狗继续生效。命令与 Memory 原子提交，具体预算以开发包 release.json 的 resolvedLimits 为准。
+
+禁止异步函数、Promise、import、require、网络、文件和宿主 API；不依赖现实时间或随机 API。本地 console 日志有界捕获，线上不收集。标准回放保存规范动作和错误，不保存源码、Memory 或可调用对象。

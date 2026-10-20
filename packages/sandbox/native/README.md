@@ -23,6 +23,8 @@ pnpm --filter @si-arena/sandbox build:wasm
 
 ## 本地性能记录
 
+以下表格是每 tick 新建 Runtime 时的历史基线。当前实现已改为常驻 Runtime；新版冷热对照与完整比赛数据见[实施记录](../../../docs/research/player-execution-implementation.md)。`benchmark` 命令排除前 5 tick，报告的是常驻环境热 tick，Runtime、SDK 和玩家模块不重复初始化。
+
 在 Apple M4、macOS arm64、Node.js 26.11.1、quickjs-emscripten 0.32.0 上采样，关闭日志，使用默认 20ms CPU 预算、两个 1200 格数组作为观察。5 tick 预热后取 100 tick：
 
 | 项目                       |   均值 |    P95 |

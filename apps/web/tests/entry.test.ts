@@ -13,7 +13,7 @@ const game = paperGame.manifest;
 const code = {
   source: 'export default () => ({ type: "idle" })',
   sourceBytes: 41,
-  botProtocolVersion: 1,
+  botProtocolVersion: game.botProtocolVersion,
   updatedAt: new Date().toISOString(),
 };
 const me: GameMeResponse = {

@@ -1,0 +1,290 @@
+{
+  "collectedAt": "2026-10-20T09:04:44.963Z",
+  "revision": "4869793f09ebd5139f05bc873b3e02ed041c20f9",
+  "originalDataHelpersRef": "af8bab107f3d58107541b3c713027d8ecb923d8d",
+  "environment": {
+    "node": "v26.11.1",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "units": "microseconds unless explicitly named otherwise",
+  "methodology": "Both modes use current persistent VM, identical frozen budgets, engine, SDK, bot and WASM. Separate package graphs prevent workspace imports from leaking between modes. Both overlay modules are transpiled identically; before restores original protocol JSON and Paper grid parsers plus previous character access, after uses current helpers. One full warm-up per mode excluded. Six paired seeds, alternating order, serial matches with two parallel players. Timed match includes startup, 600 ticks, rules, gzip+fsync and shutdown; verification separate. No database, queue wait, upload validation or rendering.",
+  "sources": {
+    "before": {
+      "packages/protocol/src/json-data.ts": "a0464b76a463a433422957f76436ddcc29b323435e0d2de8810c30cb0eb9bb0c",
+      "games/paper/src/rules/state.ts": "68467e1dad09db82d8204f446af1d3e633ab1f0e64fddda45388ab1318d060f9",
+      "packages/sandbox/src/bootstrap.ts": "f701d92523c104d1b7214e08ea7029d47e2336b4960db9c173818c45209d4744"
+    },
+    "after": {
+      "packages/protocol/src/json-data.ts": "45eda914e5ee61a0c45f14f36288f5867e7fe97722ce1c4b2ec96f72b9032832",
+      "games/paper/src/rules/state.ts": "f3771d0d76168155c6356a5feecff095fead0844f5856fda65124d9f52f5bc8c",
+      "packages/sandbox/src/bootstrap.ts": "f97749f5492547883898d811257f0547d4663d7f577e9d9637aea880ad80a1a8"
+    }
+  },
+  "warmups": [
+    {
+      "mode": "before",
+      "seed": 41,
+      "wallUs": 2962449,
+      "verifyWallUs": 1604711,
+      "ticks": 600,
+      "errors": {},
+      "finalStateHash": "67febba37a0f1fadd899ef4c66bd2efb23d00f3f3329c84c34e7b175126fd9d2",
+      "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+    },
+    {
+      "mode": "after",
+      "seed": 41,
+      "wallUs": 2244010,
+      "verifyWallUs": 1083495,
+      "ticks": 600,
+      "errors": {},
+      "finalStateHash": "67febba37a0f1fadd899ef4c66bd2efb23d00f3f3329c84c34e7b175126fd9d2",
+      "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+    }
+  ],
+  "pairs": [
+    {
+      "seed": 42,
+      "order": [
+        "before",
+        "after"
+      ],
+      "before": {
+        "mode": "before",
+        "seed": 42,
+        "wallUs": 2830211,
+        "verifyWallUs": 1589631,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "37da4283575a23d083e75b7f48c473ed7bccc58b40e8a192a1184ec1efc70b78",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "after": {
+        "mode": "after",
+        "seed": 42,
+        "wallUs": 2252520,
+        "verifyWallUs": 1086773,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "37da4283575a23d083e75b7f48c473ed7bccc58b40e8a192a1184ec1efc70b78",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "identicalActions": true,
+      "identicalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 20.41158768727844
+    },
+    {
+      "seed": 43,
+      "order": [
+        "after",
+        "before"
+      ],
+      "after": {
+        "mode": "after",
+        "seed": 43,
+        "wallUs": 2272810,
+        "verifyWallUs": 1166368,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "f1926325944a8422817e8efd736adf3f10009e75a8640b8ec6183ab5b33644c3",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "before": {
+        "mode": "before",
+        "seed": 43,
+        "wallUs": 2873247,
+        "verifyWallUs": 1594979,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "f1926325944a8422817e8efd736adf3f10009e75a8640b8ec6183ab5b33644c3",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "identicalActions": true,
+      "identicalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 20.897507245287304
+    },
+    {
+      "seed": 44,
+      "order": [
+        "before",
+        "after"
+      ],
+      "before": {
+        "mode": "before",
+        "seed": 44,
+        "wallUs": 2829377,
+        "verifyWallUs": 1599759,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "1d87a89d199f1134b55d888eeb0371dd69f4206343d420b621e49b0b1079db79",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "after": {
+        "mode": "after",
+        "seed": 44,
+        "wallUs": 2249650,
+        "verifyWallUs": 1081433,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "1d87a89d199f1134b55d888eeb0371dd69f4206343d420b621e49b0b1079db79",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "identicalActions": true,
+      "identicalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 20.489563603577754
+    },
+    {
+      "seed": 45,
+      "order": [
+        "after",
+        "before"
+      ],
+      "after": {
+        "mode": "after",
+        "seed": 45,
+        "wallUs": 2270503,
+        "verifyWallUs": 1083803,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "60d602ff1dd972ed95152b15be25a25f6aa9375e28a56a6b045863ca54323162",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "before": {
+        "mode": "before",
+        "seed": 45,
+        "wallUs": 2809175,
+        "verifyWallUs": 1590318,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "60d602ff1dd972ed95152b15be25a25f6aa9375e28a56a6b045863ca54323162",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "identicalActions": true,
+      "identicalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 19.17545186754118
+    },
+    {
+      "seed": 46,
+      "order": [
+        "before",
+        "after"
+      ],
+      "before": {
+        "mode": "before",
+        "seed": 46,
+        "wallUs": 2810360,
+        "verifyWallUs": 1584611,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "92ece476c5f7e2be26bfeb7d68699033620616afe18493c901acd6161d8844c5",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "after": {
+        "mode": "after",
+        "seed": 46,
+        "wallUs": 2271418,
+        "verifyWallUs": 1091833,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "92ece476c5f7e2be26bfeb7d68699033620616afe18493c901acd6161d8844c5",
+        "actionsSha256": "0fde7fbb0b6639c6b41e760f82c424a8591e0f9f6db9d267a6fec8047edaafd4"
+      },
+      "identicalActions": true,
+      "identicalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 19.176973768485173
+    },
+    {
+      "seed": 47,
+      "order": [
+        "after",
+        "before"
+      ],
+      "after": {
+        "mode": "after",
+        "seed": 47,
+        "wallUs": 2256629,
+        "verifyWallUs": 1094435,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "449ae2458cf932f1462e02f6509d7b7669f88493e99273240ceb89d2955f1392",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "before": {
+        "mode": "before",
+        "seed": 47,
+        "wallUs": 2845442,
+        "verifyWallUs": 1598959,
+        "ticks": 600,
+        "errors": {},
+        "finalStateHash": "449ae2458cf932f1462e02f6509d7b7669f88493e99273240ceb89d2955f1392",
+        "actionsSha256": "b1a702f778aef21899f4bcd694155e3c9593a52cf92eb25fd6a9304a75f6f606"
+      },
+      "identicalActions": true,
+      "identicalState": true,
+      "zeroErrors": true,
+      "reductionPercent": 20.693199861392365
+    }
+  ],
+  "memory": {
+    "before": {
+      "meanWallUs": 8297.763739999938,
+      "medianWallUs": 8256.645999998
+    },
+    "after": {
+      "meanWallUs": 4969.766670000099,
+      "medianWallUs": 4925.958499999979
+    }
+  },
+  "game": {
+    "release": "paper@0.2.0",
+    "botProtocolVersion": 2,
+    "limits": {
+      "codeBytes": 262144,
+      "heapBytes": 33554432,
+      "stackBytes": 262144,
+      "cpuMs": 20,
+      "wallMs": 500,
+      "memoryBytes": 65536,
+      "actionBytes": 1024,
+      "observationBytes": 131072,
+      "resultBytes": 98304,
+      "ipcBytes": 1048576,
+      "errorBytes": 4096,
+      "processMemoryBytes": 268435456,
+      "startupMs": 5000,
+      "logs": {
+        "lineBytes": 2048,
+        "tickLines": 32,
+        "tickBytes": 8192,
+        "matchBytes": 1048576
+      }
+    }
+  },
+  "wasm": {
+    "upstream": "df4efb9ef2cb25c417ecb57986da462d11b244ed",
+    "quickjs": "2025-09-13",
+    "emscripten": "5.0.1",
+    "patch": "allocation-accounting-stack-latch-v1",
+    "wasmSha256": "7614e0e6037f8b15c6dee645be4f909e6592bd32e05b0f2ae7986d574b89583d"
+  },
+  "summary": {
+    "beforeMeanWallUs": 2832968.6666666665,
+    "afterMeanWallUs": 2262255,
+    "reductionPercent": 20.1454281292204,
+    "speedup": 1.2522764527724182,
+    "withVerificationReductionPercent": 24.01670970202706,
+    "medianPairedReductionPercent": 20.450575645428096,
+    "allIdenticalActions": true,
+    "allIdenticalStates": true,
+    "allZeroErrors": true,
+    "memoryReductionPercent": 40.107156268585975
+  }
+}

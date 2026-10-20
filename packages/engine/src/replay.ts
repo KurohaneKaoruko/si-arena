@@ -3,6 +3,7 @@ import {
   freezeJson,
   utf8Bytes,
   type GameResult,
+  type DeepReadonly,
   type JsonValue,
   type ResourceLimits,
 } from "@si-arena/protocol";
@@ -100,6 +101,7 @@ export async function replayMatch<
     )
       throw new TypeError("Invalid replay tick count");
     let terminal: GameResult | undefined;
+    let previousEvents: DeepReadonly<Event[]> = freezeJson([] as Event[]);
     let matchLogBytes = 0;
     for (let tick = 0; tick < replay.ticks.length; tick++) {
       if (terminal) throw new TypeError("Replay contains actions after game termination");
@@ -112,7 +114,7 @@ export async function replayMatch<
       if (entry.tick !== tick)
         throw new TypeError("Replay ticks must start at zero and be contiguous");
       const active = players.flatMap((player) => {
-        const observation = game.rules.observe(state, player.id);
+        const observation = game.rules.observe(state, player.id, { events: previousEvents });
         if (observation === null) return [];
         cloneJson(
           game.parseObservation(cloneJson(observation, limits.observationBytes), {
@@ -136,6 +138,7 @@ export async function replayMatch<
       state = checkedState(game, output.nextState, tick + 1, context);
       const events = freezeJson(cloneJson(output.events));
       if (!Array.isArray(events)) throw new TypeError("Invalid rule events");
+      previousEvents = events;
       if (output.result !== undefined) terminal = parseResult(output.result, players, tick + 1);
       const saved = cloneJson(entry) as unknown as ReplayTick<Action>;
       await options.onTick?.({ state, events, record: freezeJson(saved) });

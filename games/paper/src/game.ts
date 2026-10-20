@@ -2,6 +2,7 @@ import type { DeepReadonly, JsonObject } from "@si-arena/protocol";
 import { paperCatalogEntry } from "./manifest";
 import { paperRules, parsePaperState } from "./rules";
 import { readRecord } from "./rules/validation";
+import { parsePaperObservation } from "./rules/observation";
 import { PAPER_CONFIG } from "./constants";
 import type { PaperObservation } from "./sdk";
 export { PAPER_SDK_SOURCE } from "./sdk/source";
@@ -43,33 +44,22 @@ export const paperGame = {
       tick: number;
     },
   ): PaperObservation {
-    const input = readRecord(
-      raw,
-      [
-        "tick",
-        "width",
-        "height",
-        "maxTicks",
-        "territory",
-        "trails",
-        "players",
-        "spawns",
-        "rngState",
-        "selfId",
-        "selfSlot",
-      ],
-      "Paper observation",
-    );
-    const { selfId, selfSlot, ...world } = input;
-    const state = this.parseState(world, context);
-    const self = state.players.find((player) => player.id === context.playerId);
-    if (!self?.alive || state.tick !== context.tick || selfId !== self.id || selfSlot !== self.slot)
-      throw new TypeError("Paper observation identity or tick mismatch");
-    return { ...state, selfId: self.id, selfSlot: self.slot };
+    const observation = parsePaperObservation(raw);
+    if (
+      observation.tick !== context.tick ||
+      observation.selfId !== context.playerId ||
+      observation.players.some(
+        (p, i) => p.id !== context.players[i]?.id || p.slot !== context.players[i]?.slot,
+      ) ||
+      context.players.length !== 2
+    )
+      throw new TypeError("Paper observation participants or tick mismatch");
+    return observation;
   },
 };
 
 export const officialBotUrl = new URL("../bots/official.js", import.meta.url);
+
 export const developmentFiles = {
   prompt: new URL("../PROMPT.md", import.meta.url),
   sdk: new URL("../SDK.md", import.meta.url),

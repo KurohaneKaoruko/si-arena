@@ -2,7 +2,7 @@ import { Socket } from "node:net";
 import type { ExecuteTickInput, ExecutionIdentity, ResourceLimits } from "@si-arena/protocol";
 import { FramedChannel } from "./framing";
 import { isRecord } from "./json";
-import { compileSource, initializeRuntime, runGuest } from "./runtime";
+import { compileSource, initializeRuntime, GuestSession } from "./runtime";
 
 const limit = Number(process.argv[2]);
 const executionId = process.argv[3];
@@ -11,6 +11,7 @@ if (!Number.isSafeInteger(limit) || limit <= 0 || !executionId)
 const socket = new Socket({ fd: 3, readable: true, writable: true });
 let initialized = false;
 let busy = false;
+const guest = new GuestSession();
 const channel = new FramedChannel(
   socket,
   limit,
@@ -67,6 +68,7 @@ async function dispatch(message: Record<string, unknown>): Promise<void> {
     message.kind !== "tick" ||
     !isRecord(message.input) ||
     typeof message.sdkSource !== "string" ||
+    typeof message.resetEnvironment !== "boolean" ||
     typeof message.logBytes !== "number"
   )
     throw new Error("Invalid executor request");
@@ -90,7 +92,8 @@ async function dispatch(message: Record<string, unknown>): Promise<void> {
     executionId,
   };
   try {
-    const result = runGuest(
+    if (message.resetEnvironment) guest.close();
+    const result = guest.execute(
       input,
       message.sdkSource,
       message.logBytes,

@@ -1,0 +1,472 @@
+{
+  "collectedAt": "2026-10-20T08:41:59.680Z",
+  "revision": "af8bab107f3d58107541b3c713027d8ecb923d8d",
+  "environment": {
+    "node": "v26.11.1",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "units": "microseconds unless suffixed Bytes; wall includes scheduling; host CPU excludes child CPU",
+  "observationBytes": 7477,
+  "sdkBytes": 3225,
+  "sourceBytes": 17033,
+  "runtimeMode": "match-long QuickJS, reset on failure",
+  "micro": [
+    {
+      "name": "idle",
+      "samples": 200,
+      "directWallUs": {
+        "mean": 1674,
+        "p50": 1027,
+        "p95": 3145,
+        "max": 22421
+      },
+      "failures": {},
+      "phases": {
+        "runtimeAndContextUs": {
+          "mean": 125,
+          "p50": 87,
+          "p95": 250,
+          "max": 325
+        },
+        "bootstrapUs": {
+          "mean": 840,
+          "p50": 615,
+          "p95": 1429,
+          "max": 2211
+        },
+        "sdkUs": {
+          "mean": 243,
+          "p50": 168,
+          "p95": 449,
+          "max": 568
+        },
+        "sourceUs": {
+          "mean": 35,
+          "p50": 18,
+          "p95": 83,
+          "max": 335
+        },
+        "entryAndSerializationUs": {
+          "mean": 43,
+          "p50": 26,
+          "p95": 94,
+          "max": 167
+        },
+        "outputUs": {
+          "mean": 22,
+          "p50": 10,
+          "p95": 58,
+          "max": 81
+        },
+        "teardownUs": {
+          "mean": 8,
+          "p50": 4,
+          "p95": 17,
+          "max": 96
+        }
+      }
+    },
+    {
+      "name": "official-initial-observation",
+      "samples": 200,
+      "directWallUs": {
+        "mean": 3849,
+        "p50": 3651,
+        "p95": 4276,
+        "max": 11087
+      },
+      "failures": {},
+      "phases": {
+        "runtimeAndContextUs": {
+          "mean": 84,
+          "p50": 75,
+          "p95": 120,
+          "max": 583
+        },
+        "bootstrapUs": {
+          "mean": 581,
+          "p50": 547,
+          "p95": 718,
+          "max": 1338
+        },
+        "sdkUs": {
+          "mean": 156,
+          "p50": 148,
+          "p95": 186,
+          "max": 432
+        },
+        "sourceUs": {
+          "mean": 450,
+          "p50": 435,
+          "p95": 506,
+          "max": 1028
+        },
+        "entryAndSerializationUs": {
+          "mean": 2397,
+          "p50": 2340,
+          "p95": 2606,
+          "max": 5723
+        },
+        "outputUs": {
+          "mean": 15,
+          "p50": 11,
+          "p95": 38,
+          "max": 82
+        },
+        "teardownUs": {
+          "mean": 5,
+          "p50": 4,
+          "p95": 10,
+          "max": 24
+        }
+      }
+    },
+    {
+      "name": "idle-60KiB-memory",
+      "samples": 200,
+      "directWallUs": {
+        "mean": 8733,
+        "p50": 8704,
+        "p95": 8957,
+        "max": 9990
+      },
+      "failures": {},
+      "phases": {
+        "runtimeAndContextUs": {
+          "mean": 63,
+          "p50": 59,
+          "p95": 87,
+          "max": 121
+        },
+        "bootstrapUs": {
+          "mean": 918,
+          "p50": 902,
+          "p95": 1036,
+          "max": 1121
+        },
+        "sdkUs": {
+          "mean": 135,
+          "p50": 131,
+          "p95": 158,
+          "max": 182
+        },
+        "sourceUs": {
+          "mean": 12,
+          "p50": 12,
+          "p95": 16,
+          "max": 17
+        },
+        "entryAndSerializationUs": {
+          "mean": 7444,
+          "p50": 7439,
+          "p95": 7552,
+          "max": 7966
+        },
+        "outputUs": {
+          "mean": 87,
+          "p50": 84,
+          "p95": 104,
+          "max": 140
+        },
+        "teardownUs": {
+          "mean": 3,
+          "p50": 3,
+          "p95": 5,
+          "max": 24
+        }
+      }
+    },
+    {
+      "name": "idle-240KiB-source-comments",
+      "samples": 200,
+      "directWallUs": {
+        "mean": 2125,
+        "p50": 2107,
+        "p95": 2203,
+        "max": 2369
+      },
+      "failures": {},
+      "phases": {
+        "runtimeAndContextUs": {
+          "mean": 51,
+          "p50": 49,
+          "p95": 65,
+          "max": 91
+        },
+        "bootstrapUs": {
+          "mean": 478,
+          "p50": 471,
+          "p95": 516,
+          "max": 602
+        },
+        "sdkUs": {
+          "mean": 126,
+          "p50": 122,
+          "p95": 143,
+          "max": 173
+        },
+        "sourceUs": {
+          "mean": 1394,
+          "p50": 1389,
+          "p95": 1426,
+          "max": 1469
+        },
+        "entryAndSerializationUs": {
+          "mean": 16,
+          "p50": 16,
+          "p95": 20,
+          "max": 26
+        },
+        "outputUs": {
+          "mean": 6,
+          "p50": 5,
+          "p95": 8,
+          "max": 19
+        },
+        "teardownUs": {
+          "mean": 2,
+          "p50": 2,
+          "p95": 3,
+          "max": 5
+        }
+      }
+    }
+  ],
+  "matches": [
+    {
+      "name": "engine-only-idle",
+      "repetition": 0,
+      "wallUs": 2139653,
+      "hostCpuUs": 1999149,
+      "replayVerifyWallUs": 2268802,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {}
+    },
+    {
+      "name": "engine-only-idle",
+      "repetition": 1,
+      "wallUs": 2140311,
+      "hostCpuUs": 2053244,
+      "replayVerifyWallUs": 1980875,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {}
+    },
+    {
+      "name": "engine-only-idle",
+      "repetition": 2,
+      "wallUs": 1982122,
+      "hostCpuUs": 1973518,
+      "replayVerifyWallUs": 1972653,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {}
+    },
+    {
+      "name": "sandbox-idle",
+      "repetition": 0,
+      "wallUs": 2837805,
+      "hostCpuUs": 2532562,
+      "replayVerifyWallUs": 1962626,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 955,
+        "p50": 854,
+        "p95": 1339,
+        "max": 26081
+      },
+      "startupUs": {
+        "mean": 40549,
+        "p50": 41339,
+        "p95": 41339,
+        "max": 41339
+      },
+      "playerCpuUs": {
+        "mean": 65,
+        "p50": 55,
+        "p95": 110,
+        "max": 2261
+      },
+      "playerCpuTotalUs": 77855
+    },
+    {
+      "name": "sandbox-idle",
+      "repetition": 1,
+      "wallUs": 4346338,
+      "hostCpuUs": 3712553,
+      "replayVerifyWallUs": 3217710,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 1427,
+        "p50": 1211,
+        "p95": 2442,
+        "max": 32429
+      },
+      "startupUs": {
+        "mean": 41771,
+        "p50": 46616,
+        "p95": 46616,
+        "max": 46616
+      },
+      "playerCpuUs": {
+        "mean": 89,
+        "p50": 84,
+        "p95": 152,
+        "max": 2448
+      },
+      "playerCpuTotalUs": 106864
+    },
+    {
+      "name": "sandbox-idle",
+      "repetition": 2,
+      "wallUs": 5626702,
+      "hostCpuUs": 4815466,
+      "replayVerifyWallUs": 3116908,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 1858,
+        "p50": 1682,
+        "p95": 2635,
+        "max": 61972
+      },
+      "startupUs": {
+        "mean": 66016,
+        "p50": 67277,
+        "p95": 67277,
+        "max": 67277
+      },
+      "playerCpuUs": {
+        "mean": 119,
+        "p50": 112,
+        "p95": 160,
+        "max": 2862
+      },
+      "playerCpuTotalUs": 142545
+    },
+    {
+      "name": "sandbox-official",
+      "repetition": 0,
+      "wallUs": 3803242,
+      "hostCpuUs": 2749119,
+      "replayVerifyWallUs": 1974808,
+      "ticks": 600,
+      "finalStateHash": "37da4283575a23d083e75b7f48c473ed7bccc58b40e8a192a1184ec1efc70b78",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 2105,
+        "p50": 1826,
+        "p95": 3641,
+        "max": 57577
+      },
+      "startupUs": {
+        "mean": 50118,
+        "p50": 51018,
+        "p95": 51018,
+        "max": 51018
+      },
+      "playerCpuUs": {
+        "mean": 1185,
+        "p50": 1005,
+        "p95": 2766,
+        "max": 13131
+      },
+      "playerCpuTotalUs": 1421406
+    },
+    {
+      "name": "sandbox-official",
+      "repetition": 1,
+      "wallUs": 3644052,
+      "hostCpuUs": 2531513,
+      "replayVerifyWallUs": 2010739,
+      "ticks": 600,
+      "finalStateHash": "37da4283575a23d083e75b7f48c473ed7bccc58b40e8a192a1184ec1efc70b78",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 2040,
+        "p50": 1787,
+        "p95": 3726,
+        "max": 49127
+      },
+      "startupUs": {
+        "mean": 34754,
+        "p50": 35132,
+        "p95": 35132,
+        "max": 35132
+      },
+      "playerCpuUs": {
+        "mean": 1137,
+        "p50": 974,
+        "p95": 2837,
+        "max": 16256
+      },
+      "playerCpuTotalUs": 1364560
+    },
+    {
+      "name": "sandbox-official",
+      "repetition": 2,
+      "wallUs": 2863307,
+      "hostCpuUs": 2085570,
+      "replayVerifyWallUs": 2403694,
+      "ticks": 600,
+      "finalStateHash": "37da4283575a23d083e75b7f48c473ed7bccc58b40e8a192a1184ec1efc70b78",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 1550,
+        "p50": 1372,
+        "p95": 2897,
+        "max": 38055
+      },
+      "startupUs": {
+        "mean": 32439,
+        "p50": 32648,
+        "p95": 32648,
+        "max": 32648
+      },
+      "playerCpuUs": {
+        "mean": 896,
+        "p50": 764,
+        "p95": 2305,
+        "max": 14991
+      },
+      "playerCpuTotalUs": 1075014
+    }
+  ],
+  "lifecycleExperiment": {
+    "cold": {
+      "mean": 989,
+      "p50": 846,
+      "p95": 1630,
+      "max": 4916
+    },
+    "persistent": {
+      "mean": 215,
+      "p50": 190,
+      "p95": 393,
+      "max": 957
+    }
+  },
+  "cloneExperiment": {
+    "strictClone": {
+      "mean": 296,
+      "p50": 279,
+      "p95": 371,
+      "max": 850
+    },
+    "jsonRoundtripLowerBound": {
+      "mean": 18,
+      "p50": 18,
+      "p95": 19,
+      "max": 110
+    }
+  }
+}

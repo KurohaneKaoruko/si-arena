@@ -1,5 +1,13 @@
 import type { DeepReadonly, GameResult, GameRules } from "@si-arena/protocol";
-import type { PaperAction, PaperObservation, PaperPlayer, PaperState } from "../sdk";
+import type {
+  PaperAction,
+  PaperObservation,
+  PaperPlayer,
+  PaperState,
+  PaperEvent,
+  PaperResetCause,
+} from "../sdk";
+import { observePaper } from "./observation";
 import { parsePaperAction } from "./actions";
 import { captureCells } from "./capture";
 import { initPaper, paperScores, parsePaperState } from "./state";
@@ -16,12 +24,7 @@ const RESET_CAUSES = [
   "self-trail",
   "trail-cut",
 ] as const;
-export type PaperResetCause = (typeof RESET_CAUSES)[number];
-export type PaperEvent =
-  | { type: "move"; playerId: string; from: Position; to: Position }
-  | { type: "trail-cut"; playerId: string; attackerId: string; position: Position }
-  | { type: "capture"; playerId: string; cells: number[] }
-  | { type: "reset"; playerId: string; from: Position; to: Position; causes: PaperResetCause[] };
+export type { PaperResetCause, PaperEvent } from "../sdk";
 
 export interface PaperResult extends GameResult {
   reason: "tick-limit";
@@ -225,12 +228,7 @@ function step(
 
 export const paperRules: PaperRules = {
   init: initPaper,
-  observe(state, playerId) {
-    const snapshot = parsePaperState(state);
-    const player = findPlayer(snapshot, playerId);
-    if (!player.alive || terminal(snapshot)) return null;
-    return { ...snapshot, selfId: player.id, selfSlot: player.slot };
-  },
+  observe: observePaper,
   parseAction: parsePaperAction,
   defaultAction(state, playerId) {
     findPlayer(state, playerId);

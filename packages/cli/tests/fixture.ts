@@ -106,15 +106,15 @@ export const localGame: GameDefinition<State, Observation, Action, never> = {
   },
 };
 
-export async function fixture(bot = "export default ()=>({add:1})") {
+export async function fixture(bot = "export default ({game,Memory})=>{game.submit(({add:1}));}") {
   const cwd = await mkdtemp(join(tmpdir(), "si-arena-cli-"));
   const official = join(cwd, "official.js");
-  await writeFile(official, "export default ()=>({add:0})");
+  await writeFile(official, "export default ({game,Memory})=>{game.submit(({add:0}));}");
   const path = join(cwd, "bot with spaces.js");
   await writeFile(path, bot);
   const registration = defineLocalGame({
     game: localGame,
-    sdkSource: "export default {}",
+    sdkSource: "export default (o,{submit})=>{submit({add:0});return {...o,submit}}",
     officialBotUrl: pathToFileURL(official),
   });
   const lines: string[] = [];

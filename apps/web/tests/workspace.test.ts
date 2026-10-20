@@ -23,7 +23,7 @@ const initial: GameMeResponse = {
   code: {
     source: "export default () => ({})",
     sourceBytes: 24,
-    botProtocolVersion: 1,
+    botProtocolVersion: paperGame.manifest.botProtocolVersion,
     updatedAt: date,
   },
   canMatch: true,

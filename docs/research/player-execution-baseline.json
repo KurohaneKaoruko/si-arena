@@ -1,0 +1,501 @@
+{
+  "date": "2026-10-20",
+  "revision": "af8bab107f3d58107541b3c713027d8ecb923d8d",
+  "environment": {
+    "node": "v26.11.1",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "units": "microseconds unless suffixed Bytes; wall includes scheduling; host CPU excludes child CPU",
+  "observationBytes": 7477,
+  "sdkBytes": 3225,
+  "sourceBytes": 17033,
+  "micro": [
+    {
+      "name": "idle",
+      "samples": 200,
+      "directWallUs": {
+        "mean": 904,
+        "p50": 812,
+        "p95": 1341,
+        "max": 2867
+      },
+      "failures": {},
+      "phases": {
+        "runtimeAndContextUs": {
+          "mean": 70,
+          "p50": 59,
+          "p95": 110,
+          "max": 277
+        },
+        "bootstrapUs": {
+          "mean": 569,
+          "p50": 523,
+          "p95": 803,
+          "max": 1721
+        },
+        "sdkUs": {
+          "mean": 147,
+          "p50": 128,
+          "p95": 219,
+          "max": 570
+        },
+        "sourceUs": {
+          "mean": 15,
+          "p50": 12,
+          "p95": 26,
+          "max": 124
+        },
+        "entryAndSerializationUs": {
+          "mean": 22,
+          "p50": 18,
+          "p95": 33,
+          "max": 102
+        },
+        "outputUs": {
+          "mean": 7,
+          "p50": 6,
+          "p95": 12,
+          "max": 51
+        },
+        "teardownUs": {
+          "mean": 63,
+          "p50": 53,
+          "p95": 110,
+          "max": 232
+        }
+      }
+    },
+    {
+      "name": "official-initial-observation",
+      "samples": 200,
+      "directWallUs": {
+        "mean": 3400,
+        "p50": 3369,
+        "p95": 3642,
+        "max": 3921
+      },
+      "failures": {},
+      "phases": {
+        "runtimeAndContextUs": {
+          "mean": 67,
+          "p50": 63,
+          "p95": 91,
+          "max": 205
+        },
+        "bootstrapUs": {
+          "mean": 560,
+          "p50": 547,
+          "p95": 633,
+          "max": 816
+        },
+        "sdkUs": {
+          "mean": 139,
+          "p50": 135,
+          "p95": 165,
+          "max": 188
+        },
+        "sourceUs": {
+          "mean": 421,
+          "p50": 413,
+          "p95": 466,
+          "max": 692
+        },
+        "entryAndSerializationUs": {
+          "mean": 2117,
+          "p50": 2113,
+          "p95": 2172,
+          "max": 2225
+        },
+        "outputUs": {
+          "mean": 7,
+          "p50": 6,
+          "p95": 10,
+          "max": 21
+        },
+        "teardownUs": {
+          "mean": 80,
+          "p50": 76,
+          "p95": 109,
+          "max": 161
+        }
+      }
+    },
+    {
+      "name": "idle-60KiB-memory",
+      "samples": 200,
+      "directWallUs": {
+        "mean": 9054,
+        "p50": 8959,
+        "p95": 9513,
+        "max": 11968
+      },
+      "failures": {},
+      "phases": {
+        "runtimeAndContextUs": {
+          "mean": 79,
+          "p50": 77,
+          "p95": 103,
+          "max": 116
+        },
+        "bootstrapUs": {
+          "mean": 1246,
+          "p50": 1230,
+          "p95": 1389,
+          "max": 1608
+        },
+        "sdkUs": {
+          "mean": 153,
+          "p50": 151,
+          "p95": 184,
+          "max": 233
+        },
+        "sourceUs": {
+          "mean": 14,
+          "p50": 14,
+          "p95": 18,
+          "max": 56
+        },
+        "entryAndSerializationUs": {
+          "mean": 7388,
+          "p50": 7318,
+          "p95": 7750,
+          "max": 8957
+        },
+        "outputUs": {
+          "mean": 71,
+          "p50": 68,
+          "p95": 83,
+          "max": 183
+        },
+        "teardownUs": {
+          "mean": 74,
+          "p50": 75,
+          "p95": 94,
+          "max": 110
+        }
+      }
+    },
+    {
+      "name": "idle-240KiB-source-comments",
+      "samples": 200,
+      "directWallUs": {
+        "mean": 2204,
+        "p50": 2179,
+        "p95": 2357,
+        "max": 2578
+      },
+      "failures": {},
+      "phases": {
+        "runtimeAndContextUs": {
+          "mean": 56,
+          "p50": 51,
+          "p95": 80,
+          "max": 107
+        },
+        "bootstrapUs": {
+          "mean": 525,
+          "p50": 511,
+          "p95": 608,
+          "max": 805
+        },
+        "sdkUs": {
+          "mean": 130,
+          "p50": 125,
+          "p95": 156,
+          "max": 175
+        },
+        "sourceUs": {
+          "mean": 1414,
+          "p50": 1410,
+          "p95": 1434,
+          "max": 1477
+        },
+        "entryAndSerializationUs": {
+          "mean": 17,
+          "p50": 16,
+          "p95": 23,
+          "max": 30
+        },
+        "outputUs": {
+          "mean": 5,
+          "p50": 5,
+          "p95": 7,
+          "max": 22
+        },
+        "teardownUs": {
+          "mean": 52,
+          "p50": 47,
+          "p95": 79,
+          "max": 85
+        }
+      }
+    }
+  ],
+  "matches": [
+    {
+      "name": "engine-only-idle",
+      "repetition": 0,
+      "wallUs": 1740867,
+      "hostCpuUs": 1734331,
+      "replayVerifyWallUs": 1713862,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {}
+    },
+    {
+      "name": "engine-only-idle",
+      "repetition": 1,
+      "wallUs": 1716271,
+      "hostCpuUs": 1714203,
+      "replayVerifyWallUs": 1722257,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {}
+    },
+    {
+      "name": "engine-only-idle",
+      "repetition": 2,
+      "wallUs": 1732393,
+      "hostCpuUs": 1730499,
+      "replayVerifyWallUs": 1739162,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {}
+    },
+    {
+      "name": "sandbox-idle",
+      "repetition": 0,
+      "wallUs": 3002595,
+      "hostCpuUs": 2243018,
+      "replayVerifyWallUs": 1752391,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 1586,
+        "p50": 1460,
+        "p95": 1963,
+        "max": 22269
+      },
+      "startupUs": {
+        "mean": 39829,
+        "p50": 40932,
+        "p95": 40932,
+        "max": 40932
+      },
+      "playerCpuUs": {
+        "mean": 53,
+        "p50": 46,
+        "p95": 70,
+        "max": 1165
+      },
+      "playerCpuTotalUs": 63323
+    },
+    {
+      "name": "sandbox-idle",
+      "repetition": 1,
+      "wallUs": 2964612,
+      "hostCpuUs": 2217946,
+      "replayVerifyWallUs": 2026280,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 1566,
+        "p50": 1467,
+        "p95": 1884,
+        "max": 24442
+      },
+      "startupUs": {
+        "mean": 32307,
+        "p50": 32765,
+        "p95": 32765,
+        "max": 32765
+      },
+      "playerCpuUs": {
+        "mean": 53,
+        "p50": 47,
+        "p95": 67,
+        "max": 1533
+      },
+      "playerCpuTotalUs": 63646
+    },
+    {
+      "name": "sandbox-idle",
+      "repetition": 2,
+      "wallUs": 3490653,
+      "hostCpuUs": 2522261,
+      "replayVerifyWallUs": 1804495,
+      "ticks": 600,
+      "finalStateHash": "7954c48a8deb440d9cc0975524c72aa4523cb22d9fcf95be3a1a80a341a67436",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 1971,
+        "p50": 1824,
+        "p95": 2546,
+        "max": 27186
+      },
+      "startupUs": {
+        "mean": 45842,
+        "p50": 46814,
+        "p95": 46814,
+        "max": 46814
+      },
+      "playerCpuUs": {
+        "mean": 66,
+        "p50": 57,
+        "p95": 106,
+        "max": 2470
+      },
+      "playerCpuTotalUs": 78688
+    },
+    {
+      "name": "sandbox-official",
+      "repetition": 0,
+      "wallUs": 4109936,
+      "hostCpuUs": 2378454,
+      "replayVerifyWallUs": 1820593,
+      "ticks": 600,
+      "finalStateHash": "37da4283575a23d083e75b7f48c473ed7bccc58b40e8a192a1184ec1efc70b78",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 3193,
+        "p50": 2937,
+        "p95": 4439,
+        "max": 41420
+      },
+      "startupUs": {
+        "mean": 32988,
+        "p50": 33394,
+        "p95": 33394,
+        "max": 33394
+      },
+      "playerCpuUs": {
+        "mean": 1474,
+        "p50": 1327,
+        "p95": 2836,
+        "max": 15548
+      },
+      "playerCpuTotalUs": 1768210
+    },
+    {
+      "name": "sandbox-official",
+      "repetition": 1,
+      "wallUs": 4067769,
+      "hostCpuUs": 2356198,
+      "replayVerifyWallUs": 2128873,
+      "ticks": 600,
+      "finalStateHash": "37da4283575a23d083e75b7f48c473ed7bccc58b40e8a192a1184ec1efc70b78",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 3160,
+        "p50": 2940,
+        "p95": 4585,
+        "max": 40647
+      },
+      "startupUs": {
+        "mean": 32078,
+        "p50": 32310,
+        "p95": 32310,
+        "max": 32310
+      },
+      "playerCpuUs": {
+        "mean": 1485,
+        "p50": 1338,
+        "p95": 2906,
+        "max": 12627
+      },
+      "playerCpuTotalUs": 1782591
+    },
+    {
+      "name": "sandbox-official",
+      "repetition": 2,
+      "wallUs": 4152509,
+      "hostCpuUs": 2380540,
+      "replayVerifyWallUs": 1951063,
+      "ticks": 600,
+      "finalStateHash": "37da4283575a23d083e75b7f48c473ed7bccc58b40e8a192a1184ec1efc70b78",
+      "errors": {},
+      "executorWallUs": {
+        "mean": 3213,
+        "p50": 2924,
+        "p95": 4602,
+        "max": 61435
+      },
+      "startupUs": {
+        "mean": 48431,
+        "p50": 48819,
+        "p95": 48819,
+        "max": 48819
+      },
+      "playerCpuUs": {
+        "mean": 1504,
+        "p50": 1351,
+        "p95": 2974,
+        "max": 15974
+      },
+      "playerCpuTotalUs": 1804882
+    }
+  ],
+  "inputExperiment": {
+    "original": {
+      "mean": 792,
+      "p50": 762,
+      "p95": 946,
+      "max": 1460
+    },
+    "stringInput": {
+      "mean": 763,
+      "p50": 731,
+      "p95": 922,
+      "max": 1750
+    }
+  },
+  "serializerExperiment": {
+    "empty": {
+      "original": {
+        "mean": 783,
+        "p50": 761,
+        "p95": 906,
+        "max": 1132
+      },
+      "boundCharacterAccess": {
+        "mean": 788,
+        "p50": 764,
+        "p95": 925,
+        "max": 1176
+      }
+    },
+    "60KiB": {
+      "original": {
+        "mean": 9307,
+        "p50": 9221,
+        "p95": 10097,
+        "max": 10491
+      },
+      "boundCharacterAccess": {
+        "mean": 5779,
+        "p50": 5717,
+        "p95": 6279,
+        "max": 8966
+      }
+    }
+  },
+  "cloneExperiment": {
+    "strictClone": {
+      "mean": 291,
+      "p50": 286,
+      "p95": 338,
+      "max": 590
+    },
+    "jsonRoundtripLowerBound": {
+      "mean": 19,
+      "p50": 18,
+      "p95": 20,
+      "max": 92
+    }
+  }
+}

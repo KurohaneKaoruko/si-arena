@@ -3,6 +3,7 @@ import {
   freezeJson,
   truncateUtf8,
   utf8Bytes,
+  type DeepReadonly,
   type GameResult,
   type JsonValue,
   type PlayerLog,
@@ -118,11 +119,12 @@ export async function runMatch<
     checkCancelled();
     let matchLogBytes = 0;
     let result: GameResult | undefined;
+    let previousEvents: DeepReadonly<Event[]> = freezeJson([] as Event[]);
     for (let tick = 0; tick < game.manifest.maxTicks; tick++) {
       checkCancelled();
       // Finish all observations/defaults before dispatching any player code.
       const active = players.flatMap((player) => {
-        const observation = game.rules.observe(state, player.id);
+        const observation = game.rules.observe(state, player.id, { events: previousEvents });
         if (observation === null) return [];
         const snapshot = cloneJson(
           game.parseObservation(cloneJson(observation, limits.observationBytes), {
@@ -217,6 +219,7 @@ export async function runMatch<
       state = checkedState(game, stepped.nextState, tick + 1, context);
       const events = freezeJson(cloneJson(stepped.events));
       if (!Array.isArray(events)) throw new EngineError("Rules must return a JSON event array");
+      previousEvents = events;
       if (stepped.result !== undefined) result = parseResult(stepped.result, players, tick + 1);
       if (!result && tick + 1 === game.manifest.maxTicks)
         throw new EngineError("Rules did not terminate within maxTicks");

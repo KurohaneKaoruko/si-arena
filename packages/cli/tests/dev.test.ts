@@ -26,7 +26,7 @@ async function pollStatus(url: URL, check: (status: SessionStatus) => boolean, t
 
 test("dev serves a live session with replay, memory and restart endpoints", async () => {
   const f = await fixture(
-    `export default ({Memory})=>{Memory.n=(Memory.n??0)+1;return {add:Memory.n}}`,
+    `export default ({game,Memory})=>{Memory.n=(Memory.n??0)+1;game.submit({add:Memory.n})}`,
   );
   const pages = await mkdtemp(join(tmpdir(), "si-arena-dev-"));
   await writeFile(join(pages, "dev.html"), "<h1>dev page</h1>");
