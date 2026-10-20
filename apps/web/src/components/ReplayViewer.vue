@@ -5,6 +5,7 @@ import type { BrowserReplaySession } from "@si-arena/player/browser";
 import AppBadge from "./ui/AppBadge.vue";
 import AppButton from "./ui/AppButton.vue";
 import AppSelect from "./ui/AppSelect.vue";
+import AppSlider from "./ui/AppSlider.vue";
 
 const props = defineProps<{
   session: BrowserReplaySession;
@@ -170,7 +171,9 @@ function jumpError(direction: -1 | 1) {
 function keyboard(event: KeyboardEvent) {
   if (
     event.target instanceof HTMLElement &&
-    event.target.closest("input,textarea,button,a,summary,[role=listbox],[role=option]")
+    event.target.closest(
+      "input,textarea,button,a,summary,[role=listbox],[role=option],[role=slider]",
+    )
   )
     return;
   if (event.altKey || event.ctrlKey || event.metaKey) return;
@@ -221,16 +224,13 @@ function keyboard(event: KeyboardEvent) {
           <p v-if="canvasError" role="alert" class="p-4 text-sm text-danger">{{ canvasError }}</p>
         </div>
         <div class="mt-4 rounded-card border border-line bg-surface p-4 shadow-card">
-          <label for="replay-timeline" class="sr-only">已完成 tick 时间轴</label>
-          <input
-            id="replay-timeline"
-            class="block min-h-9 w-full cursor-pointer accent-accent"
-            type="range"
-            min="0"
+          <AppSlider
+            :model-value="tick"
+            :min="0"
             :max="session.totalTicks"
-            :value="tick"
-            :aria-valuetext="`已完成 ${tick} tick`"
-            @input="seek"
+            label="已完成 tick 时间轴"
+            :value-text="`已完成 ${tick} tick`"
+            @update:model-value="playback.seek"
           />
           <div class="mt-2 flex flex-wrap items-center gap-2">
             <AppButton

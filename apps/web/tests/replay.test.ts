@@ -91,6 +91,24 @@ test("keys pressed inside the select popup do not drive the replay", async () =>
   expect(wrapper.text()).not.toContain("播放中");
 });
 
+test("the timeline slider seeks the replay without starting playback", async () => {
+  const session = await loadRegisteredReplay(await replayFixture(), replayGames);
+  const wrapper = mount(ReplayViewer, { props: { session, fileName: "match.json.gz" } });
+  const slider = wrapper.get('[role="slider"]');
+  expect(slider.attributes("aria-valuemin")).toBe("0");
+  expect(slider.attributes("aria-valuemax")).toBe(String(session.totalTicks));
+  expect(slider.attributes("aria-valuetext")).toContain("已完成 0");
+
+  await slider.trigger("keydown", { key: "ArrowRight" });
+  await flushPromises();
+  expect(wrapper.get('[data-testid="tick-count"]').text()).toContain("已完成 1");
+
+  // 滑块消费掉的按键不能顺带启停回放
+  await slider.trigger("keydown", { key: " " });
+  await flushPromises();
+  expect(wrapper.text()).not.toContain("播放中");
+});
+
 test("file opening failures show an error without an old or partially verified match", async () => {
   const wrapper = mount(ReplayPage);
   expect(wrapper.text()).toContain("选择一场比赛");

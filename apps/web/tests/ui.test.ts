@@ -3,6 +3,7 @@ import { defineComponent, h } from "vue";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import AppButton from "../src/components/ui/AppButton.vue";
 import AppSelect from "../src/components/ui/AppSelect.vue";
+import AppSlider from "../src/components/ui/AppSlider.vue";
 import StateBlock from "../src/components/ui/StateBlock.vue";
 import ToastHost from "../src/components/ui/ToastHost.vue";
 import { useToast } from "../src/composables/useToast";
@@ -57,6 +58,65 @@ test("the state block renders loading, error and empty states with a retry actio
 
   const empty = mount(StateBlock, { props: { status: "empty", message: "还没有比赛" } });
   expect(empty.text()).toContain("还没有比赛");
+});
+
+test("the slider reports its value and moves with the keyboard", async () => {
+  const wrapper = mount(AppSlider, {
+    props: {
+      modelValue: 5,
+      min: 0,
+      max: 10,
+      label: "时间轴",
+      valueText: "已完成 5 tick",
+    },
+  });
+  const slider = wrapper.get('[role="slider"]');
+  expect(slider.attributes("aria-label")).toBe("时间轴");
+  expect(slider.attributes("aria-valuemin")).toBe("0");
+  expect(slider.attributes("aria-valuemax")).toBe("10");
+  expect(slider.attributes("aria-valuenow")).toBe("5");
+  expect(slider.attributes("aria-valuetext")).toBe("已完成 5 tick");
+  expect(slider.attributes("tabindex")).toBe("0");
+
+  await slider.trigger("keydown", { key: "ArrowRight" });
+  expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([6]);
+  await slider.trigger("keydown", { key: "ArrowLeft" });
+  expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([4]);
+  await slider.trigger("keydown", { key: "Home" });
+  expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([0]);
+  await slider.trigger("keydown", { key: "End" });
+  expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([10]);
+  // 越界的方向键要夹在区间内
+  await slider.trigger("keydown", { key: "PageUp" });
+  expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([10]);
+});
+
+test("the slider keeps its own keys away from the page around it", async () => {
+  const onKeydown = vi.fn();
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        return () =>
+          h("div", { onKeydown }, [
+            h(AppSlider, { modelValue: 0, min: 0, max: 10, label: "时间轴" }),
+          ]);
+      },
+    }),
+  );
+  const slider = wrapper.get('[role="slider"]');
+  await slider.trigger("keydown", { key: "ArrowRight" });
+  await slider.trigger("keydown", { key: "End" });
+  expect(onKeydown).not.toHaveBeenCalled();
+});
+
+test("the slider ignores the keyboard while it is disabled", async () => {
+  const wrapper = mount(AppSlider, {
+    props: { modelValue: 5, min: 0, max: 10, label: "时间轴", disabled: true },
+  });
+  const slider = wrapper.get('[role="slider"]');
+  expect(slider.attributes("aria-disabled")).toBe("true");
+  await slider.trigger("keydown", { key: "ArrowRight" });
+  expect(wrapper.emitted("update:modelValue")).toBeUndefined();
 });
 
 test("a link without download stays a navigation so anchor targets still work", () => {
