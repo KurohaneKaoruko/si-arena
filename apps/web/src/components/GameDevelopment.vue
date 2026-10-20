@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { GameCatalogEntry } from "@si-arena/protocol";
 import { parseGameDevelopment, parseGameReleaseMetadata } from "@si-arena/protocol";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useApiResource } from "../composables/useApiResource";
 import { useToast } from "../composables/useToast";
 import { copyText } from "../utils/clipboard";
@@ -12,6 +12,7 @@ import StateBlock from "./ui/StateBlock.vue";
 const props = defineProps<{ game: GameCatalogEntry }>();
 const toast = useToast();
 const promptOpen = ref(false);
+const setupOpen = ref(false);
 const base = computed(() => `/api/games/${encodeURIComponent(props.game.id)}`);
 const { data, status, error, reload } = useApiResource(
   () => `${base.value}/development`,
@@ -37,17 +38,40 @@ const command = computed(
   () =>
     `npx @si-arena/cli@latest init ${props.game.id} ./${props.game.id}-bot --server ${JSON.stringify(window.location.origin)}`,
 );
-async function copy(text: string, label: string) {
+const setupPrompt = computed(() => {
+  const directory = `./${props.game.id}-bot`;
+  return [
+    `我要参加 SI Arena 平台的「${props.game.name}」编程竞技。请你在我的电脑上完成环境准备、项目初始化与依赖安装，然后按项目内的参赛提示词为我编写参赛 bot，并用本地工具验证通过。`,
+    ``,
+    `1. 检查环境（node -v、pnpm -v）：需要 Node.js ≥ 26 与 pnpm ≥ 12；缺失或版本过低时，自行选择当前系统上合适的方式安装或升级。`,
+    `2. 在当前目录执行初始化命令：`,
+    `   ${command.value}`,
+    `3. 进入 ${directory}，执行 pnpm install --frozen-lockfile。`,
+    `4. 依次完整阅读项目内的 PROMPT.md（比赛规则与胜负判定）、SDK.md（每 tick 玩家接口）和 bots/official.js（官方示例策略）。`,
+    `5. 以明显强于官方示例 bot 为目标编写完整参赛代码，写入 bot.js 覆盖模板；PROMPT.md 中「只输出最终完整代码」指写入该文件，不要另建文件或输出围栏。`,
+    `6. 运行 pnpm arena run --bot ./bot.js --matches 20 --seed 42，按 PROMPT.md 的强度标准验证：对官方 bot 胜率不低于 80%、无执行错误；未达标继续改进并复测。`,
+    `7. 完成后向我报告最终战绩，并提醒我回到平台网页，在游戏页用「上传策略」选择（或拖放）bot.js 文件上传参赛。`,
+  ].join("\n");
+});
+async function copy(text: string, label: string, onFail?: () => void) {
   if (await copyText(text)) {
     toast.success(`${label}已复制。`);
     return;
   }
-  promptOpen.value = true;
+  onFail?.();
   toast.warning("无法访问剪贴板，请手动选择并复制下方文本。");
 }
 function sourceLink(source: string) {
   return `data:text/plain;charset=utf-8,${encodeURIComponent(source)}`;
 }
+// The route reuses this component across games; collapsed panels must not leak between them.
+watch(
+  () => props.game.id,
+  () => {
+    promptOpen.value = false;
+    setupOpen.value = false;
+  },
+);
 </script>
 
 <template>
@@ -62,24 +86,36 @@ function sourceLink(source: string) {
     <div class="border-b border-line py-5">
       <h3 class="text-sm font-semibold">快速开始</h3>
       <p class="mt-1.5 text-sm leading-6 text-soft">Node.js 26+ · pnpm 12</p>
-      <StateBlock v-if="releaseStatus === 'loading'" class="mt-4" status="loading" />
-      <div v-else-if="release" class="mt-4">
-        <div class="flex flex-wrap items-center gap-2">
-          <AppButton variant="primary" @click="copy(command, '初始化命令')"
-            >复制初始化命令</AppButton
-          >
-          <AppButton variant="secondary" :href="`${releasePath}/download`" download
-            >下载开发包 ZIP</AppButton
-          >
-          <span class="font-mono text-xs text-faint"
-            >{{ (release.archive.bytes / 1024 / 1024).toFixed(1) }} MiB</span
-          >
-        </div>
-        <pre class="code-block mt-4 text-accent"><code>{{ command }}</code></pre>
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        <AppButton variant="primary" @click="copy(command, '初始化命令')">复制初始化命令</AppButton>
+        <AppButton
+          variant="secondary"
+          @click="copy(setupPrompt, 'AI 安装提示词', () => (setupOpen = true))"
+          >复制 AI 安装提示词</AppButton
+        >
+        <AppButton v-if="release" variant="secondary" :href="`${releasePath}/download`" download
+          >下载开发包 ZIP</AppButton
+        >
+        <span v-if="release" class="font-mono text-xs text-faint"
+          >{{ (release.archive.bytes / 1024 / 1024).toFixed(1) }} MiB</span
+        >
       </div>
+      <pre class="code-block mt-4 text-accent"><code>{{ command }}</code></pre>
+      <details :open="setupOpen" @toggle="setupOpen = ($event.target as HTMLDetailsElement).open">
+        <summary class="w-fit cursor-pointer py-2 text-xs text-soft hover:text-ink">
+          查看 AI 安装提示词全文（环境准备、初始化与编写 bot 一条龙）
+        </summary>
+        <textarea
+          aria-label="AI 安装提示词"
+          class="input min-h-72 resize-y p-3.5 font-mono text-[13px] leading-6"
+          readonly
+          :value="setupPrompt"
+        />
+      </details>
+      <StateBlock v-if="releaseStatus === 'loading'" class="mt-4" status="loading" />
       <div v-else-if="releaseStatus === 'error'" class="mt-4">
         <p class="text-sm leading-6 text-soft">
-          此发行的下载包暂不可用，仍可使用下方提示词和示例。
+          此发行的下载包暂不可用，初始化命令与提示词仍可使用。
         </p>
         <AppButton class="mt-3" variant="secondary" @click="reloadRelease"
           >重新获取开发包</AppButton
@@ -95,7 +131,9 @@ function sourceLink(source: string) {
           <div class="flex flex-wrap items-center justify-between gap-3">
             <h3 class="text-sm font-semibold">统一参赛提示词</h3>
             <div class="flex flex-wrap gap-2">
-              <AppButton variant="secondary" @click="copy(data.prompt, '参赛提示词')"
+              <AppButton
+                variant="secondary"
+                @click="copy(data.prompt, '参赛提示词', () => (promptOpen = true))"
                 >复制提示词</AppButton
               >
               <AppButton variant="secondary" :href="sourceLink(data.prompt)" download="PROMPT.md"
