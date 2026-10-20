@@ -6,10 +6,15 @@ import { cloneJson, type DeepReadonly } from "@si-arena/protocol";
 
 test("live observations, replay verification and checkpoint seeks receive exactly the preceding events", async () => {
   const base = counterGame(105);
+  let stepCalls = 0;
   const game: typeof base = {
     ...base,
     rules: {
       ...base.rules,
+      step(state, actions) {
+        stepCalls++;
+        return base.rules.step(state, actions);
+      },
       observe(state, id, context) {
         const events = context?.events ?? [];
         expect(Object.isFrozen(events)).toBe(true);
@@ -28,6 +33,10 @@ test("live observations, replay verification and checkpoint seeks receive exactl
     });
     expect(session.frame(completed).state.tick).toBe(completed);
   }
+  // Repeating an observation at the resting tick must not re-derive its input frame.
+  const before = stepCalls;
+  expect(session.observation(105, "a")).toMatchObject({ tick: 104, events: [{ tick: 103 }] });
+  expect(stepCalls).toBe(before);
 });
 
 test("initial worlds and checkpoint seeks use the engine's state normalization and slot context", async () => {

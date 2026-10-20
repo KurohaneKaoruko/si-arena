@@ -20,6 +20,8 @@ export interface ReplayFrame<State, Action, Event> {
   state: DeepReadonly<State>;
   previousState: DeepReadonly<State>;
   events: DeepReadonly<Event[]>;
+  /** Events of the step that produced `previousState`: the observation input at this tick. Absent when the frame was rebuilt from a checkpoint without its predecessor. */
+  inputEvents?: DeepReadonly<Event[]> | undefined;
   record: DeepReadonly<ReplayTick<Action>> | null;
 }
 export interface SessionOptions {
@@ -109,10 +111,12 @@ export async function createReplaySession<
   const errorTicks = Object.freeze(
     replay.ticks.filter((tick) => Object.keys(tick.errors ?? {}).length).map((tick) => tick.tick),
   );
+  const emptyEvents = freezeJson([] as Event[]);
   let last: ReplayFrame<State, Action, Event> = Object.freeze({
     state: initial,
     previousState: initial,
-    events: [],
+    events: emptyEvents,
+    inputEvents: emptyEvents,
     record: null,
   });
   const frame = (completedTicks: number): ReplayFrame<State, Action, Event> => {
@@ -127,7 +131,8 @@ export async function createReplaySession<
       return (last = Object.freeze({
         state: initial,
         previousState: initial,
-        events: [],
+        events: emptyEvents,
+        inputEvents: emptyEvents,
         record: null,
       }));
     let state = initial;
@@ -145,7 +150,10 @@ export async function createReplaySession<
       const output = game.rules.step(state, record.actions);
       const next = parseGameState(game, output.nextState, state.tick + 1, context);
       const events = freezeJson(cloneJson(output.events));
-      last = Object.freeze({ state: next, previousState: state, events, record });
+      // Only a frame stepped consecutively from `last` knows the events that
+      // were current while its previous state was the observation input.
+      const inputEvents = last.state === state ? last.events : undefined;
+      last = Object.freeze({ state: next, previousState: state, events, inputEvents, record });
       state = next;
       if (state.tick % 50 === 0) remember(state);
     }
@@ -157,8 +165,7 @@ export async function createReplaySession<
     frame,
     observation(completedTicks: number, playerId: string): Observation | null {
       const current = frame(completedTicks);
-      const inputTick = current.previousState.tick;
-      const events = inputTick === 0 ? freezeJson([] as Event[]) : frame(inputTick).events;
+      const events = current.inputEvents ?? frame(current.previousState.tick).events;
       last = current;
       return game.rules.observe(current.previousState, playerId, { events });
     },

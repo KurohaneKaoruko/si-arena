@@ -183,11 +183,28 @@ test("trusted game API factory failures remain system errors", async () => {
     `export default ()=>{throw new Error('broken factory')}`,
     `export default ()=>({})`,
     `export default {}`,
+    `export default (o,{submit})=>{submit(undefined);return {...o}}`,
+    `export default (o,{submit})=>{submit(()=>{});return {...o}}`,
   ]) {
     const player = await create(`export default ()=>{}`, { sdkSource });
     await expect(player.execute(0, {})).rejects.toBeInstanceOf(SandboxSystemError);
     expect(player.memory).toEqual({});
   }
+});
+
+test("a missing trusted SDK source fails fast instead of deep in the executor", async () => {
+  await expect(
+    SandboxPlayer.create<JsonValue>({
+      source: "export default ()=>{}",
+      matchId: "match",
+      playerId: "p",
+      isolation: { kind: "local" },
+      limits: limits(),
+      sdkSource: undefined as unknown as string,
+      defaultAction: { type: "idle" },
+      parseAction: () => ({ ok: true, action: { type: "idle" } }),
+    }),
+  ).rejects.toThrow(TypeError);
 });
 
 test("runtime errors discard all candidate output, preserve captured logs, and recover next tick", async () => {

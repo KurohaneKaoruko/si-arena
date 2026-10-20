@@ -202,6 +202,10 @@ export const BOOTSTRAP = String.raw`(function(emitLog) {
       try {
         game = createGame(freezeData(config.observation), commands);
         if (!game || typeof game !== 'object' || !submitted) throw new Error('Trusted game API must initialize its default action and view');
+        // A default action that cannot serialize is a trusted-authoring bug and
+        // must fail as a system error, never as player misconduct.
+        try { encode(action, config.limits.actionBytes, 'INVALID_ACTION', 'INVALID_ACTION', false); }
+        catch (_) { failure = undefined; throw new Error('Trusted game API default action must be strict JSON data'); }
       } finally { phase = 'closed'; }
     },
     run(fn) {

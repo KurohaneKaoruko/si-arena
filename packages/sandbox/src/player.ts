@@ -57,6 +57,8 @@ export class SandboxPlayer<Action extends JsonValue> {
     assertSource(options.source, this.limits);
     if (!options.matchId || !options.playerId)
       throw new TypeError("Match and player identities are required");
+    if (typeof options.sdkSource !== "string" || options.sdkSource.length === 0)
+      throw new TypeError("Trusted SDK source is required");
     this.source = options.source;
     this.sdkSource = options.sdkSource;
     if (Buffer.byteLength(this.sdkSource) > this.limits.codeBytes)

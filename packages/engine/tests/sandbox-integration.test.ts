@@ -88,6 +88,12 @@ test("the published official Paper bot plays under the normal release limits and
     9,
   );
   expect(result.result.players.find((player) => player.id === "official")!.rank).toBe(1);
+  // The official bot must play clean: a guest runtime losing an API the bot
+  // relies on would degrade it to the idle default without failing loudly.
+  const officialErrors = sink.replay.ticks.flatMap((tick) =>
+    tick.errors?.official ? [tick.errors.official] : [],
+  );
+  expect(officialErrors).toEqual([]);
   expect(await replayMatch(sink.replay, paperGame)).toEqual(result);
   // A full 600-tick match on slow shared CI runners needs well over the
   // default 5s test timeout.

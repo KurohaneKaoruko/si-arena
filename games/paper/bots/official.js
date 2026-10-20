@@ -471,7 +471,7 @@ function homePath(o) {
           path.push(DIRECTIONS[move[current]]);
           current = parent[current];
         }
-        return path.toReversed();
+        return path.slice().reverse();
       }
       queue.push(target);
     }
