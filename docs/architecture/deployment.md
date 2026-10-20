@@ -33,7 +33,7 @@
 在服务器上的仓库目录内执行：
 
 ```sh
-cp .env.prod.example .env.prod   # 填写 POSTGRES_PASSWORD 与 CADDY_DOMAIN
+cp .env.prod.example .env.prod   # 必填 POSTGRES_PASSWORD；CADDY_DOMAIN 有域名才填，留空走纯 HTTP
 
 # 1. 构建镜像并启动数据库与迁移（server/worker 会等迁移完成后自启）
 docker compose --env-file .env.prod -f deploy/compose.prod.yaml up -d --build
