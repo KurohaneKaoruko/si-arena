@@ -21,6 +21,9 @@ export default defineProject({
     environment: "node",
     globals: false,
     include: ["tests/**/*.test.ts"],
+    // 共享 CI runner 比本地慢 2-3 倍，jsdom 回放类测试常在默认 5s 边缘抖动；
+    // 更长的测试仍按惯例显式标注自己的预算。
+    testTimeout: 15000,
     clearMocks: true,
     restoreMocks: true,
   },
