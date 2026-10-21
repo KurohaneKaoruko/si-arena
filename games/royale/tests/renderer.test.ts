@@ -4,6 +4,7 @@ import {
   drawRoyaleBoard,
   royalePlayerSummaries,
   royalePresentation,
+  royaleHighlights,
 } from "@si-arena/game-royale/renderer";
 import { royaleGame } from "@si-arena/game-royale/game";
 import type { RoyaleEvent, RoyaleState } from "@si-arena/game-royale/sdk";
@@ -149,5 +150,29 @@ test("the presentation describes the published release", () => {
     { label: "地图尺寸", value: "26–40 见方" },
     { label: "回合上限", value: "800" },
     { label: "每 tick CPU", value: "20 ms" },
+  ]);
+});
+
+test("highlights name eliminations, their attackers and zone shrinks", () => {
+  const names = new Map([
+    ["a", "Alpha"],
+    ["b", "Beta"],
+  ]);
+  const at = { x: 1, y: 1 };
+  expect(
+    royaleHighlights(
+      [
+        { type: "move", playerId: "a", from: at, to: at },
+        { type: "trail-cut", playerId: "b", attackerId: "a", position: at },
+        { type: "death", playerId: "b", position: at, causes: ["trail-cut"] },
+        { type: "death", playerId: "c", position: at, causes: ["boundary", "zone"] },
+        { type: "zone-shrink", size: 30 },
+      ],
+      names,
+    ),
+  ).toStrictEqual([
+    { text: "Beta 出局：尾迹被切断，切断者 Alpha", tone: "danger" },
+    { text: "c 出局：越界、留在安全区外", tone: "danger" },
+    { text: "安全区收缩到 30×30", tone: "neutral" },
   ]);
 });

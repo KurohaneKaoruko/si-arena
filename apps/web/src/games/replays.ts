@@ -3,7 +3,11 @@ import type { DeepReadonly, JsonValue } from "@si-arena/protocol";
 import { paperGame } from "@si-arena/game-paper/game";
 import { drawPaperBoard, paperPlayerSummaries } from "@si-arena/game-paper/renderer";
 import { royaleGame } from "@si-arena/game-royale/game";
-import { drawRoyaleBoard, royalePlayerSummaries } from "@si-arena/game-royale/renderer";
+import {
+  drawRoyaleBoard,
+  royaleHighlights,
+  royalePlayerSummaries,
+} from "@si-arena/game-royale/renderer";
 
 type ReplayGameOptions<
   State extends { tick: number },
@@ -31,9 +35,11 @@ function boardReplay<State extends { tick: number }, Observation, Action extends
     animation: BoardAnimation<State, Event>,
   ) => void,
   summarize: (state: DeepReadonly<State>) => readonly ReplayPlayerSummary[],
+  narrate?: ReplayGameOptions<State, Observation, Action, Event>["narrate"],
 ) {
   return defineReplayGame({
     game,
+    ...(narrate ? { narrate } : {}),
     aspectRatio: 1,
     scoreUnit: "格",
     draw: (context, frame, width, height, motion) =>
@@ -51,7 +57,7 @@ function boardReplay<State extends { tick: number }, Observation, Action extends
 // Explicit trusted releases, one entry per game; file contents only select an entry, never import code.
 export const replayGames = [
   boardReplay(paperGame, drawPaperBoard, paperPlayerSummaries),
-  boardReplay(royaleGame, drawRoyaleBoard, royalePlayerSummaries),
+  boardReplay(royaleGame, drawRoyaleBoard, royalePlayerSummaries, royaleHighlights),
 ];
 
 /** Whether this web build can verify and draw replays of the given release. */

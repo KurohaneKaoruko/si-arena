@@ -5,6 +5,7 @@ import type { BrowserReplaySession } from "@si-arena/player/browser";
 import GameCanvas from "./GameCanvas.vue";
 import ReplayControls from "./replay/ReplayControls.vue";
 import ReplayDiagnostics from "./replay/ReplayDiagnostics.vue";
+import ReplayHighlights from "./replay/ReplayHighlights.vue";
 import ReplayLogs from "./replay/ReplayLogs.vue";
 import ReplayScoreboard from "./replay/ReplayScoreboard.vue";
 import type { MemoryLoader } from "./replay/replay-diagnostics";
@@ -153,6 +154,12 @@ function keyboard(event: KeyboardEvent) {
       <aside class="min-w-0 space-y-4" aria-label="选手与诊断" @keydown="keyboard">
         <slot name="summary" />
         <ReplayScoreboard :session="session" :view="view" :tick="tick" />
+        <ReplayHighlights
+          v-if="session.highlights.length"
+          :highlights="session.highlights"
+          :tick="tick"
+          @seek="playback.seek"
+        />
         <ReplayDiagnostics
           v-model:player-id="playerId"
           :session="session"

@@ -4,8 +4,12 @@ import {
   createReplaySession,
   REPLAY_MAX_BYTES,
   type ReplayFrame,
+  type ReplayHighlight,
+  type ReplayNarrator,
   type SessionOptions,
 } from "../session";
+
+export type { ReplayHighlight, ReplayNarrator };
 
 export interface ReplayPlayerSummary {
   id: string;
@@ -38,6 +42,8 @@ export interface BrowserReplaySession {
   replay: DeepReadonly<Omit<Replay<unknown, unknown>, "initialState" | "ticks">>;
   totalTicks: number;
   errorTicks: readonly number[];
+  /** Game-specific notable moments, oldest first; empty when the game has no narrator. */
+  highlights: readonly ReplayHighlight[];
   hasLogs: boolean;
   view(completedTicks: number): ReplayView;
 }
@@ -64,6 +70,7 @@ export function defineReplayGame<
     options: ReplayDrawOptions,
   ): void;
   summarize(state: DeepReadonly<State>): readonly ReplayPlayerSummary[];
+  narrate?: ReplayNarrator<Event>;
 }): ReplayGameRegistration {
   if (!Number.isFinite(options.aspectRatio) || options.aspectRatio <= 0)
     throw new RangeError("Invalid replay aspect ratio");
@@ -72,13 +79,17 @@ export function defineReplayGame<
     release: options.game.manifest.release,
     name: options.game.manifest.name,
     async load(raw, settings) {
-      const session = await createReplaySession(raw, options.game, settings);
+      const session = await createReplaySession(raw, options.game, {
+        ...settings,
+        ...(options.narrate ? { narrate: options.narrate } : {}),
+      });
       return {
         aspectRatio: options.aspectRatio,
         scoreUnit: options.scoreUnit,
         replay: session.replay,
         totalTicks: session.replay.ticks.length,
         errorTicks: session.errorTicks,
+        highlights: session.highlights,
         hasLogs: session.replay.ticks.some(
           (record) =>
             Object.keys(record.logs ?? {}).length > 0 ||

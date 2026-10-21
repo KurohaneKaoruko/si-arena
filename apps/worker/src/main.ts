@@ -114,7 +114,7 @@ async function main(): Promise<void> {
     concurrency: config.concurrency,
     isolation: config.isolation.kind,
     replaysDir: config.replaysDir,
-    games: claimable.map((release) => `${release.gameId}@${release.release}`),
+    games: claimable.map((release) => release.release),
   });
 }
 

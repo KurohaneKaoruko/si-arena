@@ -4,6 +4,7 @@ import { royaleMapSize } from "../constants";
 export { ROYALE_PALETTE } from "./palette";
 
 export { drawRoyaleBoard, royalePlayerSummaries, type RoyaleBoardAnimation } from "./board";
+export { royaleHighlights } from "./highlights";
 
 export const royalePresentation = {
   id: "royale",
