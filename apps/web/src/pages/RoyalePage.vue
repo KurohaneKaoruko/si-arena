@@ -82,7 +82,7 @@ function runSummary(run: MatchDetail) {
       />
       <ol
         v-else-if="status"
-        class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,10rem),1fr))] gap-3"
+        class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-3"
       >
         <li
           v-for="(entry, seat) in status.lineup"

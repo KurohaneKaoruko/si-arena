@@ -75,10 +75,10 @@ const bossBusy = computed(() => match.pending.value && match.body.value?.boss ==
         >查看当前比赛</AppButton
       >
       <AppButton
-        v-else-if="data?.canMatch"
+        v-else-if="!data || data.canMatch"
         variant="primary"
         :loading="match.pending.value && !bossBusy"
-        :disabled="match.pending.value"
+        :disabled="!data || match.pending.value"
         @click="match.start()"
         >发起匹配</AppButton
       >
