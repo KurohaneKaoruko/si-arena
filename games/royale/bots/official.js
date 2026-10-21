@@ -492,11 +492,18 @@ function planLoop(o) {
   for (let d1 = 0; d1 < 4; d1++) {
     for (const anchor of anchors[d1]) {
       for (const d2 of [(d1 + 1) % 4, (d1 + 3) % 4]) {
-        for (const l1 of SIZES) {
-          for (const l2 of SIZES) {
+        // A loop that ends on its first leg ends the same way for every longer l1,
+        // and one that ends on its second leg the same way for every longer l2.
+        let firstLeg = false;
+        for (let i = 0; i < SIZES.length && !firstLeg; i++) {
+          for (let j = 0; j < SIZES.length; j++) {
+            const l1 = SIZES[i];
+            const l2 = SIZES[j];
             const loop = scoreLoop(o, owned, anchor, depth[anchor], d1, d2, l1, l2);
-            if (loop && (!best || loop.score > best.score))
+            if (loop.score !== null && (!best || loop.score > best.score))
               best = { ...loop, anchor, d1, d2, l1, l2 };
+            firstLeg = loop.leg === 0;
+            if (loop.leg < 2) break;
           }
         }
       }
@@ -523,7 +530,10 @@ function planLoop(o) {
   return planTime(o, path) > 0 ? path : null;
 }
 
-/** Score of one loop, or null when it leaves the zone, never closes or can be cut. */
+/**
+ * Score of one loop, null when it leaves the zone, never closes or can be cut,
+ * with the leg (0..3) on which it closed or failed.
+ */
 function scoreLoop(o, owned, anchor, walk, d1, d2, l1, l2) {
   const { width, territory, trails, me, expire, oppDist, danger } = o;
   const stride = width + 1;
@@ -543,23 +553,24 @@ function scoreLoop(o, owned, anchor, walk, d1, d2, l1, l2) {
       x += DX[d];
       y += DY[d];
       step++;
-      if (x < 0 || y < 0 || x >= width || y >= width) return null;
+      if (x < 0 || y < 0 || x >= width || y >= width) return { score: null, leg };
       const cell = y * width + x;
-      if (trails[cell] === me || expire[cell] <= step || oppDist[cell] <= step) return null;
+      if (trails[cell] === me || expire[cell] <= step || oppDist[cell] <= step)
+        return { score: null, leg };
       if (territory[cell] === me) {
-        if (reach <= step || life <= step) return null;
+        if (reach <= step || life <= step) return { score: null, leg };
         const gain =
           (maxX - minX + 1) * (maxY - minY + 1) -
           (owned[(maxY + 1) * stride + maxX + 1] -
             owned[minY * stride + maxX + 1] -
             owned[(maxY + 1) * stride + minX] +
             owned[minY * stride + minX]);
-        if (gain <= 0) return null;
+        if (gain <= 0) return { score: null, leg };
         const slack = reach - step;
         const risk = slack < RISK_SLACK ? (RISK_SLACK - slack) * RISK_STEP : 0;
-        return { score: gain / (1 + step / TIME_WEIGHT) - risk, closes: step - walk };
+        return { score: gain / (1 + step / TIME_WEIGHT) - risk, closes: step - walk, leg };
       }
-      if (danger[cell]) return null;
+      if (danger[cell]) return { score: null, leg };
       if (oppDist[cell] < reach) reach = oppDist[cell];
       if (expire[cell] < life) life = expire[cell];
       if (x < minX) minX = x;
@@ -568,5 +579,5 @@ function scoreLoop(o, owned, anchor, walk, d1, d2, l1, l2) {
       if (y > maxY) maxY = y;
     }
   }
-  return null;
+  return { score: null, leg: 3 };
 }
