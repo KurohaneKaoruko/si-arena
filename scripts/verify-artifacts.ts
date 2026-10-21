@@ -144,6 +144,21 @@ for (let tick = 0; tick < 500; tick++) {
 if (result?.completedTicks !== 500 || result.players.some(p => p.rank !== 1 || p.score !== 9 || !p.alive)) {
   throw new Error("Standalone match returned an unexpected result");
 }
+import { royaleGame, ROYALE_SDK_SOURCE, officialBotUrl as royaleBotUrl } from "@si-arena/game-royale/game";
+const royaleRegistration = defineLocalGame({game:royaleGame,sdkSource:ROYALE_SDK_SOURCE,officialBotUrl:royaleBotUrl});
+if(royaleRegistration.manifest.id!=="royale"||royaleRegistration.manifest.maxPlayers!==5)throw new Error("Packed royale registration failed");
+let royaleState = royaleGame.rules.init({
+  seed: 2, config: royaleGame.manifest.config,
+  players: [0, 1, 2, 3, 4].map((slot) => ({ id: "p" + slot, slot })),
+});
+let royaleResult = undefined as ReturnType<typeof royaleGame.rules.step>["result"];
+for (let tick = 0; tick < 800 && !royaleResult; tick++) {
+  const output = royaleGame.rules.step(royaleState, Object.fromEntries(royaleState.players.map((p) => [p.id, { type: "idle" as const }])));
+  royaleState = output.nextState; royaleResult = output.result;
+}
+if (royaleResult?.reason !== "tick-limit" || royaleResult.players.some(p => p.rank !== 1 || p.score !== 9)) {
+  throw new Error("Standalone royale match returned an unexpected result");
+}
 const bot = await SandboxPlayer.create({
   matchId: "artifact", playerId: "alpha", source: "let calls=0;export default ({game,Memory})=>{calls++;Memory.n=(Memory.n??0)+1;Memory.calls=calls;game.act()}",
   sdkSource: "export default (o,{submit})=>{submit({type:'idle'});return {act(){submit({type:o.fail?'invalid':'idle'})}}}",

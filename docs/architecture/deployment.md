@@ -16,7 +16,7 @@
 
 镜像由 `deploy/Dockerfile` 的两个 target 构建（构建上下文仍是仓库根）：
 
-- `app`：`node:26-slim` + pnpm 12.14.0，包含完整 workspace 构建产物与依赖。保留仓库目录布局，使启动脚本、drizzle 迁移、`packages/sandbox/runtime/` 的 WASM 与 `games/paper` 的官方 bot 等按相对路径解析的资源全部成立。server 与 worker 共用该镜像，仅启动命令不同。
+- `app`：`node:26-slim` + pnpm 12.14.0，包含完整 workspace 构建产物与依赖。保留仓库目录布局，使启动脚本、drizzle 迁移、`packages/sandbox/runtime/` 的 WASM 与 `games/*` 的官方 bot 等按相对路径解析的资源全部成立。server 与 worker 共用该镜像，仅启动命令不同。
 - `web`：`caddy:2-alpine` + `apps/web/dist` 静态文件 + `deploy/Caddyfile`。
 
 凭据统一放 `.env.prod`（参照 `.env.prod.example`，已被 git 忽略）。`POSTGRES_PASSWORD` 必填，用 `openssl rand -hex 24` 生成——base64 输出常含 `+ / =`，会被原样拼进 `DATABASE_URL` 导致连接串非法；`CADDY_DOMAIN` 决定是否启用自动 HTTPS。`HTTP_PORT`/`HTTPS_PORT`（默认 80/443）可把 caddy 发布到非标准宿主端口，用于与既有服务共机：此时 Let's Encrypt 的挑战流量到不了容器，`CADDY_DOMAIN` 必须留空走纯 HTTP，且两个端口都要换——任一映射仍占宿主 80/443 都会绑定冲突。所有 compose 命令都显式携带 `--env-file .env.prod`，避免误读开发用 `.env`。
@@ -59,7 +59,7 @@ docker compose --env-file .env.prod -f deploy/compose.prod.yaml --profile tools 
 
 ## 版本与 npm 发布
 
-公开包采用统一版本（lockstep）：`pnpm-workspace.yaml` 的 `versioning.fixed` 把 6 个公开包（protocol、sandbox、engine、player、game-paper、cli）声明为一个固定组，private 包在 `versioning.ignore` 中排除。发版流程：
+公开包采用统一版本（lockstep）：`pnpm-workspace.yaml` 的 `versioning.fixed` 把 7 个公开包（protocol、sandbox、engine、player、game-paper、game-royale、cli）声明为一个固定组，private 包在 `versioning.ignore` 中排除。发版流程：
 
 ```sh
 # 1. 记录变更意图（哪些包受影响、bump 级别、changelog 摘要）
@@ -73,7 +73,7 @@ git add -A && git commit -m "chore: release <版本>"
 pnpm publish:packages [--otp <验证码>]
 ```
 
-`scripts/publish.ts` 只做执行器：校验工作区干净、公开包版本一致、抽查 CLI tarball 中 `workspace:*` 已替换为当前版本，然后按依赖拓扑序（protocol → sandbox → engine → player → game-paper → cli）以 `--access public` 发布。`--dry-run` 走全链但不真正发布，用于演练。npm 账号开启 2FA 时用 `--otp` 或 `NPM_CONFIG_OTP` 传入验证码。
+`scripts/publish.ts` 只做执行器：校验工作区干净、公开包版本一致、抽查 CLI tarball 中 `workspace:*` 已替换为当前版本，然后按依赖拓扑序（protocol → sandbox → engine → player → game-paper → game-royale → cli）以 `--access public` 发布。`--dry-run` 走全链但不真正发布，用于演练。npm 账号开启 2FA 时用 `--otp` 或 `NPM_CONFIG_OTP` 传入验证码。
 
 发布后注意：
 

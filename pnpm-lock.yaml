@@ -277,6 +277,9 @@ importers:
       '@si-arena/game-paper':
         specifier: workspace:*
         version: link:games/paper
+      '@si-arena/game-royale':
+        specifier: workspace:*
+        version: link:games/royale
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:packages/protocol
