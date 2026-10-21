@@ -6,7 +6,7 @@
 
 ## 强度标准与验证
 
-- 验收底线：本地与 4 个官方示例 bot 同场打满 20 局（`pnpm arena run --bot ./bot.js --opponent ./bots/official.js --opponent ./bots/official.js --opponent ./bots/official.js --opponent ./bots/official.js --matches 20 --seed 42`），平均名次优于官方 bot，且没有任何 tick 执行错误；未达标必须继续改进并复测。
+- 验收底线：本地与 4 个官方示例 bot 同场打满 20 局（`pnpm arena run --bot ./bot.js --opponent ./bots/official.js --opponent ./bots/official.js --opponent ./bots/official.js --opponent ./bots/official.js --matches 20 --seed 42`），按每场 `match` 行 `result.players` 中的 `rank` 计算，你的平均名次优于官方 bot，且没有任何 tick 执行错误（批量汇总行的胜负只按第 1 名计）；未达标必须继续改进并复测。
 - 只给 `--bot` 时对手是 1 个官方 bot（两人局）；每多一个 `--opponent` 多一个对手，最多 4 个。两人局、五人局都要测：地图大小随人数变化。
 - 换起始种子复测（如 `--seed 1337`）确认不是种子运气；也可以挂自己的旧版本对弈，避免只针对官方 bot 过拟合。
 - 分析败局而不是猜测：events 里的 death 记录了每次出局的原因，trail-cut 记录了切断者，据此定位是外出太贪、安全余量不足、被安全区吞掉还是进攻时机错误。
