@@ -343,6 +343,9 @@ importers:
       '@si-arena/game-paper':
         specifier: workspace:*
         version: link:../../games/paper
+      '@si-arena/game-royale':
+        specifier: workspace:*
+        version: link:../../games/royale
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -374,6 +377,9 @@ importers:
       '@si-arena/game-paper':
         specifier: workspace:*
         version: link:../../games/paper
+      '@si-arena/game-royale':
+        specifier: workspace:*
+        version: link:../../games/royale
       '@si-arena/player':
         specifier: workspace:*
         version: link:../../packages/player
@@ -417,6 +423,9 @@ importers:
       '@si-arena/game-paper':
         specifier: workspace:*
         version: link:../../games/paper
+      '@si-arena/game-royale':
+        specifier: workspace:*
+        version: link:../../games/royale
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

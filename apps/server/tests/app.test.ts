@@ -6,7 +6,8 @@ test("health and game metadata work without a database or player executor", asyn
   try {
     expect((await app.inject("/health")).statusCode).toBe(200);
     const list = (await app.inject("/api/games")).json();
-    expect(list.games.length).toBe(1);
+    expect(list.games.map((entry: { id: string }) => entry.id)).toStrictEqual(["paper", "royale"]);
+    expect(list.games[1].arena).toMatchObject({ seats: 5, keepMatches: 3 });
     const game = (await app.inject("/api/games/paper")).json();
     expect(game.id).toBe("paper");
     expect(game.resolvedLimits.cpuMs).toBe(20);

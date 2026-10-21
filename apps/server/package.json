@@ -13,6 +13,7 @@
   "dependencies": {
     "@si-arena/db": "workspace:*",
     "@si-arena/game-paper": "workspace:*",
+    "@si-arena/game-royale": "workspace:*",
     "@si-arena/protocol": "workspace:*",
     "@si-arena/sandbox": "workspace:*",
     "drizzle-orm": "catalog:",

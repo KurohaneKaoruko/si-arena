@@ -752,3 +752,70 @@ dbTest(
     expect((await call("GET", `/api/matches/${id}/replay`)).statusCode).toBe(503);
   },
 );
+
+async function uploadRoyaleBot(token: string): Promise<void> {
+  const royale = registeredGames.find((game) => game.entry.id === "royale");
+  if (!royale) throw new Error("royale game is not registered");
+  const res = await call("PUT", "/api/games/royale/me/code", {
+    body: await readFile(royale.officialBotUrl, "utf8"),
+    token,
+    headers: { "content-type": "text/plain" },
+  });
+  expect(res.statusCode).toBe(200);
+}
+
+dbTest("the royale arena runs one locked lineup at a time", async () => {
+  const starter = await registerUser();
+  const first = await registerUser();
+  const second = await registerUser();
+  for (const user of [first, second]) await uploadRoyaleBot(user.token);
+  await database.db
+    .update(gameEntries)
+    .set({ points: 30 })
+    .where(and(eq(gameEntries.gameId, "royale"), eq(gameEntries.userId, second.id)));
+
+  const duel = await call("POST", "/api/games/royale/matches", {
+    token: first.token,
+    headers: { "idempotency-key": "royale-duel" },
+  });
+  expect(duel.statusCode).toBe(409);
+  expect(duel.json().code).toBe("ARENA_GAME");
+
+  const status = await call("GET", "/api/games/royale/arena");
+  expect(status.statusCode).toBe(200);
+  const lineup = status.json().lineup as Array<{ userId: string; official: boolean }>;
+  // Points first; the official bot takes one free seat when fewer than five players qualify.
+  expect(lineup[0]!.userId).toBe(second.id);
+  expect(lineup.filter((seat) => seat.official)).toHaveLength(1);
+  expect(status.json().active).toBeNull();
+
+  const started = await call("POST", "/api/games/royale/arena", {
+    token: starter.token,
+    headers: { "idempotency-key": "royale-run" },
+  });
+  expect(started.statusCode).toBe(201);
+  const run = started.json();
+  expect(run.kind).toBe("arena");
+  expect(run.participants.map((seat: { userId: string }) => seat.userId)).toEqual(
+    lineup.map((seat) => seat.userId),
+  );
+  // The starter needs no royale code and need not be seated.
+  expect(run.participants.some((seat: { userId: string }) => seat.userId === starter.id)).toBe(
+    false,
+  );
+
+  const busy = await call("POST", "/api/games/royale/arena", {
+    token: first.token,
+    headers: { "idempotency-key": "royale-second" },
+  });
+  expect(busy.statusCode).toBe(409);
+  expect(busy.json()).toMatchObject({ code: "ARENA_BUSY", matchId: run.id });
+  const retried = await call("POST", "/api/games/royale/arena", {
+    token: starter.token,
+    headers: { "idempotency-key": "royale-run" },
+  });
+  expect(retried.statusCode).toBe(200);
+  expect(retried.json().id).toBe(run.id);
+  const during = await call("GET", "/api/games/royale/arena");
+  expect(during.json().active.id).toBe(run.id);
+});

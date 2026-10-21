@@ -13,7 +13,8 @@ const royale = {
   ...paperGame.manifest,
   id: "royale",
   name: "圈地大逃杀",
-  release: "royale@0.1.0",
+  // Not a registered release, so the page must list runs without downloading them.
+  release: "royale@0.0.0-unregistered",
   arena,
 };
 const date = "2026-10-21T00:00:00.000Z";

@@ -2,6 +2,8 @@ import { defineReplayGame, type ReplayPlayerSummary } from "@si-arena/player/bro
 import type { DeepReadonly, JsonValue } from "@si-arena/protocol";
 import { paperGame } from "@si-arena/game-paper/game";
 import { drawPaperBoard, paperPlayerSummaries } from "@si-arena/game-paper/renderer";
+import { royaleGame } from "@si-arena/game-royale/game";
+import { drawRoyaleBoard, royalePlayerSummaries } from "@si-arena/game-royale/renderer";
 
 type ReplayGameOptions<
   State extends { tick: number },
@@ -47,7 +49,10 @@ function boardReplay<State extends { tick: number }, Observation, Action extends
 }
 
 // Explicit trusted releases, one entry per game; file contents only select an entry, never import code.
-export const replayGames = [boardReplay(paperGame, drawPaperBoard, paperPlayerSummaries)];
+export const replayGames = [
+  boardReplay(paperGame, drawPaperBoard, paperPlayerSummaries),
+  boardReplay(royaleGame, drawRoyaleBoard, royalePlayerSummaries),
+];
 
 /** Whether this web build can verify and draw replays of the given release. */
 export function canReplay(gameId: string, release: string): boolean {
