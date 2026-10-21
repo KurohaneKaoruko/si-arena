@@ -3,6 +3,7 @@ import {
   DEFAULT_RESOURCE_LIMITS,
   freezeJson,
   resolveResourceLimits,
+  snapshotJson,
   stringifyJson,
   toJsonValue,
   utf8Bytes,
@@ -120,10 +121,11 @@ export function checkedState<
   tick: number,
   context: StateContext,
 ): DeepReadonly<State> {
-  const state = cloneJson(game.parseState(cloneJson(raw), context));
+  // One strict walk of the raw world; the parser may then share its frozen parts.
+  const state = snapshotJson(game.parseState(snapshotJson(raw), context));
   if (state.tick !== tick)
     throw new EngineError("Rules must start at tick 0 and advance exactly one tick");
-  return freezeJson(state);
+  return state;
 }
 export function parseResult(
   raw: unknown,

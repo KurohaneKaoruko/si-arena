@@ -52,9 +52,10 @@ export interface ExecutorOutcome<Action> extends ExecutionIdentity {
   resources?: { cpuUsedUs?: number; memoryBytes?: number };
 }
 export interface PlayerExecutor<Observation, Action> {
+  /** The observation is a shared, deep-frozen snapshot; adapters copy it before mutating. */
   execute(
     tick: number,
-    observation: Observation,
+    observation: DeepReadonly<Observation>,
     defaultAction: Action,
   ): Promise<ExecutorOutcome<Action>>;
   /** Must release active requests and be safe to call again. */

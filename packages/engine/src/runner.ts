@@ -1,6 +1,7 @@
 import {
   cloneJson,
   freezeJson,
+  snapshotJson,
   truncateUtf8,
   utf8Bytes,
   type DeepReadonly,
@@ -126,8 +127,9 @@ export async function runMatch<
       const active = players.flatMap((player) => {
         const observation = game.rules.observe(state, player.id, { events: previousEvents });
         if (observation === null) return [];
-        const snapshot = cloneJson(
-          game.parseObservation(cloneJson(observation, limits.observationBytes), {
+        // Snapshots share the frozen world grids instead of copying them per boundary.
+        const snapshot = snapshotJson(
+          game.parseObservation(snapshotJson(observation, limits.observationBytes), {
             ...context,
             playerId: player.id,
             tick,
@@ -215,9 +217,9 @@ export async function runMatch<
       if (Object.keys(logs).length) record.logs = logs;
       if (Object.keys(logsTruncated).length) record.logsTruncated = logsTruncated;
       if (Object.keys(resources).length) record.resources = resources;
-      const stepped = game.rules.step(state, freezeJson(cloneJson(actions)));
+      const stepped = game.rules.step(state, snapshotJson(actions));
       state = checkedState(game, stepped.nextState, tick + 1, context);
-      const events = freezeJson(cloneJson(stepped.events));
+      const events = snapshotJson(stepped.events);
       if (!Array.isArray(events)) throw new EngineError("Rules must return a JSON event array");
       previousEvents = events;
       if (stepped.result !== undefined) result = parseResult(stepped.result, players, tick + 1);
@@ -225,7 +227,7 @@ export async function runMatch<
         throw new EngineError("Rules did not terminate within maxTicks");
       // Persist only complete ticks; an exception in trusted rules never becomes player failure.
       await options.sink.append(cloneJson(record));
-      await options.onTick?.({ state, events, record: freezeJson(cloneJson(record)) });
+      await options.onTick?.({ state, events, record: snapshotJson(record) });
       if (result) break;
     }
     checkCancelled();
