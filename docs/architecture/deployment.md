@@ -47,6 +47,10 @@ docker compose --env-file .env.prod -f deploy/compose.prod.yaml --profile tools 
 
 日常更新：`git pull && docker compose --env-file .env.prod -f deploy/compose.prod.yaml up -d --build`，迁移服务会在启动前自动应用新的数据库变更。
 
+## Boss
+
+Boss 是部署方私有的 bot，源码不进仓库。把每个游戏的 Boss 代码放到宿主 `./data/bosses/<gameId>.js`（例如 `data/bosses/paper.js`），compose 以只读方式挂载给 server；server 每次启动时安装或更新 Boss，目录里没有对应文件的游戏自动关闭 Boss 挑战。更换 Boss 代码后重启 server 即可。Boss 代码同样受该游戏发行的 `codeBytes` 限制，超限时 server 启动失败。
+
 ## 冒烟清单
 
 上线或重大变更后逐项验证：
