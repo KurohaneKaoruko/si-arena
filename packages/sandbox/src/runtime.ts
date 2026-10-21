@@ -40,6 +40,54 @@ export async function initializeRuntime(): Promise<void> {
       return module;
     },
   });
+  warmUp();
+}
+
+// A fresh process runs the QuickJS WASM on V8's baseline tier, so tick 0 used to
+// bill the player for engine compilation (about 3x the CPU of later ticks).
+// This trusted module exercises the parser, interpreter, JSON and collections
+// once before the executor reports ready; no player data is involved.
+const WARM_UP_SOURCE = `${Array.from(
+  { length: 5 },
+  (_, i) =>
+    `function w${i}(grid, n) { const seen = new Set(); const q = []; let acc = ${i}; ` +
+    `for (let j = 0; j < grid.length; j++) if (grid[j] === ${(i % 3) - 1}) { acc += j & 7; q.push({ x: j % 30, y: (j / 30) | 0 }); } ` +
+    `for (const p of q) { const k = p.x * 31 + p.y; if (!seen.has(k)) seen.add(k); acc += k % (n + 1); } ` +
+    `return acc + q.map((p) => p.x).filter((x) => x > 3).length; }`,
+).join("\n")}
+export default function run(n) {
+  const grid = [];
+  for (let i = 0; i < 900; i++) grid.push(((i * 7) % 3) - 1);
+  const o = JSON.parse(JSON.stringify({ grid, players: [{ id: "a", position: { x: 1, y: 2 } }] }));
+  let s = w0(o.grid, n) + w1(o.grid, n) + w2(o.grid, n) + w3(o.grid, n) + w4(o.grid, n);
+  const m = new Map();
+  for (let i = 0; i < 400; i++) m.set("k" + i, { v: i, t: [i, i + 1] });
+  for (const [k, v] of m) s += v.t[1] + k.length;
+  class C { constructor(v) { this.v = v; } get d() { return this.v * 2; } }
+  for (let i = 0; i < 300; i++) s += new C(i).d;
+  try { null.x; } catch (e) { s += String(e).length; }
+  return s;
+}`;
+
+function warmUp(): void {
+  const runtime = quickjs.newRuntime();
+  const context = runtime.newContext();
+  try {
+    const namespace = context.unwrapResult(
+      context.evalCode(WARM_UP_SOURCE, "arena-warm-up.js", { type: "module" }),
+    );
+    const run = context.getProp(namespace, "default");
+    for (let round = 0; round < 4; round++) {
+      const arg = context.newNumber(round);
+      context.unwrapResult(context.callFunction(run, context.undefined, arg)).dispose();
+      arg.dispose();
+    }
+    run.dispose();
+    namespace.dispose();
+  } finally {
+    context.dispose();
+    runtime.dispose();
+  }
 }
 
 class GuestFault {

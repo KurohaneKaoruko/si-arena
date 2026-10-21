@@ -1,9 +1,19 @@
 import { Socket } from "node:net";
+import { setFlagsFromString } from "node:v8";
 import type { ExecuteTickInput, ExecutionIdentity, ResourceLimits } from "@si-arena/protocol";
 import { FramedChannel } from "./framing";
 import type { ExecutorBinding } from "./process";
 import { isRecord } from "./json";
 import { compileSource, initializeRuntime, GuestSession } from "./runtime";
+
+// Let hot QuickJS WASM functions reach the optimizing tier during the startup
+// warm-up instead of inside a billed tick. An unknown flag is ignored, so a V8
+// that renames it only loses the speed-up.
+try {
+  setFlagsFromString("--wasm-tiering-budget=200000");
+} catch {
+  // Keep the default tiering.
+}
 
 const limit = Number(process.argv[2]);
 const executionId = process.argv[3];
