@@ -1,4 +1,101 @@
-# SI Arena
+<div align="center">
+
+<img src="docs/assets/readme/hero.svg" width="100%" alt="SI Arena：像素风标志与五名选手的动画">
+
+<h3>让 AI 写的代码，替你上场。</h3>
+
+在本地用任意 AI 编写 JavaScript 选手 → 上传 → 匹配对手 → 在浏览器里逐 tick 回放每一步。
+
+[![Node.js 26](https://img.shields.io/badge/Node.js-26-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](configs/typescript/base.json)
+[![Vue 3](https://img.shields.io/badge/Vue-3-42B883?logo=vuedotjs&logoColor=white)](apps/web)
+[![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)](deploy/compose.yaml)
+[![QuickJS-WASM](https://img.shields.io/badge/sandbox-QuickJS--WASM-C5F04A)](packages/sandbox)
+[![npm](https://img.shields.io/npm/v/@si-arena/cli?label=%40si-arena%2Fcli&color=CB3837&logo=npm)](https://www.npmjs.com/package/@si-arena/cli)
+[![MIT](https://img.shields.io/badge/license-MIT-7E8898)](LICENSE)
+
+[两种玩法](#两种玩法) · [三步上场](#三步上场) · [核心特性](#核心特性) · [架构](#架构) · [开发者文档](#开发者文档)
+
+</div>
+
+## 两种玩法
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<img src="docs/assets/readme/duel.svg" width="100%" alt="1v1 圈地动画：蓝方圈下一块地，橙方切断蓝方尾迹把它送回出生点">
+
+### 圈地 · 1v1 排位
+
+离开领地拉出尾迹，回到领地圈下中间的格子；踩中对手的尾迹，把他送回出生点。30×30 地图、500 tick，比谁的地盘大。
+
+系统按排位分找实力接近的真人对手，对手离线也能开局；排行榜实时刷新。还能指定对手练习，或挑战部署方的私有 Boss。完整规则见 [圈地设计](docs/designs/paper.md)。
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/assets/readme/royale.svg" width="100%" alt="大逃杀动画：五名选手圈地，安全区随淘汰向中心收缩">
+
+### 圈地 · 大逃杀
+
+最多五人同场，尾迹被切断、被圈住、撞头或留在圈外就出局。每淘汰一人，安全区向中心收一圈，最后站着的人赢。
+
+积分榜前 5 名自动入场，全服同一时间只跑一局，任何人都能按下开始；跑完后所有人一起看回放和战况。完整规则见 [大逃杀设计](docs/designs/royale.md)。
+
+</td>
+</tr>
+</table>
+
+## 三步上场
+
+```sh
+# 1. 下载这一发行的开发包：提示词、SDK、官方 bot、本地对战与回放工具
+npx @si-arena/cli@latest init paper ./paper-bot --server https://<平台地址>
+cd paper-bot && pnpm install --frozen-lockfile
+
+# 2. 把统一提示词交给你喜欢的 AI，让它写 bot.js；本地和官方 bot 实时对战
+pnpm arena dev --bot ./bot.js
+
+# 3. 批量自测满意后，回到网页上传 bot.js，发起匹配
+pnpm arena run --bot ./bot.js --matches 20 --seed 42
+```
+
+大逃杀把 `paper` 换成 `royale` 即可；本地对战默认补满 5 名官方 bot。
+
+## 核心特性
+
+<table>
+<tr>
+<td width="33%" valign="top"><b>同一套沙箱</b><br>选手代码只在 QuickJS-WASM 里跑，每人一个独立进程；本地工具与线上完全相同，每 tick 20 ms CPU 公平计量。</td>
+<td width="33%" valign="top"><b>确定性回放</b><br>回放只保存初始世界和每 tick 的动作，浏览器用同一套规则重演并校验最终哈希，错误、CPU、日志逐 tick 可查。</td>
+<td width="33%" valign="top"><b>实时排行榜</b><br>排位赛结算后双方分数立即生效，被匹配的一方同样计分；官方 bot 与 Boss 只陪练，不上榜。</td>
+</tr>
+<tr>
+<td valign="top"><b>不接模型 API</b><br>用什么 AI、怎么提示都由你决定；平台只看代码在棋盘上的表现。</td>
+<td valign="top"><b>离线开发包</b><br>初始化后不需要平台、数据库或账号：本地对战、批量自测、可视化调试和回放查看全部离线可用。</td>
+<td valign="top"><b>可扩展的游戏</b><br>每个游戏是独立包：规则、SDK、渲染器、提示词与官方 bot，平台核心不出现任何游戏专属分支。</td>
+</tr>
+</table>
+
+## 架构
+
+```mermaid
+flowchart LR
+  subgraph local[玩家本地]
+    ai([任意 AI]) --> bot[bot.js]
+    bot --> cli[arena CLI<br/>对战 · 调试 · 回放]
+  end
+  bot -- 上传 --> api[Fastify API]
+  web[Vue 网站] <--> api
+  api <--> db[(PostgreSQL)]
+  worker[worker] -- 领取比赛 / 结算 --> db
+  worker --> sandbox[QuickJS-WASM 沙箱<br/>每名选手一个进程]
+  worker --> replays[(gzip 回放)]
+  replays -- 下载并重演校验 --> web
+```
+
+## 开发者文档
 
 项目标识为 `si-arena`，SI 是 **Super Intelligence** 的缩写。npm 组织为 `@si-arena`，统一命令行包为 `@si-arena/cli`。
 
@@ -6,7 +103,7 @@ SI Arena 是一个通过网页参与的 AI 编程竞技游戏平台。玩家在�
 
 项目采用自由竞技模式。平台不集成模型 API，不验证代码由哪个模型生成，也不开展严格的模型能力评测。
 
-## 核心玩法
+## 平台规则
 
 1. 选择游戏，下载提示词、SDK、游戏包和官方示例 bot。
 2. 在本地使用 AI 编写代码，通过本地工具运行、调试和查看回放。
@@ -17,12 +114,6 @@ SI Arena 是一个通过网页参与的 AI 编程竞技游戏平台。玩家在�
 只有玩家主动发起匹配才会产生新比赛。上传代码、玩家离线或后台定时任务都不会自动开赛。官方 bot 由特殊的官方用户持有：没有其他真人可匹配时立即与它进行一场练习赛，因此只有一个真实用户时也能开局；与官方 bot 的比赛不计分，它也不进入排行榜。玩家还可以指定对手练习、挑战部署方私有的 Boss，或在大逃杀竞技场里与排行榜前 5 名同场。
 
 每个游戏的代码、局内得分和排位独立。平台只保留每位玩家在每个游戏的最新代码，不提供历史版本和回滚。
-
-## 首个游戏
-
-首个游戏为 Paper.io 风格的网格圈地对抗：离开领地产生尾迹，安全回到领地完成圈地，踏上对手尾迹会把对手送回起点（对手的领地保留）。游戏以 tick 推进，策略代码每 tick 执行一次，所有玩家动作统一结算。
-
-游戏采用 30×30 网格、两人对战，每场最多 500 tick。完整规则见 [圈地游戏设计](docs/designs/paper.md)。
 
 ## 技术方向
 
