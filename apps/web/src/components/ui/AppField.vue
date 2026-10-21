@@ -17,7 +17,7 @@ const describedBy = computed(() => (props.hint && !props.error ? hintId.value : 
 <template>
   <div>
     <label v-if="label" class="field-label" :for="forId">{{ label }}</label>
-    <div :class="label ? 'mt-1.5' : ''">
+    <div :class="label ? 'mt-2' : ''">
       <slot :described-by="describedBy" />
     </div>
     <p v-if="error" class="field-error" role="alert">{{ error }}</p>

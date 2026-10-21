@@ -175,11 +175,11 @@ onBeforeUnmount(() => {
       aria-haspopup="listbox"
       :aria-controls="open ? listboxId : undefined"
       :disabled="disabled"
-      class="flex w-full min-w-0 items-center gap-2 border border-line bg-surface text-left text-ink transition hover:border-line-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/10 disabled:cursor-not-allowed disabled:bg-subtle disabled:opacity-60"
+      class="flex w-full min-w-0 items-center gap-2 border border-line-strong bg-subtle text-left text-ink transition hover:border-faint focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15 disabled:cursor-not-allowed disabled:opacity-60"
       :class="
         size === 'sm'
-          ? 'min-h-9 rounded-control px-2.5 text-[13px]'
-          : 'min-h-10 rounded-control px-3 text-sm'
+          ? 'min-h-10 rounded-[0.5rem] px-2.5 text-[13px]'
+          : 'min-h-11 rounded-control px-3 text-sm'
       "
       @click="open ? closeList() : openList()"
       @keydown="onTriggerKeydown"
@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
         :aria-label="label"
         :aria-activedescendant="activeOptionId"
         tabindex="-1"
-        class="absolute left-0 z-50 max-h-60 w-full min-w-32 overflow-auto rounded-card border border-line bg-surface p-1 shadow-pop focus:outline-none"
+        class="absolute left-0 z-50 max-h-60 w-full min-w-32 overflow-auto rounded-panel border border-line-strong bg-subtle p-1 shadow-pop focus:outline-none"
         :class="dropUp ? 'bottom-full mb-1' : 'top-full mt-1'"
         @keydown="onListKeydown"
       >
@@ -223,10 +223,10 @@ onBeforeUnmount(() => {
           :data-active="index === activeIndex ? 'true' : 'false'"
           :aria-selected="option.value === modelValue"
           :aria-disabled="option.disabled ? 'true' : undefined"
-          class="flex cursor-pointer items-center justify-between gap-2 rounded-control px-2.5 py-1.5 text-sm transition"
+          class="flex cursor-pointer items-center justify-between gap-2 rounded-[0.5rem] px-2.5 py-1.5 text-sm transition"
           :class="[
             option.value === modelValue ? 'text-ink' : 'text-soft',
-            index === activeIndex ? 'bg-muted' : '',
+            index === activeIndex ? 'bg-line' : '',
             option.disabled ? 'cursor-not-allowed opacity-45' : '',
           ]"
           @click="choose(option)"

@@ -2,29 +2,25 @@
 import type { GameCatalogEntry } from "@si-arena/protocol";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ApiError, errorMessage } from "../api/client";
-import { parseGameMe, parseMatch, parseUpload } from "../api/contracts";
-import { authorizedRequest } from "../auth/session";
+import { parseGameMe, parseMatch } from "../api/contracts";
 import { useApiResource } from "../composables/useApiResource";
 import { useMatchRequest } from "../composables/useMatchRequest";
+import { useStrategyUpload } from "../composables/useStrategyUpload";
+import { gameMatchLocation } from "../games/locations";
+import { shortTime } from "../utils/time";
 import AppBadge from "./ui/AppBadge.vue";
 import AppButton from "./ui/AppButton.vue";
 import StateBlock from "./ui/StateBlock.vue";
-import { gameMatchLocation } from "../games/locations";
 
 const props = defineProps<{ game: GameCatalogEntry; compact?: boolean }>();
 const route = useRoute();
 const router = useRouter();
 let refreshQueued = false;
-const base = computed(() => `/api/games/${encodeURIComponent(props.game.id)}`);
-const {
-  data,
-  status,
-  error,
-  refreshError,
-  reload,
-  cancel: cancelRead,
-} = useApiResource(() => `${base.value}/me`, parseGameMe, { authenticated: true, notify: false });
+const me = useApiResource(() => `/api/games/${encodeURIComponent(props.game.id)}/me`, parseGameMe, {
+  authenticated: true,
+  notify: false,
+});
+const { data, status, error, refreshError, reload } = me;
 const active = useApiResource(
   () =>
     data.value?.activeMatch && route.query.match !== data.value.activeMatch.id
@@ -40,6 +36,15 @@ watch(
   },
 );
 const match = useMatchRequest(() => props.game.id);
+const upload = useStrategyUpload({
+  game: () => props.game,
+  me,
+  blocked: () => match.pending.value,
+  onAccepted: () => {
+    match.error.value = "";
+  },
+});
+const { busy, uncertain, fileError, feedback, candidate } = upload;
 watch(
   () => data.value?.activeMatch?.id,
   (id) => {
@@ -48,13 +53,9 @@ watch(
   },
 );
 const fileInput = ref<HTMLInputElement | null>(null);
-const candidate = ref<string | null>(null);
-const fileError = ref("");
-const feedback = ref("");
-const uncertain = ref(false);
-const busy = ref<"read" | "upload" | "verify" | null>(null);
 const dragging = ref(false);
 const working = computed(() => !!busy.value || match.pending.value);
+const locked = computed(() => working.value || uncertain.value);
 watch([busy, match.pending, uncertain], () => {
   if (
     !working.value &&
@@ -73,11 +74,10 @@ const disabledReason = computed(
       CODE_TOO_LARGE: "当前策略超过代码大小限制，请重新上传。",
     })[data.value?.cannotMatchReason ?? "NO_CODE"],
 );
-let current: AbortController | undefined;
-let revision = 0;
+const bossBusy = computed(() => match.pending.value && match.body.value?.boss === true);
 
 async function refresh() {
-  // startMatch refreshes once its POST/navigation has finished.
+  // A match request refreshes once its POST/navigation has finished.
   if (match.pending.value) return;
   if (busy.value || uncertain.value) {
     refreshQueued = true;
@@ -93,132 +93,29 @@ watch(
   () => void refresh(),
 );
 onMounted(() => window.addEventListener("focus", refresh));
-
-function acceptUpload(source: string, metadata: ReturnType<typeof parseUpload>) {
-  if (!data.value) return;
-  data.value = {
-    ...data.value,
-    code: { ...metadata, source },
-    canMatch: true,
-    cannotMatchReason: null,
-  };
-  candidate.value = null;
-  uncertain.value = false;
-  fileError.value = "";
-  refreshError.value = "";
-  match.error.value = "";
-  feedback.value = "策略已更新";
-}
-
-async function verifyUpload() {
-  if (busy.value || candidate.value === null) return;
-  const source = candidate.value;
-  cancelRead();
-  const request = new AbortController();
-  current = request;
-  busy.value = "verify";
-  try {
-    const result = await authorizedRequest(`${base.value}/me`, parseGameMe, {
-      signal: request.signal,
-    });
-    if (request.signal.aborted) return;
-    data.value = result;
-    if (result.code?.source === source) acceptUpload(source, result.code);
-    else fileError.value = "尚未确认上传结果，请重试上传。";
-  } catch (failure) {
-    if (!request.signal.aborted) fileError.value = errorMessage(failure);
-  } finally {
-    if (current === request) busy.value = null;
-  }
-}
-
-async function upload() {
-  if (candidate.value === null || working.value) return;
-  const source = candidate.value;
-  cancelRead();
-  const request = new AbortController();
-  current = request;
-  busy.value = "upload";
-  fileError.value = "";
-  feedback.value = "";
-  let verify = false;
-  try {
-    const result = await authorizedRequest(`${base.value}/me/code`, parseUpload, {
-      method: "PUT",
-      body: source,
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-      signal: request.signal,
-    });
-    if (!request.signal.aborted) acceptUpload(source, result);
-  } catch (failure) {
-    if (request.signal.aborted) return;
-    fileError.value = errorMessage(failure);
-    // A transport or server failure may happen after the new source was saved.
-    if (!(failure instanceof ApiError) || failure.status >= 500) {
-      uncertain.value = true;
-      verify = true;
-    }
-  } finally {
-    if (current === request) busy.value = null;
-  }
-  if (verify) await verifyUpload();
-}
-
-async function readFile(file: File) {
-  if (working.value || uncertain.value) return;
-  const version = ++revision;
-  fileError.value = "";
-  feedback.value = "";
-  candidate.value = null;
-  if (!/\.m?js$/i.test(file.name)) {
-    fileError.value = "请选择 .js 或 .mjs 文件。";
-    return;
-  }
-  if (file.size > props.game.resolvedLimits.codeBytes) {
-    fileError.value = "文件超过该游戏的代码大小限制。";
-    return;
-  }
-  busy.value = "read";
-  try {
-    const source = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
-    if (version !== revision) return;
-    if (!source.trim()) fileError.value = "策略文件不能为空。";
-    else candidate.value = source;
-  } catch {
-    if (version === revision)
-      fileError.value = "无法读取文件，请使用 UTF-8 编码的 JavaScript 文件。";
-  } finally {
-    if (version === revision) busy.value = null;
-  }
-  if (version === revision && candidate.value !== null) await upload();
-}
+onUnmounted(() => window.removeEventListener("focus", refresh));
 
 function selectFile(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   input.value = "";
-  if (file) void readFile(file);
+  if (file) void upload.read(file);
 }
 function dropFile(event: DragEvent) {
   dragging.value = false;
   const files = event.dataTransfer?.files;
-  if (!files?.length || working.value || uncertain.value) return;
+  if (!files?.length || locked.value) return;
   if (files.length !== 1) {
     fileError.value = "每次只能上传一个策略文件。";
     return;
   }
-  void readFile(files[0]!);
+  void upload.read(files[0]!);
 }
-async function startMatch() {
-  if (data.value?.canMatch && !working.value && !uncertain.value && (await match.start()))
+async function startMatch(boss = false) {
+  if (data.value?.canMatch && !locked.value && (await match.start(boss ? { boss: true } : {})))
     await refresh();
 }
 defineExpose({ refresh, data });
-onUnmounted(() => {
-  revision++;
-  current?.abort();
-  window.removeEventListener("focus", refresh);
-});
 </script>
 
 <template>
@@ -227,42 +124,55 @@ onUnmounted(() => {
   <section
     v-else-if="data"
     aria-label="我的参赛策略"
-    class="min-w-0 transition"
+    class="flex min-w-0 flex-col gap-3 transition"
     :class="[
-      compact ? 'p-3 sm:p-4' : 'rounded-card border bg-subtle p-4',
-      dragging ? 'bg-accent-soft ring-2 ring-accent/15' : 'border-line',
+      compact ? 'px-4 pt-3.5 pb-4 sm:px-5 sm:pb-5' : 'card p-4',
+      { 'bg-accent-soft': dragging },
     ]"
     @dragover.prevent="dragging = true"
     @dragleave.self="dragging = false"
     @drop.prevent="dropFile"
   >
-    <div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-soft">
-      <span
-        >排位 <span class="font-mono text-ink">{{ data.entry.rating.toFixed(2) }}</span> · 已赛
-        {{ data.entry.matchesPlayed }} 场</span
+    <div
+      class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[13px] text-soft"
+    >
+      <span v-if="game.arena"
+        >已赛 {{ data.entry.matchesPlayed }} 场 · 冠军 {{ data.entry.wins }} 次</span
+      >
+      <span v-else
+        >排位
+        <b class="figure text-base text-ink">{{ data.entry.rating.toFixed(2) }}</b>
+        · 已赛 {{ data.entry.matchesPlayed }} 场</span
       >
       <span class="font-mono"
         >{{ data.entry.wins }} 胜 {{ data.entry.draws }} 平 {{ data.entry.losses }} 负</span
       >
     </div>
-    <div class="mb-3 flex flex-wrap items-center gap-2 text-xs" aria-live="polite">
-      <span class="text-soft">当前策略</span>
+    <div
+      class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-control border border-dashed px-3 py-2.5 text-xs"
+      :class="dragging ? 'border-accent' : 'border-line-strong'"
+      aria-live="polite"
+    >
+      <span class="text-[13px] text-soft">当前策略</span>
       <AppBadge v-if="uncertain" tone="warning">上传结果待确认</AppBadge>
       <AppBadge v-else-if="busy">{{
         busy === "read" ? "读取文件中" : busy === "verify" ? "核实上传结果中" : "上传并校验中"
       }}</AppBadge>
-      <AppBadge v-else-if="data.canMatch" tone="success">可参赛</AppBadge>
+      <AppBadge v-else-if="data.canMatch" tone="accent">可参赛</AppBadge>
       <AppBadge v-else :tone="data.code ? 'warning' : 'neutral'">{{
         data.code ? "需要更新" : "尚未上传"
       }}</AppBadge>
-      <span v-if="data.code" class="font-mono text-soft"
-        >{{ (data.code.sourceBytes / 1024).toFixed(1) }} KiB</span
+      <span v-if="data.code" class="font-mono text-faint"
+        >{{ (data.code.sourceBytes / 1024).toFixed(1) }} KiB ·
+        {{ shortTime(data.code.updatedAt) }}</span
       >
-      <span v-if="feedback && !busy" class="text-success">{{ feedback }}</span>
-      <span v-if="dragging" class="text-accent">松开以上传策略</span>
+      <span v-if="feedback && !busy" class="text-accent">{{ feedback }}</span>
+      <span class="ml-auto hidden text-faint sm:inline" :class="{ 'text-accent': dragging }">{{
+        dragging ? "松开以上传策略" : "可拖入 .js 文件更新"
+      }}</span>
     </div>
-    <p v-if="!data.canMatch" class="mb-3 text-xs text-soft">{{ disabledReason }}</p>
-    <div class="flex flex-wrap gap-2">
+    <p v-if="!data.canMatch" class="text-xs text-soft">{{ disabledReason }}</p>
+    <div class="grid grid-cols-2 gap-2.5">
       <input
         ref="fileInput"
         id="strategy-file"
@@ -271,52 +181,78 @@ onUnmounted(() => {
         accept=".js,.mjs,text/javascript,application/javascript"
         tabindex="-1"
         aria-label="上传策略文件"
-        :disabled="working || uncertain"
+        :disabled="locked"
         @change="selectFile"
       />
       <AppButton
-        class="flex-1"
+        size="lg"
         :variant="data.code ? 'secondary' : 'primary'"
         :loading="!!busy"
-        :disabled="working || uncertain"
+        :disabled="locked"
         @click="fileInput?.click()"
         >{{ data.code ? "更新策略" : "上传策略" }}</AppButton
       >
       <AppButton
-        v-if="data.activeMatch"
-        class="flex-1"
+        v-if="game.arena"
+        size="lg"
+        :variant="data.code ? 'primary' : 'secondary'"
+        to="/royale"
+        >前往竞技场</AppButton
+      >
+      <AppButton
+        v-else-if="data.activeMatch"
+        size="lg"
         variant="primary"
-        :disabled="working || uncertain"
+        :disabled="locked"
         :to="gameMatchLocation(game.id, data.activeMatch.id)"
         >查看当前比赛</AppButton
       >
       <AppButton
         v-else
-        class="flex-1"
+        size="lg"
         :variant="data.code ? 'primary' : 'secondary'"
-        :loading="match.pending.value"
-        :disabled="!data.canMatch || working || uncertain"
-        @click="startMatch"
+        :loading="match.pending.value && !bossBusy"
+        :disabled="!data.canMatch || locked"
+        @click="startMatch()"
         >发起匹配</AppButton
       >
     </div>
     <div
-      v-if="fileError || uncertain"
-      class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-3"
+      v-if="data.boss.available && !game.arena"
+      class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-[13px] text-soft"
     >
-      <p role="alert" class="min-w-0 break-words text-sm text-danger">
+      <span
+        >Boss 战绩
+        <span class="font-mono text-ink"
+          >{{ data.boss.wins }} 胜 / {{ data.boss.attempts }} 次</span
+        ></span
+      >
+      <AppButton
+        size="sm"
+        variant="danger"
+        :loading="bossBusy"
+        :disabled="!data.canMatch || !!data.activeMatch || locked"
+        @click="startMatch(true)"
+        >挑战 Boss</AppButton
+      >
+    </div>
+    <div
+      v-if="fileError || uncertain"
+      class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-3"
+    >
+      <p role="alert" class="min-w-0 text-sm break-words text-danger-ink">
         {{ fileError || "正在确认上传结果。" }}
       </p>
-      <AppButton v-if="uncertain" size="sm" :disabled="working" @click="verifyUpload"
+      <AppButton v-if="uncertain" size="sm" :disabled="working" @click="upload.verify"
         >核实状态</AppButton
       >
-      <AppButton v-if="candidate !== null" size="sm" :disabled="working" @click="upload"
+      <AppButton v-if="candidate !== null" size="sm" :disabled="working" @click="upload.upload"
         >重试上传</AppButton
       >
     </div>
     <div
       v-if="refreshError || active.refreshError.value || active.error.value"
-      class="mt-3 flex flex-wrap items-center gap-3 text-xs text-danger"
+      class="flex flex-wrap items-center gap-3 text-xs text-danger-ink"
       role="alert"
     >
       {{ refreshError || active.refreshError.value || active.error.value }}
@@ -324,10 +260,10 @@ onUnmounted(() => {
         >刷新参赛状态</AppButton
       >
     </div>
-    <p v-if="match.error.value" role="alert" class="mt-3 text-sm text-danger">
+    <p v-if="match.error.value" role="alert" class="text-sm text-danger-ink">
       {{ match.error.value }}
     </p>
-    <details v-if="data.code && !compact" class="mt-3 border-t border-line pt-2">
+    <details v-if="data.code && !compact" class="border-t border-line pt-2">
       <summary class="w-fit cursor-pointer py-1 text-xs text-soft">查看当前代码</summary>
       <pre class="code-block mt-2 max-h-80">{{ data.code.source }}</pre>
     </details>

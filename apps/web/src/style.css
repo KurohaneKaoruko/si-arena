@@ -1,39 +1,60 @@
 @import "tailwindcss";
+/* Latin display and mono faces are self-hosted; Chinese text uses the system stack. */
+@import "@fontsource/jetbrains-mono/latin-400.css";
+@import "@fontsource/jetbrains-mono/latin-600.css";
+@import "@fontsource/chakra-petch/latin-600.css";
+@import "@fontsource/chakra-petch/latin-700.css";
 
 @theme {
-  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  --font-sans:
+    "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  /* Chakra Petch only for the logo and big numbers. */
+  --font-display: "Chakra Petch", "JetBrains Mono", ui-monospace, sans-serif;
 
-  /* 极简编辑风亮色主题：白底、发丝级描边、单一强调色 */
-  --color-background: #ffffff;
-  --color-surface: #ffffff;
-  --color-subtle: #fafafa;
-  --color-muted: #f4f4f5;
-  --color-line: #e4e4e7;
-  --color-line-strong: #d4d4d8;
-  --color-ink: #18181b;
-  --color-soft: #52525b;
-  --color-faint: #71717a;
-  --color-accent: #4f46e5;
-  --color-accent-strong: #4338ca;
-  --color-accent-soft: #eef2ff;
-  --color-danger: #dc2626;
-  --color-danger-soft: #fef2f2;
-  --color-success: #15803d;
-  --color-success-soft: #f0fdf4;
-  --color-warning: #b45309;
-  --color-warning-soft: #fffbeb;
+  /* Night arena: dark only. */
+  --color-background: #0b0e13;
+  --color-surface: #12161d;
+  --color-subtle: #181d26;
+  --color-board: #0f131a;
+  --color-dock: #0f1319;
+  --color-line: #252c38;
+  --color-line-strong: #323b4a;
+  --color-divider: #1e242e;
+  --color-ink: #e9eef5;
+  --color-soft: #a7b1c0;
+  --color-faint: #7e8898;
+  --color-accent: #c5f04a;
+  --color-accent-strong: #ddfb86;
+  --color-accent-soft: rgb(197 240 74 / 0.14);
+  --color-accent-line: #3a4a1f;
+  --color-on-accent: #0b0e13;
+  --color-danger: #ff6b5b;
+  --color-danger-ink: #ff8a7a;
+  --color-danger-soft: #2a1614;
+  --color-danger-line: #5a2a25;
+  --color-danger-pale: #ffd7d2;
+  --color-loss: #4a2320;
+  --color-even: #2a313d;
+  --color-warning: #ffb020;
+  --color-warning-soft: rgb(255 176 32 / 0.14);
+  --color-player-0: #5b8cff;
+  --color-player-1: #ffb020;
+  --color-player-2: #ff5fa2;
+  --color-player-3: #2ed3b7;
+  --color-player-4: #a880ff;
 
-  --radius-card: 0.5rem;
-  --radius-control: 0.25rem;
+  --radius-card: 1rem;
+  --radius-panel: 0.75rem;
+  --radius-control: 0.625rem;
+  --radius-chip: 0.3125rem;
 
-  --shadow-card: 0 1px 2px 0 rgb(24 24 27 / 0.04);
-  --shadow-pop: 0 10px 32px -10px rgb(24 24 27 / 0.2);
+  --shadow-pop: 0 18px 40px -14px rgb(0 0 0 / 0.7);
 }
 
 @layer base {
   :root {
-    color-scheme: light;
+    color-scheme: dark;
   }
   /* 页面自身不再回弹：到顶或到底后继续滚动不产生橡皮筋效果 */
   html {
@@ -58,7 +79,7 @@
   }
   ::selection {
     background: var(--color-accent);
-    color: #ffffff;
+    color: var(--color-on-accent);
   }
   /* 数字与标识统一用等宽，避免跳动 */
   code,
@@ -71,21 +92,31 @@
 
 /* 表单控件：用 @utility 定义，才能被其他规则 @apply 复用 */
 @utility input {
-  @apply block min-h-10 w-full min-w-0 rounded-control border border-line bg-surface px-3 text-sm text-ink transition placeholder:text-faint hover:border-line-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/10 disabled:cursor-not-allowed disabled:bg-subtle disabled:opacity-60;
+  @apply block min-h-11 w-full min-w-0 rounded-control border border-line-strong bg-background px-3.5 text-[15px] text-ink transition placeholder:text-faint hover:border-faint focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15 disabled:cursor-not-allowed disabled:opacity-60;
   overscroll-behavior: contain;
 }
 
 @layer components {
   .workspace {
-    @apply mx-auto w-full max-w-[96rem] px-4 sm:px-6 lg:px-8;
+    @apply mx-auto w-full max-w-[80rem] px-4 sm:px-6;
+  }
+  .card {
+    @apply rounded-card border border-line bg-surface;
+  }
+  /* 卡片内的浅色数据块 */
+  .tile {
+    @apply rounded-control bg-subtle;
+  }
+  /* 大数字：仅数字使用 Chakra Petch */
+  .figure {
+    @apply font-display font-bold tracking-tight tabular-nums;
+  }
+  .eyebrow {
+    @apply font-mono text-[13px] tracking-[0.12em] text-accent;
   }
   /* 元信息：版本、tick、ID、时间戳等 */
   .meta {
     @apply font-mono text-xs text-faint;
-  }
-  /* 正文引导段 */
-  .lead {
-    @apply text-[15px] leading-7 text-soft;
   }
   .link {
     @apply font-medium text-accent underline underline-offset-4 transition hover:text-accent-strong;
@@ -94,27 +125,24 @@
     @apply block text-sm font-medium text-ink;
   }
   .field-hint {
-    @apply mt-1.5 block text-xs leading-5 text-soft;
+    @apply mt-2 block text-xs leading-5 text-faint;
   }
   .field-error {
-    @apply mt-1.5 block text-xs leading-5 text-danger;
+    @apply mt-2 block text-xs leading-5 text-danger-ink;
   }
   /* 代码块多数场景不设高度，不能因 overscroll-behavior 把滚轮困在无溢出的滚动容器里 */
   .code-block {
-    @apply overflow-x-auto rounded-control border border-line bg-subtle px-4 py-3 font-mono text-[13px] leading-6 text-soft;
+    @apply overflow-x-auto rounded-panel border border-line bg-background px-4 py-3 font-mono text-[13px] leading-7 text-soft;
   }
   .skip-link {
-    @apply fixed top-3 left-3 z-50 -translate-y-24 rounded-control bg-accent px-5 py-3 text-sm font-medium text-white shadow-pop focus:translate-y-0;
+    @apply fixed top-3 left-3 z-50 -translate-y-24 rounded-control bg-accent px-5 py-3 text-sm font-bold text-on-accent shadow-pop focus:translate-y-0;
   }
-  /* 表格：表头用浅底，行用发丝线分隔 */
-  .data-head {
-    @apply border-b border-line bg-subtle text-xs font-medium tracking-wide text-soft;
-  }
-  .data-head-cell {
-    @apply px-4 py-2.5;
-  }
-  .data-cell {
-    @apply px-4 py-3;
+  /* 大厅与登录页的网格底纹 */
+  .grid-backdrop {
+    background-image:
+      linear-gradient(#141922 1px, transparent 1px),
+      linear-gradient(90deg, #141922 1px, transparent 1px);
+    background-size: 32px 32px;
   }
 }
 
@@ -123,7 +151,8 @@
   .touch-target,
   summary,
   select,
-  a[role="button"] {
+  a[role="button"],
+  [role="tab"] {
     min-height: 44px;
   }
 }
@@ -133,20 +162,12 @@
   min-width: 0;
   padding-bottom: calc(var(--game-actions-height, 10rem) + 1rem);
 }
-.game-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
-}
 .game-columns {
   display: grid;
   min-width: 0;
-  gap: 1rem;
+  gap: 1.25rem;
 }
-.game-preview,
-.game-match {
+.game-stage {
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -154,10 +175,15 @@
   gap: 0.75rem;
 }
 .game-preview {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.625rem;
   padding: 0.75rem;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-card);
-  background: var(--color-subtle);
+  background: var(--color-surface);
 }
 .game-canvas {
   position: relative;
@@ -174,6 +200,7 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-card);
   background: var(--color-surface);
@@ -184,6 +211,7 @@
   overflow-x: auto;
   padding-inline: 0.5rem;
   border-bottom: 1px solid var(--color-line);
+  scrollbar-width: none;
 }
 .game-content {
   min-width: 0;
@@ -192,7 +220,7 @@
 }
 .game-panel {
   min-width: 0;
-  padding: 1rem;
+  padding: 1.25rem;
 }
 .game-actions {
   position: fixed;
@@ -202,7 +230,7 @@
   overflow-y: auto;
   border-top: 1px solid var(--color-line);
   padding-bottom: env(safe-area-inset-bottom);
-  background: var(--color-surface);
+  background: var(--color-dock);
 }
 .game-match-pending {
   position: relative;
@@ -228,9 +256,6 @@
   flex-direction: column;
   gap: 0.75rem;
 }
-.replay-workspace .replay-controls {
-  order: 2;
-}
 
 @media (min-width: 1024px) {
   body:has(.app-shell--game) {
@@ -242,24 +267,19 @@
   }
   .app-shell--game > main {
     min-height: 0;
-    max-width: none;
+    max-width: 90rem;
     overflow: hidden;
-    padding: 0.75rem 1rem;
+    padding: 1.25rem 1.5rem;
   }
   .game-workbench {
-    display: flex;
     height: 100%;
     min-height: 0;
-    flex-direction: column;
     padding-bottom: 0;
   }
-  .game-heading {
-    flex-shrink: 0;
-  }
   .game-columns {
+    height: 100%;
     min-height: 0;
-    flex: 1;
-    grid-template-columns: minmax(0, 1fr) clamp(24rem, 35vw, 30rem);
+    grid-template-columns: minmax(0, 1fr) clamp(24rem, 32vw, 28rem);
   }
   .game-content {
     position: relative;
@@ -281,27 +301,19 @@
     flex: 1;
     aspect-ratio: auto !important;
   }
+  .game-stage > .game-preview {
+    flex: 1;
+  }
   .game-match-pending > .game-preview {
     height: 100%;
   }
-  .replay-workspace,
-  .replay-layout--fit,
-  .replay-stage,
-  .replay-map {
+  .replay--fit,
+  .replay--fit .replay-stage,
+  .replay--fit .replay-map {
     display: flex;
     min-height: 0;
     flex: 1;
     flex-direction: column;
-  }
-  .replay-map {
-    align-items: stretch;
-  }
-  .replay-map > :first-child {
-    flex-shrink: 0;
-  }
-  .replay-workspace .replay-controls {
-    max-height: 45%;
-    overflow-y: auto;
   }
 }
 

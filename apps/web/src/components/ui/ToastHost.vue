@@ -5,8 +5,8 @@ import { useToast } from "../../composables/useToast";
 const { current, dismiss } = useToast();
 
 const accents = {
-  info: "bg-accent",
-  success: "bg-success",
+  info: "bg-soft",
+  success: "bg-accent",
   warning: "bg-warning",
   danger: "bg-danger",
 } as const;
@@ -23,16 +23,16 @@ const live = computed(() => (current.value?.tone === "danger" ? "assertive" : "p
     <Transition name="toast">
       <div
         v-if="current"
-        class="pointer-events-auto flex w-full max-w-[30rem] items-start gap-3 rounded-card border border-line bg-surface px-4 py-3 shadow-pop"
+        class="pointer-events-auto flex w-full max-w-[30rem] items-start gap-3 rounded-panel border border-line-strong bg-subtle px-4 py-3 shadow-pop"
       >
         <!-- 圆点、关闭图标都放进与正文同样的 24px 行盒里居中，三者才真正对齐 -->
         <span class="flex h-6 shrink-0 items-center" aria-hidden="true">
-          <span class="size-1.5 rounded-full" :class="accents[current.tone]" />
+          <span class="size-2 rounded-full" :class="accents[current.tone]" />
         </span>
         <p class="min-w-0 flex-1 text-sm leading-6 text-ink">{{ current.message }}</p>
         <button
           type="button"
-          class="-mr-1 flex size-6 shrink-0 items-center justify-center rounded-control text-faint transition hover:bg-muted hover:text-ink"
+          class="-mr-1 flex size-6 shrink-0 items-center justify-center rounded-chip text-faint transition hover:bg-line hover:text-ink"
           aria-label="关闭提示"
           @click="dismiss"
         >

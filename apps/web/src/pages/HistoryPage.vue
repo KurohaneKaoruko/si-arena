@@ -36,23 +36,20 @@ defineExpose({ refresh: reload });
 </script>
 
 <template>
-  <div>
-    <h2 class="mb-3 text-[15px] font-semibold">我的比赛</h2>
+  <div class="space-y-4">
+    <h2 class="text-xl font-bold">我的比赛</h2>
     <p v-if="session.ready && !session.user" class="py-8 text-center text-sm text-soft">
       登录后查看比赛
     </p>
-    <div v-else>
+    <template v-else>
       <StateBlock v-if="status === 'loading'" status="loading" />
       <StateBlock v-else-if="status === 'error'" status="error" :message="error" @retry="reload" />
-      <StateBlock v-else-if="empty" status="empty" message="暂无比赛" />
+      <StateBlock v-else-if="empty" status="empty" message="暂无比赛。上传策略后发起匹配。" />
       <template v-else-if="data">
         <MatchList v-if="data.matches.length" :matches="data.matches" />
-        <div
-          v-else
-          class="rounded-card border border-line bg-surface px-5 py-4 text-sm leading-6 text-soft"
-        >
+        <p v-else class="rounded-panel border border-line px-5 py-4 text-sm leading-6 text-soft">
           本页没有比赛。
-        </div>
+        </p>
         <PaginationControls
           :page="data.page"
           :limit="data.limit"
@@ -61,9 +58,9 @@ defineExpose({ refresh: reload });
           @change="change"
         />
       </template>
-      <p v-if="refreshError" role="alert" class="mt-3 text-sm text-danger">
+      <p v-if="refreshError" role="alert" class="text-sm text-danger-ink">
         {{ refreshError }} <AppButton size="sm" variant="link" @click="reload">重新加载</AppButton>
       </p>
-    </div>
+    </template>
   </div>
 </template>
