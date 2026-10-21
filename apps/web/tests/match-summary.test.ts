@@ -5,6 +5,7 @@ import { matchOutcome, ratingDelta } from "../src/games/match-summary";
 const match: MatchSummary = {
   id: "match",
   gameId: "paper",
+  kind: "ranked",
   status: "completed",
   createdAt: new Date().toISOString(),
   participants: [
@@ -12,6 +13,7 @@ const match: MatchSummary = {
       userId: "initiator",
       username: "First",
       official: false,
+      boss: false,
       slot: 0,
       rank: 2,
       ratingBefore: 1000,
@@ -21,6 +23,7 @@ const match: MatchSummary = {
       userId: "opponent",
       username: "Second",
       official: true,
+      boss: false,
       slot: 1,
       rank: 1,
       ratingBefore: 1000,

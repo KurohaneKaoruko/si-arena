@@ -18,6 +18,7 @@ const code = {
 };
 const me: GameMeResponse = {
   entry: { rating: 1000, matchesPlayed: 0, wins: 0, draws: 0, losses: 0 },
+  boss: { available: false, attempts: 0, wins: 0 },
   code,
   canMatch: true,
   cannotMatchReason: null,
@@ -44,6 +45,7 @@ async function setup(fetch: ReturnType<typeof vi.fn>, initial = me) {
       response({
         ...initial.activeMatch,
         gameId: "paper",
+        kind: "ranked",
         release: game.release,
         seed: 1,
         createdAt: code.updatedAt,
