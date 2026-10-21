@@ -5,29 +5,49 @@ export interface OpponentCandidate {
   rating: number;
 }
 
-export const OPPONENT_RATING_WINDOW = 250;
+/** Rating windows tried in order; the last one accepts any gap. */
+export const OPPONENT_RATING_WINDOWS = [250, 500, 1000, Infinity] as const;
+/** Opponents of this many most recent completed ranked matches count as recent. */
+export const RECENT_OPPONENT_MATCHES = 5;
 
 /**
- * Picks the opponent for an initiated match: ordinary players within the rating
- * window, preferring the smallest absolute difference (ties broken randomly).
- * The most recent completed opponent is skipped whenever another candidate
- * remains. Returns null when no ordinary candidate qualifies; the caller then
- * falls back to the official account, which ignores the rating window.
+ * Picks the ranked opponent among ordinary players (ranked.md "匹配流程"):
+ * recent opponents are skipped while anyone else qualifies (only the very last
+ * one when everyone is recent), then the smallest rating gap wins inside the
+ * narrowest window that has a candidate; equal gaps are broken randomly.
+ * Returns null when there is no ordinary candidate at all.
+ *
+ * @param recentOpponentIds most recent first
  */
 export function selectOpponent(
   initiatorRating: number,
   candidates: readonly OpponentCandidate[],
-  recentOpponentId: string | null,
+  recentOpponentIds: readonly string[],
 ): string | null {
-  const qualified = candidates.filter(
-    (candidate) => Math.abs(candidate.rating - initiatorRating) <= OPPONENT_RATING_WINDOW,
-  );
-  let pool = qualified;
-  if (qualified.length > 1 && recentOpponentId !== null) {
-    const withoutRecent = qualified.filter((candidate) => candidate.userId !== recentOpponentId);
-    if (withoutRecent.length > 0) pool = withoutRecent;
+  const pool = withoutRecent(candidates, recentOpponentIds);
+  for (const window of OPPONENT_RATING_WINDOWS) {
+    const inWindow = pool.filter(
+      (candidate) => Math.abs(candidate.rating - initiatorRating) <= window,
+    );
+    if (inWindow.length > 0) return closest(initiatorRating, inWindow);
   }
-  if (pool.length === 0) return null;
+  return null;
+}
+
+function withoutRecent(
+  candidates: readonly OpponentCandidate[],
+  recentOpponentIds: readonly string[],
+): readonly OpponentCandidate[] {
+  if (candidates.length <= 1) return candidates;
+  const recent = new Set(recentOpponentIds);
+  const fresh = candidates.filter((candidate) => !recent.has(candidate.userId));
+  if (fresh.length > 0) return fresh;
+  const last = recentOpponentIds[0];
+  const notLast = candidates.filter((candidate) => candidate.userId !== last);
+  return notLast.length > 0 ? notLast : candidates;
+}
+
+function closest(initiatorRating: number, pool: readonly OpponentCandidate[]): string {
   let bestDiff = Infinity;
   const tied: OpponentCandidate[] = [];
   for (const candidate of pool) {

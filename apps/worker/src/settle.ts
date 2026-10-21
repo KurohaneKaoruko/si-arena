@@ -1,11 +1,19 @@
-import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { gameEntries, matchParticipants, matches } from "@si-arena/db";
 import type { Executor } from "@si-arena/db";
-import type { GameResult } from "@si-arena/protocol";
+import type { ArenaSettings, GameResult } from "@si-arena/protocol";
 import { formatRating, scoreFromRanks, twoPlayerElo } from "./elo";
 import type { ReplayStore } from "./replay-store";
 
 export type SettleOutcome = "completed" | "refused";
+
+export interface SettleResult {
+  outcome: SettleOutcome;
+  /** Arena runs deleted by retention; their replay files are removed after commit. */
+  prunedMatchIds: string[];
+}
+
+type Transaction = Parameters<Parameters<Executor["transaction"]>[0]>[0];
 
 export interface SettleInput {
   matchId: string;
@@ -14,6 +22,8 @@ export interface SettleInput {
   /** Measured on the saved candidate before this call. */
   replayFile: { fileName: string; formatVersion: 1; bytes: number; sha256: string };
   candidatePath: string;
+  /** The game's arena settings when it has one. */
+  arena?: ArenaSettings;
 }
 
 function rankByUserId(result: GameResult): Map<string, number> {
@@ -28,16 +38,17 @@ function rankByUserId(result: GameResult): Map<string, number> {
 }
 
 /**
- * Publishes a finished match: one transaction verifies execution rights, locks
- * both rating rows in a stable order, applies Elo, links the replay candidate
- * to its public name, and commits the terminal state. Refusal leaves every row
- * and file untouched — a stale worker can never overwrite a valid settlement.
+ * Publishes a finished match: one transaction verifies execution rights, settles
+ * by match kind (Elo for ranked games, arena points, ranks only for practice and
+ * boss games), links the replay candidate to its public name, commits the
+ * terminal state and prunes old arena runs. Refusal leaves every row and file
+ * untouched — a stale worker can never overwrite a valid settlement.
  */
 export async function settleMatch(
   db: Executor,
   store: ReplayStore,
   input: SettleInput,
-): Promise<SettleOutcome> {
+): Promise<SettleResult> {
   return db.transaction(async (tx) => {
     const matchRows = await tx
       .select()
@@ -55,65 +66,22 @@ export async function settleMatch(
       .limit(1)
       .for("update");
     const match = matchRows[0];
-    if (match === undefined) return "refused";
+    if (match === undefined) return { outcome: "refused", prunedMatchIds: [] };
 
     const seats = await tx
       .select()
       .from(matchParticipants)
       .where(eq(matchParticipants.matchId, input.matchId))
       .orderBy(asc(matchParticipants.slot));
-    if (seats.length !== 2) throw new Error("Match must settle exactly two participants");
     const ranks = rankByUserId(input.result);
     for (const seat of seats) {
       if (!ranks.has(seat.userId)) throw new Error("Match result is missing a participant rank");
     }
-
-    // Stable lock order by user id keeps concurrent settlements deadlock-free.
-    const orderedUserIds = seats.map((seat) => seat.userId).toSorted();
-    const entries = await tx
-      .select()
-      .from(gameEntries)
-      .where(and(eq(gameEntries.gameId, match.gameId), inArray(gameEntries.userId, orderedUserIds)))
-      .orderBy(asc(gameEntries.userId))
-      .for("update");
-    const entryByUser = new Map(entries.map((entry) => [entry.userId, entry]));
-    for (const userId of orderedUserIds) {
-      if (!entryByUser.has(userId)) throw new Error("Participant lost their game entry");
-    }
-
-    const seatA = seats[0]!;
-    const seatB = seats[1]!;
-    const ratingA = Number(entryByUser.get(seatA.userId)!.rating);
-    const ratingB = Number(entryByUser.get(seatB.userId)!.rating);
-    const scoreA = scoreFromRanks(ranks.get(seatA.userId)!, ranks.get(seatB.userId)!);
-    const { deltaA, deltaB } = twoPlayerElo(ratingA, ratingB, scoreA);
-    const deltas = [deltaA, deltaB];
-    const ratingsBefore = [ratingA, ratingB];
-
-    for (const [index, seat] of seats.entries()) {
-      const entry = entryByUser.get(seat.userId)!;
-      const ratingAfter = ratingsBefore[index]! + deltas[index]!;
-      const score = index === 0 ? scoreA : 1 - scoreA;
-      await tx
-        .update(gameEntries)
-        .set({
-          rating: formatRating(ratingAfter),
-          matchesPlayed: entry.matchesPlayed + 1,
-          wins: entry.wins + (score === 1 ? 1 : 0),
-          draws: entry.draws + (score === 0.5 ? 1 : 0),
-          losses: entry.losses + (score === 0 ? 1 : 0),
-          updatedAt: sql`now()`,
-        })
-        .where(eq(gameEntries.id, entry.id));
-      await tx
-        .update(matchParticipants)
-        .set({
-          rank: ranks.get(seat.userId)!,
-          ratingBefore: formatRating(ratingsBefore[index]!),
-          ratingAfter: formatRating(ratingAfter),
-        })
-        .where(eq(matchParticipants.id, seat.id));
-    }
+    if (match.kind === "ranked") await settleRanked(tx, match.gameId, seats, ranks);
+    else if (match.kind === "arena") {
+      if (input.arena === undefined) throw new Error("Arena match settled without arena settings");
+      await settleArena(tx, match.gameId, seats, ranks, input.arena);
+    } else await recordRanks(tx, seats, ranks);
 
     await store.publish(input.candidatePath, input.matchId);
     await tx
@@ -132,6 +100,143 @@ export async function settleMatch(
           eq(matches.status, "running"),
         ),
       );
-    return "completed";
+    const prunedMatchIds =
+      match.kind === "arena" && input.arena !== undefined
+        ? await pruneArenaRuns(tx, match.gameId, input.arena.keepMatches)
+        : [];
+    return { outcome: "completed" as const, prunedMatchIds };
   });
+}
+
+type Seat = typeof matchParticipants.$inferSelect;
+
+/** Locks the entries of the given users in a stable order (deadlock-free). */
+async function lockEntries(tx: Transaction, gameId: string, userIds: string[]) {
+  const ordered = userIds.toSorted();
+  const entries = await tx
+    .select()
+    .from(gameEntries)
+    .where(and(eq(gameEntries.gameId, gameId), inArray(gameEntries.userId, ordered)))
+    .orderBy(asc(gameEntries.userId))
+    .for("update");
+  const byUser = new Map(entries.map((entry) => [entry.userId, entry]));
+  for (const userId of ordered)
+    if (!byUser.has(userId)) throw new Error("Participant lost their game entry");
+  return byUser;
+}
+
+/** Practice and boss games: ranks only, nobody's standing changes. */
+async function recordRanks(tx: Transaction, seats: Seat[], ranks: Map<string, number>) {
+  for (const seat of seats)
+    await tx
+      .update(matchParticipants)
+      .set({ rank: ranks.get(seat.userId)! })
+      .where(eq(matchParticipants.id, seat.id));
+}
+
+/** Two-player Elo on both entries, the passive opponent included. */
+async function settleRanked(
+  tx: Transaction,
+  gameId: string,
+  seats: Seat[],
+  ranks: Map<string, number>,
+) {
+  if (seats.length !== 2) throw new Error("Ranked match must settle exactly two participants");
+  if (seats.some((seat) => seat.officialSnapshot || seat.bossSnapshot))
+    throw new Error("Ranked match cannot seat the official bot or the boss");
+  const entryByUser = await lockEntries(
+    tx,
+    gameId,
+    seats.map((seat) => seat.userId),
+  );
+  const seatA = seats[0]!;
+  const seatB = seats[1]!;
+  const ratingA = Number(entryByUser.get(seatA.userId)!.rating);
+  const ratingB = Number(entryByUser.get(seatB.userId)!.rating);
+  const scoreA = scoreFromRanks(ranks.get(seatA.userId)!, ranks.get(seatB.userId)!);
+  const { deltaA, deltaB } = twoPlayerElo(ratingA, ratingB, scoreA);
+  const deltas = [deltaA, deltaB];
+  const ratingsBefore = [ratingA, ratingB];
+  for (const [index, seat] of seats.entries()) {
+    const entry = entryByUser.get(seat.userId)!;
+    const ratingAfter = ratingsBefore[index]! + deltas[index]!;
+    const score = index === 0 ? scoreA : 1 - scoreA;
+    await tx
+      .update(gameEntries)
+      .set({
+        rating: formatRating(ratingAfter),
+        matchesPlayed: entry.matchesPlayed + 1,
+        wins: entry.wins + (score === 1 ? 1 : 0),
+        draws: entry.draws + (score === 0.5 ? 1 : 0),
+        losses: entry.losses + (score === 0 ? 1 : 0),
+        updatedAt: sql`now()`,
+      })
+      .where(eq(gameEntries.id, entry.id));
+    await tx
+      .update(matchParticipants)
+      .set({
+        rank: ranks.get(seat.userId)!,
+        ratingBefore: formatRating(ratingsBefore[index]!),
+        ratingAfter: formatRating(ratingAfter),
+      })
+      .where(eq(matchParticipants.id, seat.id));
+  }
+}
+
+/** Arena points by rank for every ranked seat; the official bot only gets its rank. */
+async function settleArena(
+  tx: Transaction,
+  gameId: string,
+  seats: Seat[],
+  ranks: Map<string, number>,
+  arena: ArenaSettings,
+) {
+  const scored = seats.filter((seat) => !seat.officialSnapshot && !seat.bossSnapshot);
+  const entryByUser = await lockEntries(
+    tx,
+    gameId,
+    scored.map((seat) => seat.userId),
+  );
+  for (const seat of scored) {
+    const entry = entryByUser.get(seat.userId)!;
+    const rank = ranks.get(seat.userId)!;
+    await tx
+      .update(gameEntries)
+      .set({
+        points: entry.points + arenaPoints(arena, rank),
+        placementTotal: entry.placementTotal + rank,
+        matchesPlayed: entry.matchesPlayed + 1,
+        wins: entry.wins + (rank === 1 ? 1 : 0),
+        updatedAt: sql`now()`,
+      })
+      .where(eq(gameEntries.id, entry.id));
+  }
+  await recordRanks(tx, seats, ranks);
+}
+
+export function arenaPoints(arena: ArenaSettings, rank: number): number {
+  return arena.points[rank - 1] ?? 0;
+}
+
+/**
+ * Deletes finished runs of the arena beyond the newest `keep` (rows cascade to
+ * participants). Returns their ids so the caller removes the replay files once
+ * the transaction has committed.
+ */
+async function pruneArenaRuns(tx: Transaction, gameId: string, keep: number): Promise<string[]> {
+  const stale = await tx
+    .select({ id: matches.id })
+    .from(matches)
+    .where(
+      and(
+        eq(matches.gameId, gameId),
+        eq(matches.kind, "arena"),
+        inArray(matches.status, ["completed", "failed"]),
+      ),
+    )
+    .orderBy(desc(matches.createdAt), desc(matches.id))
+    .offset(keep);
+  const ids = stale.map((row) => row.id);
+  if (ids.length > 0) await tx.delete(matches).where(inArray(matches.id, ids));
+  return ids;
 }

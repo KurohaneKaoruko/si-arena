@@ -4,8 +4,8 @@ import { RouterLink } from "vue-router";
 
 const props = withDefaults(
   defineProps<{
-    variant?: "primary" | "secondary" | "ghost" | "link" | undefined;
-    size?: "sm" | "md" | "lg" | undefined;
+    variant?: "primary" | "secondary" | "ghost" | "danger" | "link" | undefined;
+    size?: "sm" | "md" | "lg" | "icon" | undefined;
     to?: string | Record<string, unknown> | undefined;
     href?: string | undefined;
     /**
@@ -23,30 +23,33 @@ const props = withDefaults(
 );
 
 const variants = {
-  primary: "bg-accent text-white shadow-sm hover:bg-accent-strong",
-  secondary: "border border-line bg-surface text-ink hover:border-line-strong hover:bg-subtle",
-  ghost: "text-soft hover:bg-muted hover:text-ink",
-  link: "text-accent underline underline-offset-4 hover:text-accent-strong",
+  primary: "bg-accent font-bold text-on-accent hover:bg-accent-strong",
+  secondary: "border border-line-strong text-ink hover:border-faint hover:bg-subtle",
+  ghost: "text-soft hover:bg-subtle hover:text-ink",
+  danger: "border border-danger-line text-danger-ink hover:bg-danger-soft",
+  link: "font-medium text-accent underline underline-offset-4 hover:text-accent-strong",
 } as const;
 
 // 盒模型与字号分开：Tailwind 同一层里的工具类按自身顺序决定优先级，
 // 文字型按钮不能和尺寸类共用 px / min-h，否则会被尺寸类盖掉。
 const sizes = {
-  sm: { box: "min-h-8 rounded-control px-2.5", text: "text-[13px]" },
-  md: { box: "min-h-9 rounded-control px-3.5", text: "text-sm" },
-  lg: { box: "min-h-11 rounded-control px-5", text: "text-[15px]" },
+  sm: { box: "min-h-9 rounded-[0.5rem] px-3", text: "text-[13px]" },
+  md: { box: "min-h-11 rounded-control px-4", text: "text-sm" },
+  lg: { box: "min-h-12 rounded-control px-5", text: "text-[15px]" },
+  icon: { box: "size-11 shrink-0 rounded-control", text: "text-sm" },
 } as const;
 
 const inert = computed(() => props.disabled || props.loading);
 const isLink = computed(() => Boolean(props.to || props.href));
 
 const classes = computed(() => [
-  "touch-target inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap transition",
+  "touch-target inline-flex items-center justify-center gap-2 whitespace-nowrap transition",
   props.variant === "link" ? "min-h-0 px-0" : sizes[props.size].box,
+  props.variant === "primary" || props.variant === "link" ? "" : "font-medium",
   sizes[props.size].text,
   variants[props.variant],
   props.block ? "w-full" : "",
-  inert.value ? "pointer-events-none opacity-50" : "",
+  inert.value ? "pointer-events-none opacity-45" : "",
 ]);
 
 const element = computed(() => {

@@ -9,23 +9,15 @@ defineEmits<{ change: [page: number] }>();
   <nav
     v-if="total > limit"
     aria-label="分页"
-    class="mt-6 flex flex-wrap items-center justify-between gap-3"
+    class="flex flex-wrap items-center justify-center gap-3 text-sm text-soft"
   >
-    <AppButton
-      variant="secondary"
-      size="sm"
-      :disabled="pending || page <= 1"
-      @click="$emit('change', page - 1)"
+    <AppButton :disabled="pending || page <= 1" @click="$emit('change', page - 1)"
       >上一页</AppButton
     >
-    <span class="font-mono text-xs text-soft"
+    <span class="font-mono"
       >{{ page }} / {{ Math.max(1, Math.ceil(total / limit)) }} 页 · {{ total }} 条</span
     >
-    <AppButton
-      variant="secondary"
-      size="sm"
-      :disabled="pending || page * limit >= total"
-      @click="$emit('change', page + 1)"
+    <AppButton :disabled="pending || page * limit >= total" @click="$emit('change', page + 1)"
       >下一页</AppButton
     >
   </nav>

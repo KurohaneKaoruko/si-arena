@@ -20,6 +20,7 @@ COPY packages/player/package.json packages/player/
 COPY packages/cli/package.json packages/cli/
 COPY packages/db/package.json packages/db/
 COPY games/paper/package.json games/paper/
+COPY games/royale/package.json games/royale/
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY . .

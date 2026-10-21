@@ -15,6 +15,13 @@
       "when": 1792385115809,
       "tag": "0001_flimsy_siren",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792572235301,
+      "tag": "0002_match_kinds_boss_arena",
+      "breakpoints": true
     }
   ]
 }

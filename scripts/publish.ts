@@ -22,6 +22,7 @@ const PUBLIC_PACKAGES = [
   { name: "@si-arena/engine", directory: "packages/engine" },
   { name: "@si-arena/player", directory: "packages/player" },
   { name: "@si-arena/game-paper", directory: "games/paper" },
+  { name: "@si-arena/game-royale", directory: "games/royale" },
   { name: "@si-arena/cli", directory: "packages/cli" },
 ] as const;
 
@@ -70,7 +71,7 @@ try {
   runPnpm(["--filter", "@si-arena/cli", "pack", "--pack-destination", temporary], {
     timeoutMs: 10 * 60_000,
   });
-  const [archive] = (await readdir(temporary)).filter((file) => file.endsWith(".tgz"));
+  const archive = (await readdir(temporary)).find((file) => file.endsWith(".tgz"));
   if (!archive) throw new Error("Packing @si-arena/cli produced no tarball");
   await extract({ file: join(temporary, archive), cwd: temporary, strict: true });
   const packedManifest = JSON.parse(

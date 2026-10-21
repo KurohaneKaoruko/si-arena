@@ -12,6 +12,8 @@ const props = withDefaults(
     /** 读屏时播报的当前值描述。 */
     valueText?: string | undefined;
     disabled?: boolean | undefined;
+    /** Values highlighted on the track, such as ticks with execution errors. */
+    marks?: readonly number[] | undefined;
   }>(),
   { step: 1 },
 );
@@ -29,8 +31,17 @@ const ratio = computed(() => {
   return Math.min(1, Math.max(0, (props.modelValue - props.min) / span.value));
 });
 /** 拇指中心相对轨道的偏移；填充部分与拇指共用同一个位置。 */
-const thumbPosition = computed(
-  () => `calc(${THUMB_SIZE / 2}px + (100% - ${THUMB_SIZE}px) * ${ratio.value})`,
+function offset(value: number) {
+  return `calc(${THUMB_SIZE / 2}px + (100% - ${THUMB_SIZE}px) * ${value})`;
+}
+const thumbPosition = computed(() => offset(ratio.value));
+const markPositions = computed(() =>
+  props.max <= props.min
+    ? []
+    : (props.marks ?? []).map((value) => ({
+        value,
+        left: offset(Math.min(1, Math.max(0, (value - props.min) / span.value))),
+      })),
 );
 
 function clamp(value: number) {
@@ -104,7 +115,7 @@ function onKeydown(event: KeyboardEvent) {
     ref="track"
     role="slider"
     tabindex="0"
-    class="group relative flex h-9 w-full touch-none select-none items-center focus:outline-none"
+    class="group relative flex h-7 w-full touch-none select-none items-center focus:outline-none"
     :class="disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'"
     :aria-label="label"
     :aria-valuemin="min"
@@ -118,13 +129,20 @@ function onKeydown(event: KeyboardEvent) {
     @pointerup="onPointerUp"
     @pointercancel="onPointerUp"
   >
-    <div class="pointer-events-none absolute inset-x-0 h-1.5 rounded-control bg-muted"></div>
+    <div class="pointer-events-none absolute inset-x-0 h-1 rounded-full bg-line"></div>
     <div
-      class="pointer-events-none absolute left-0 h-1.5 rounded-control bg-accent"
+      class="pointer-events-none absolute left-0 h-1 rounded-full bg-accent"
       :style="{ width: thumbPosition }"
     ></div>
+    <span
+      v-for="mark in markPositions"
+      :key="mark.value"
+      class="pointer-events-none absolute h-5 w-[3px] -translate-x-1/2 rounded-full bg-danger"
+      :style="{ left: mark.left }"
+      aria-hidden="true"
+    ></span>
     <div
-      class="pointer-events-none absolute size-4 rounded-full border-2 border-accent bg-surface shadow-sm group-focus-visible:ring-4 group-focus-visible:ring-accent/15"
+      class="pointer-events-none absolute size-4 rounded-full bg-ink shadow-[0_0_0_3px_var(--color-background)] group-focus-visible:ring-4 group-focus-visible:ring-accent/40"
       :style="{ left: thumbPosition, transform: 'translateX(-50%)' }"
     ></div>
   </div>

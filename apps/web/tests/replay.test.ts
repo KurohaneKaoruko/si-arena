@@ -29,7 +29,7 @@ test("Paper v1 replays are rejected because that release is not registered", asy
 
 test("timeline, keyboard and error navigation preserve S0/input tick semantics and escape player logs", async () => {
   const session = await loadRegisteredReplay(await replayFixture(), replayGames);
-  const wrapper = mount(ReplayViewer, { props: { session, fileName: "match.json.gz" } });
+  const wrapper = mount(ReplayViewer, { props: { session } });
   expect(wrapper.get('[data-testid="tick-count"]').text()).toContain("已完成 0");
   expect(wrapper.text()).toContain("初始世界 S0");
   await wrapper.get('[aria-label="前进一个 tick"]').trigger("click");
@@ -64,7 +64,7 @@ test("missing logs for prototype-named participants remain empty rather than inh
     delete tick.logs;
   }
   const session = await loadRegisteredReplay(raw, replayGames);
-  const wrapper = mount(ReplayViewer, { props: { session, fileName: "match.json.gz" } });
+  const wrapper = mount(ReplayViewer, { props: { session } });
   await wrapper.get('[aria-label="前进一个 tick"]').trigger("click");
   expect(wrapper.text()).toContain("此回放未包含玩家日志");
   expect(wrapper.find("#log-level").exists()).toBe(false);
@@ -74,7 +74,7 @@ test("missing logs for prototype-named participants remain empty rather than inh
 
 test("leaving the viewer cancels playback and hidden tabs pause it", async () => {
   const session = await loadRegisteredReplay(await replayFixture(), replayGames);
-  const wrapper = mount(ReplayViewer, { props: { session, fileName: "match.json.gz" } });
+  const wrapper = mount(ReplayViewer, { props: { session } });
   await wrapper
     .findAll("button")
     .find((button) => button.text() === "播放")!
@@ -89,7 +89,7 @@ test("leaving the viewer cancels playback and hidden tabs pause it", async () =>
 
 test("keys pressed inside the select popup do not drive the replay", async () => {
   const session = await loadRegisteredReplay(await replayFixture(), replayGames);
-  const wrapper = mount(ReplayViewer, { props: { session, fileName: "match.json.gz" } });
+  const wrapper = mount(ReplayViewer, { props: { session } });
   await wrapper.get("#log-level").trigger("click");
   const listbox = wrapper.get('[role="listbox"]');
   // Home / End / 空格是播放器的快捷键，在下拉框里按不能改播放位置、也不能启停
@@ -103,7 +103,7 @@ test("keys pressed inside the select popup do not drive the replay", async () =>
 
 test("the timeline slider seeks the replay without starting playback", async () => {
   const session = await loadRegisteredReplay(await replayFixture(), replayGames);
-  const wrapper = mount(ReplayViewer, { props: { session, fileName: "match.json.gz" } });
+  const wrapper = mount(ReplayViewer, { props: { session } });
   const slider = wrapper.get('[role="slider"]');
   expect(slider.attributes("aria-valuemin")).toBe("0");
   expect(slider.attributes("aria-valuemax")).toBe(String(session.totalTicks));
@@ -136,11 +136,10 @@ test("file opening failures show an error without an old or partially verified m
 test("online replays omit console tools while preserving execution errors and observation", async () => {
   const session = await loadRegisteredReplay(await replayFixture(), replayGames);
   const wrapper = mount(ReplayViewer, {
-    props: { session, fileName: "online.json.gz", sourceKind: "online" },
+    props: { session, sourceKind: "online" },
   });
   expect(wrapper.find("#log-level").exists()).toBe(false);
   expect(wrapper.text()).not.toContain("玩家日志");
-  expect(wrapper.text()).not.toContain("online.json.gz");
   const nextError = wrapper.findAll("button").find((button) => button.text() === "下一处错误")!;
   await nextError.trigger("click");
   expect(wrapper.text()).toContain("test failure");

@@ -1,27 +1,53 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { clampMatchPage } from "@si-arena/protocol";
+import { clampMatchPage, type GameCatalogEntry, type LeaderboardPlayer } from "@si-arena/protocol";
 import { parseLeaderboard } from "../api/contracts";
 import { session } from "../auth/session";
 import { useApiResource } from "../composables/useApiResource";
+import { useMatchRequest } from "../composables/useMatchRequest";
+import { leaderboardBlurb } from "../games/leaderboard";
+import ParticipantTags from "../components/ParticipantTags.vue";
 import PaginationControls from "../components/PaginationControls.vue";
-import AppBadge from "../components/ui/AppBadge.vue";
-import DataTable from "../components/ui/DataTable.vue";
+import AppButton from "../components/ui/AppButton.vue";
 import StateBlock from "../components/ui/StateBlock.vue";
-import type { GameCatalogEntry } from "@si-arena/protocol";
 
-defineProps<{ game: GameCatalogEntry }>();
+const props = defineProps<{
+  game: GameCatalogEntry;
+  /** The page around it already shows the title and description. */
+  headless?: boolean;
+}>();
 
 const route = useRoute();
 const router = useRouter();
-const gamePath = computed(() => `/games/${encodeURIComponent(String(route.params.gameId))}`);
 const page = computed(() => clampMatchPage(Number(route.query.page ?? 1)));
-const { data, status, empty, error, pending, reload } = useApiResource(
-  () => `/api${gamePath.value}/leaderboard?page=${page.value}&limit=20`,
+const { data, status, empty, error, refreshError, pending, reload } = useApiResource(
+  () => `/api/games/${encodeURIComponent(props.game.id)}/leaderboard?page=${page.value}&limit=20`,
   parseLeaderboard,
-  { isEmpty: (value) => value.players.length === 0 },
+  {
+    isEmpty: (value) => value.players.length === 0,
+    // Live: every 10 s while visible, immediately when the tab becomes visible again.
+    pollWhen: () => true,
+    pollInterval: 10000,
+    notify: false,
+  },
 );
+const arena = computed(() => !!props.game.arena);
+const challengeable = computed(() => !arena.value && !!session.user);
+const match = useMatchRequest(() => props.game.id);
+const podium = computed(() => (data.value?.page === 1 ? data.value.players.slice(0, 3) : []));
+
+function record(p: LeaderboardPlayer) {
+  if (!arena.value) return `${p.matchesPlayed} 场 · ${p.wins} 胜 ${p.draws} 平 ${p.losses} 负`;
+  const average = p.matchesPlayed ? (p.placementTotal / p.matchesPlayed).toFixed(1) : "—";
+  return `${p.matchesPlayed} 场 · ${p.wins} 冠 · 平均第 ${average} 名`;
+}
+function score(p: LeaderboardPlayer) {
+  return arena.value ? String(p.points) : p.rating.toFixed(2);
+}
+function rankClass(rank: number) {
+  return rank <= 3 ? "text-accent" : rank <= 5 ? "text-ink" : "text-soft";
+}
 function change(value: number) {
   void router.push({ query: { ...route.query, page: value } });
 }
@@ -29,53 +55,106 @@ defineExpose({ refresh: reload });
 </script>
 
 <template>
-  <div>
-    <h2 class="mb-3 text-[15px] font-semibold">排行榜</h2>
-    <div>
-      <StateBlock v-if="status === 'loading'" status="loading" />
-      <StateBlock v-else-if="status === 'error'" status="error" :message="error" @retry="reload" />
-      <StateBlock v-else-if="empty" status="empty" message="还没有排名，成为第一位参赛者。" />
-      <DataTable v-else caption="按排位分排序的选手列表">
-        <template #head>
-          <tr>
-            <th class="data-head-cell w-14" scope="col">#</th>
-            <th class="data-head-cell" scope="col">选手</th>
-            <th class="data-head-cell" scope="col">排位分</th>
-          </tr>
-        </template>
-        <tr
-          v-for="p in data?.players ?? []"
+  <div class="@container space-y-4">
+    <header v-if="!headless" class="space-y-1">
+      <h2 class="text-xl font-bold">排行榜</h2>
+      <p class="text-[13px] leading-6 text-soft">{{ leaderboardBlurb(game) }}</p>
+    </header>
+    <StateBlock v-if="status === 'loading'" status="loading" />
+    <StateBlock v-else-if="status === 'error'" status="error" :message="error" @retry="reload" />
+    <StateBlock v-else-if="empty" status="empty" message="还没有排名，成为第一位参赛者。" />
+    <template v-else-if="data">
+      <ol class="hidden gap-3.5 @2xl:grid @2xl:grid-cols-3" aria-label="前三名">
+        <li
+          v-for="p in podium"
           :key="p.userId"
-          class="transition hover:bg-subtle"
-          :class="p.userId === session.user?.id ? 'bg-accent-soft' : ''"
+          class="card flex flex-col gap-2.5 p-5"
+          :class="{ 'border-accent-line': p.rank === 1 }"
         >
-          <td class="data-cell">
-            <span
-              v-if="p.rank <= 3"
-              class="inline-flex size-6 items-center justify-center rounded-control bg-accent-soft font-mono text-xs font-semibold text-accent"
-              >{{ p.rank }}</span
+          <span
+            class="figure text-[40px] leading-none"
+            :class="p.rank === 1 ? 'text-accent' : 'text-ink'"
+            >{{ p.rank }}</span
+          >
+          <span class="truncate text-lg font-bold">{{ p.username }}</span>
+          <span class="flex items-baseline justify-between gap-2 text-[13px] text-soft"
+            ><span class="min-w-0">{{ record(p) }}</span
+            ><b class="figure text-lg text-ink">{{ score(p) }}</b></span
+          >
+        </li>
+      </ol>
+      <div class="card overflow-hidden">
+        <table class="w-full text-left text-sm">
+          <caption class="sr-only">
+            {{
+              game.name
+            }}排行榜，按{{
+              arena ? "积分" : "排位分"
+            }}排序
+          </caption>
+          <thead class="text-[13px] text-faint">
+            <tr>
+              <th scope="col" class="w-12 py-3.5 pr-2 pl-4 font-medium @lg:w-16 @lg:pl-5">#</th>
+              <th scope="col" class="px-2 py-3.5 font-medium">选手</th>
+              <th scope="col" class="hidden px-2 py-3.5 font-medium @lg:table-cell">战绩</th>
+              <th scope="col" class="py-3.5 pr-4 pl-2 text-right font-medium @lg:pr-5">
+                {{ arena ? "积分" : "排位分" }}
+              </th>
+              <th v-if="challengeable" scope="col" class="w-0 py-3.5 pr-4 @lg:pr-5">
+                <span class="sr-only">挑战</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="p in data.players"
+              :key="p.userId"
+              class="border-t border-divider"
+              :class="{ 'bg-accent/7': p.userId === session.user?.id }"
             >
-            <span v-else class="font-mono text-xs text-faint">{{ p.rank }}</span>
-          </td>
-          <td class="data-cell max-w-52 break-all font-medium">
-            {{ p.username }}
-            <span v-if="p.userId === session.user?.id" class="ml-1 text-xs text-accent">你</span>
-            <AppBadge v-if="p.official" class="ml-1.5 align-middle" tone="accent">官方</AppBadge>
-            <p class="mt-1 text-xs font-normal text-soft">
-              {{ p.matchesPlayed }} 场 · {{ p.wins }} 胜 {{ p.draws }} 平 {{ p.losses }} 负
-            </p>
-          </td>
-          <td class="data-cell font-mono tracking-tight">{{ p.rating.toFixed(2) }}</td>
-        </tr>
-      </DataTable>
+              <td class="figure py-3.5 pr-2 pl-4 text-[17px] @lg:pl-5" :class="rankClass(p.rank)">
+                {{ p.rank }}
+              </td>
+              <td class="min-w-0 px-2 py-3.5">
+                <span class="flex flex-wrap items-center gap-1.5 font-semibold break-all"
+                  >{{ p.username }} <ParticipantTags :player="p"
+                /></span>
+                <span class="mt-0.5 block font-mono text-xs text-faint @lg:hidden">{{
+                  record(p)
+                }}</span>
+              </td>
+              <td class="hidden px-2 py-3.5 font-mono text-[13px] text-soft @lg:table-cell">
+                {{ record(p) }}
+              </td>
+              <td class="figure py-3.5 pr-4 pl-2 text-right text-[17px] @lg:pr-5">
+                {{ score(p) }}
+              </td>
+              <td v-if="challengeable" class="py-2 pr-4 text-right @lg:pr-5">
+                <AppButton
+                  v-if="p.userId !== session.user?.id"
+                  size="sm"
+                  :aria-label="`挑战 ${p.username}`"
+                  :loading="match.pending.value && match.body.value?.opponentId === p.userId"
+                  :disabled="match.pending.value"
+                  @click="match.start({ opponentId: p.userId })"
+                  >挑战</AppButton
+                >
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-if="challengeable" class="text-xs text-faint">挑战是练习赛，不改变双方排位分。</p>
       <PaginationControls
-        v-if="data"
         :page="data.page"
         :limit="data.limit"
         :total="data.total"
         :pending="pending"
         @change="change"
       />
-    </div>
+    </template>
+    <p v-if="refreshError" role="alert" class="text-sm text-danger-ink">
+      {{ refreshError }} <AppButton size="sm" variant="link" @click="reload">重新加载</AppButton>
+    </p>
   </div>
 </template>

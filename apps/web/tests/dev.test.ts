@@ -22,13 +22,12 @@ afterEach(() => {
 
 test("the memory card only appears in live sessions and follows the executed tick", async () => {
   const session = await loadRegisteredReplay(await replayFixture(), replayGames);
-  const plain = mount(ReplayViewer, { props: { session, fileName: "match.json.gz" } });
+  const plain = mount(ReplayViewer, { props: { session } });
   expect(plain.find('[aria-label="Memory 提交"]').exists()).toBe(false);
 
   const wrapper = mount(ReplayViewer, {
     props: {
       session,
-      fileName: "本地调试会话",
       memory: async (tick, playerId) =>
         playerId === "constructor" ? { before: { n: tick }, after: { n: tick + 1 } } : undefined,
     },
@@ -143,7 +142,7 @@ test("the dev page polls the session, loads the replay and restarts on demand", 
     .find((button) => button.text() === "换种子重开")!
     .trigger("click");
   await flushPromises();
-  const reseedCall = calls.filter((call) => call.url === "/api/session/restart").at(-1);
+  const reseedCall = calls.findLast((call) => call.url === "/api/session/restart");
   expect(reseedCall?.body).toBeDefined();
   const seedValue = Number(JSON.parse(reseedCall!.body!).seed);
   expect(seedValue).toBeGreaterThanOrEqual(0);

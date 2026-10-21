@@ -39,16 +39,16 @@ export async function runClaimedMatch(
     .from(matchParticipants)
     .where(eq(matchParticipants.matchId, claim.id))
     .orderBy(matchParticipants.slot);
-  if (seats.length !== 2 || seats[0]!.slot !== 0 || seats[1]!.slot !== 1) {
+  if (seats.length < 2 || seats.some((seat, index) => seat.slot !== index)) {
     await failMatch(ctx.db, {
       matchId: claim.id,
       executionId: claim.executionId,
       reason: "EXECUTION_FAILED",
     });
-    throw new Error(`Match ${claim.id} does not have participants seated at slots 0 and 1`);
+    throw new Error(`Match ${claim.id} does not have participants seated at slots 0..n-1`);
   }
 
-  // One consistent snapshot for both players; uploads after this point only
+  // One consistent snapshot for every player; uploads after this point only
   // affect future matches.
   const entries = await ctx.db
     .select()
@@ -120,13 +120,18 @@ export async function runClaimedMatch(
     const replayFile = await ctx.store.inspect(candidatePath, claim.id);
     for (let attempt = 1; attempt <= SETTLE_ATTEMPTS; attempt++) {
       try {
-        await settleMatch(ctx.db, ctx.store, {
+        const settled = await settleMatch(ctx.db, ctx.store, {
           matchId: claim.id,
           executionId: claim.executionId,
           result: outcome.result,
           replayFile,
           candidatePath,
+          ...(game.arena ? { arena: game.arena } : {}),
         });
+        // Rows are gone once committed; a missed file is swept as an orphan later.
+        await Promise.all(settled.prunedMatchIds.map((id) => ctx.store.remove(id))).catch(
+          () => undefined,
+        );
         return;
       } catch (error) {
         if (attempt === SETTLE_ATTEMPTS) throw error;

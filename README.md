@@ -14,7 +14,7 @@ SI Arena 是一个通过网页参与的 AI 编程竞技游戏平台。玩家在�
 4. 主动发起排位，系统选择实力接近的对手；对手可以离线。
 5. 观看比赛或回放，查看结果和错误，再修改代码继续竞技。
 
-只有玩家主动发起匹配才会产生新比赛。上传代码、玩家离线或后台定时任务都不会自动开赛。官方 bot 由特殊的官方用户持有，正常参与匹配和排名，使只有一个真实用户时也能立即匹配到对手。
+只有玩家主动发起匹配才会产生新比赛。上传代码、玩家离线或后台定时任务都不会自动开赛。官方 bot 由特殊的官方用户持有：没有其他真人可匹配时立即与它进行一场练习赛，因此只有一个真实用户时也能开局；与官方 bot 的比赛不计分，它也不进入排行榜。玩家还可以指定对手练习、挑战部署方私有的 Boss，或在大逃杀竞技场里与排行榜前 5 名同场。
 
 每个游戏的代码、局内得分和排位独立。平台只保留每位玩家在每个游戏的最新代码，不提供历史版本和回滚。
 
@@ -67,9 +67,9 @@ API 提供 `/health`、`/api/games`、`/api/games/:gameId`，`/api/auth` 下的�
 
 提交时 git hooks 自动运行：pre-commit 用 lint-staged 对暂存文件执行 `oxlint --fix` 与 `oxfmt`，commit-msg 用 commitlint 校验 Conventional Commits 格式（如 `feat: ...`、`chore: ...`）。hooks 在 `pnpm install` 时由根 `prepare` 脚本安装。
 
-PostgreSQL 的本地启动命令为 `docker compose -f deploy/compose.yaml up -d db`，数据保存在命名 volume；数据库连接使用 .env 中的 DATABASE_URL。首次使用先运行 `pnpm db:migrate` 创建表结构；server 启动时会幂等初始化 `official` 官方账号，并为每个已注册游戏安装官方 bot 源码（排位分与统计保持不变）。游戏目录与规则页不依赖数据库连接，认证接口需要数据库。数据库集成测试需要 `ARENA_TEST_DATABASE_URL` 指向可创建临时库的连接，例如 `ARENA_TEST_DATABASE_URL=postgresql://si_arena:si_arena@127.0.0.1:5433/si_arena pnpm test --project server`；测试自建并清理独立数据库，未设置该变量时自动跳过。
+PostgreSQL 的本地启动命令为 `docker compose -f deploy/compose.yaml up -d db`，数据保存在命名 volume；数据库连接使用 .env 中的 DATABASE_URL。首次使用先运行 `pnpm db:migrate` 创建表结构；server 启动时会幂等初始化 `official` 官方账号，并为每个已注册游戏安装官方 bot 源码（排位分与统计保持不变）；`BOSSES_DIR`（默认 `data/bosses`）下有 `<gameId>.js` 时同时安装该游戏的私有 Boss。游戏目录与规则页不依赖数据库连接，认证接口需要数据库。数据库集成测试需要 `ARENA_TEST_DATABASE_URL` 指向可创建临时库的连接，例如 `ARENA_TEST_DATABASE_URL=postgresql://si_arena:si_arena@127.0.0.1:5433/si_arena pnpm test --project server`；测试自建并清理独立数据库，未设置该变量时自动跳过。
 
-apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、player、cli 与 db（server 与 worker 共享的 Drizzle 表结构、连接和迁移）；games/paper 包含圈地的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
+apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、player、cli 与 db（server 与 worker 共享的 Drizzle 表结构、连接和迁移）；games/paper 与 games/royale 分别包含圈地与圈地大逃杀的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
 
 `packages/sandbox` 提供可调用的独立进程执行器：QuickJS 在本场成功 tick 间常驻、失败后重建、线程 CPU/堆/栈限制、Memory 提交与失败回滚、本地日志，以及受限源码校验。使用方法、Linux 进程内存隔离和性能命令见 [沙箱包说明](packages/sandbox/README.md)。
 
@@ -88,6 +88,7 @@ apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox�
 ```sh
 pnpm test
 pnpm test --project paper-rules
+pnpm test --project royale-rules
 pnpm test:watch --project paper-rules
 pnpm test:coverage
 pnpm test:artifacts
@@ -102,10 +103,13 @@ pnpm test:artifacts
 先运行 `pnpm build:packages`，再执行：
 
 ```sh
-pnpm arena run --bot ./games/paper/bots/official.js --seed 42
-pnpm arena run --bot ./my-bot.js --opponent ./another-bot.js --matches 20 --seed 42
-pnpm arena replay ./replays/match-实际文件名.json.gz --verify --logs
+pnpm arena run --game paper --bot ./games/paper/bots/official.js --seed 42
+pnpm arena run --game paper --bot ./my-bot.js --opponent ./another-bot.js --matches 20 --seed 42
+pnpm arena run --game royale --bot ./games/royale/bots/official.js --opponent ./games/royale/bots/official.js --opponent ./games/royale/bots/official.js --seed 42
+pnpm arena replay --game paper ./replays/match-实际文件名.json.gz --verify --logs
 ```
+
+根注册配置同时登记圈地与圈地大逃杀，因此根目录命令需要 `--game` 选择游戏；独立开发包只含一个游戏，无需该参数。
 
 CLI 支持按发行下载初始化、指定 bot、官方或本地对手、顺序批量比赛、gzip 回放及日志校验。输出 JSON Lines，包含发行、完整限额、结果和回放绝对路径。回放无需 bot 文件。根脚本通过可信配置注册游戏，CLI 自身不绑定圈地。`arena dev` 实时调试服务依赖开发包内置的页面资源，在独立开发包内提供。命令与接入方式见 [CLI 说明](packages/cli/README.md)。
 
@@ -114,6 +118,8 @@ CLI 支持按发行下载初始化、指定 bot、官方或本地对手、顺序
 启动数据库并执行迁移后，运行 `pnpm dev` 同时启动网站、API 和 worker。在网页注册或登录，进入游戏工作台，PC 左侧固定显示游戏画面，右侧提供内容导航与独立滚动区域，底部参赛区提供当前策略、排位与战绩；移动端采用上下布局并固定底部参赛操作。点击「上传策略」或「更新策略」选择 `.js` 文件后自动上传并替换，也可拖放单个文件；上传成功后另行点击「发起匹配」。校验失败保留原策略，上传结果不明时先读取服务端状态核实，核实前暂停新的匹配操作。已有未完成的主动比赛显示「查看当前比赛」。
 
 游戏内通过「玩法 / 对局 / 我的比赛 / 排行榜 / 开发资料」切换，玩法展示规则和本人只读源码。默认绘制静态初始棋盘，不执行策略或创建比赛。发起匹配或打开记录后，左侧自动更新比赛状态，结束后加载暂停的回放；右侧对局展示名次、得分、排位变化与 Tick 诊断。切换导航保留画面、播放进度与速度；参赛区可直接更新策略和再次匹配。地址 `/games/:gameId?match=:matchId` 保留当前比赛，`tab=play` 或 `tab=match` 选择右侧内容，旧 `/matches/:matchId` 链接自动转入对应工作台。在线回放不展示本地 console 日志工具；本地文件按实际日志内容显示，Memory 仅在实时本地调试中提供。账号页可以修改密码，修改后所有设备需要重新登录。
+
+网站顶部导航为「大厅 / 圈地 1v1 / 大逃杀 / 排行榜 / 本地回放」和账号入口，退出登录在账号页；账号页同时显示各游戏排位与 Boss 战绩。大厅 `/` 展示两种玩法、个人排位、1v1 前五名和最近比赛。`/leaderboard?game=:gameId` 按游戏展示排行榜，页面可见时每 10 秒刷新，自己的比赛结束后立即刷新；竞技场游戏显示积分、冠军次数与平均名次。排行榜可向其他选手发起「挑战」（练习赛，不计分）；服务器安装 Boss 时，参赛区与大厅提供「挑战 Boss」。比赛记录与对局标注练习、Boss 或竞技场，练习与 Boss 显示「不计分」。`/royale` 取目录中第一个声明竞技场的游戏，显示空闲或运行状态（运行中每 3 秒、空闲时每 15 秒刷新）、下一局阵容和保留的最近几局回放；没有注册 renderer 的发行不下载回放。网站只有深色主题，中文使用系统字体，等宽与数字字体随网站自托管。
 
 登录凭据保存在浏览器 localStorage，会话过期后重新登录；退出会撤销当前会话。比赛结果和回放无需登录即可查看，普通玩家的最新代码仅本人可见。上传只替换代码，不会创建比赛；匹配请求在网络失败时复用幂等键，已有未完成的主动比赛会直接打开。
 

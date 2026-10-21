@@ -61,8 +61,8 @@ const progressPercent = computed(() => {
   return Math.min(100, Math.round((value.completedTicks / value.maxTicks) * 100));
 });
 const phaseBadge = {
-  running: "accent",
-  completed: "success",
+  running: "warning",
+  completed: "accent",
   error: "danger",
 } as const;
 
@@ -174,7 +174,7 @@ onBeforeUnmount(() => {
       </template>
     </PageHeader>
 
-    <div class="mt-8 rounded-card border border-line bg-surface p-5 shadow-card" aria-live="polite">
+    <div class="card mt-8 p-5" aria-live="polite">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
           <p class="break-all font-mono text-xs text-faint">
@@ -184,7 +184,7 @@ onBeforeUnmount(() => {
                 : "正在连接本地调试服务…"
             }}
           </p>
-          <h2 class="mt-1.5 text-[15px] font-semibold tracking-tight">
+          <h2 class="mt-1.5 text-base font-bold">
             {{
               phase === "running"
                 ? "比赛进行中，完成后自动载入播放器。"
@@ -206,7 +206,7 @@ onBeforeUnmount(() => {
           已完成 {{ current.completedTicks }} / {{ current.maxTicks }} tick
         </p>
         <div
-          class="mt-2 h-1.5 w-full overflow-hidden rounded-control bg-muted"
+          class="mt-2 h-2 w-full overflow-hidden rounded-full bg-line"
           role="progressbar"
           aria-label="比赛进度"
           :aria-valuenow="current.completedTicks"
@@ -214,7 +214,7 @@ onBeforeUnmount(() => {
           :aria-valuemax="current.maxTicks"
         >
           <div
-            class="h-full rounded-control bg-accent transition-[width] duration-500"
+            class="h-full rounded-full bg-accent transition-[width] duration-500"
             :style="{ width: `${progressPercent}%` }"
           />
         </div>
@@ -223,7 +223,7 @@ onBeforeUnmount(() => {
       <p
         v-if="phase === 'error' && current?.message"
         role="alert"
-        class="mt-4 break-words rounded-control border border-danger/25 bg-danger-soft p-3 text-sm text-danger"
+        class="mt-4 break-words rounded-control border border-danger-line bg-danger-soft p-3 text-sm text-danger-ink"
       >
         {{ current.message }}
       </p>
@@ -232,7 +232,7 @@ onBeforeUnmount(() => {
       </p>
 
       <div v-if="ranking.length" class="mt-4 border-t border-line pt-3.5">
-        <h3 class="text-sm font-semibold">
+        <h3 class="text-sm font-bold">
           {{ phase === "completed" ? "本局排名" : `第 ${status?.lastCompleted?.run} 局排名` }}
         </h3>
         <p v-for="entry in ranking" :key="entry.id" class="mt-1.5 text-sm text-soft">
@@ -254,7 +254,7 @@ onBeforeUnmount(() => {
     <p
       v-if="sessionError"
       role="alert"
-      class="mt-8 break-words rounded-card border border-danger/25 bg-danger-soft p-5 text-sm text-danger"
+      class="mt-8 break-words rounded-card border border-danger-line bg-danger-soft p-5 text-sm text-danger-ink"
     >
       {{ sessionError }}
     </p>
@@ -264,7 +264,6 @@ onBeforeUnmount(() => {
       :key="session.replay.matchId"
       class="mt-8"
       :session="session"
-      file-name="本地调试会话"
       :memory="memory"
       source-kind="live"
     />

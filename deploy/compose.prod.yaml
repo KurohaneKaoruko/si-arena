@@ -38,6 +38,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       REPLAYS_DIR: /data/replays
       DEVKITS_DIR: /data/releases
+      BOSSES_DIR: /data/bosses
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
       WORKER_ISOLATION: local
     depends_on:
@@ -55,6 +56,8 @@ services:
     volumes:
       - replays_data:/data/replays
       - releases_data:/data/releases
+      # 私有 Boss 代码，只读挂载宿主 ./data/bosses；目录为空时不开放 Boss 挑战。
+      - ../data/bosses:/data/bosses:ro
     depends_on:
       db:
         condition: service_healthy

@@ -162,3 +162,21 @@ test("the caller's raw value stays unfrozen and detached from the loaded session
   expect(ticks).toBeGreaterThan(0);
   expect(session.frame(ticks).state.tick).toBe(ticks);
 });
+
+test("a narrator turns events into highlights during the verifying pass", async () => {
+  const game = counterGame(30);
+  const { replay } = await fixture(30, game);
+  const session = await createReplaySession(replay, game, {
+    narrate: (events, names) =>
+      events.flatMap((event) =>
+        event.tick % 10 === 9
+          ? [{ text: `${[...names.values()].join("+")} @${event.tick}`, tone: "neutral" as const }]
+          : [],
+      ),
+  });
+  const names = replay.players.map((player) => player.name).join("+");
+  expect(session.highlights).toStrictEqual(
+    [9, 19, 29].map((tick) => ({ tick: tick + 1, text: `${names} @${tick}`, tone: "neutral" })),
+  );
+  expect((await createReplaySession(replay, game)).highlights).toStrictEqual([]);
+});

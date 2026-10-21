@@ -5,6 +5,16 @@ import type { ResourceLimits } from "./resources";
 export type MatchStatus = "pending" | "running" | "completed" | "failed";
 
 /**
+ * How a match was created and how it settles:
+ * - ranked: matchmaking against another player; both ratings change.
+ * - practice: a chosen opponent or the official fallback; no rating change.
+ * - boss: a challenge against the platform boss; no rating change.
+ * - arena: a run of a game's single shared arena; scored with arena points.
+ */
+export const MATCH_KINDS = ["ranked", "practice", "boss", "arena"] as const;
+export type MatchKind = (typeof MATCH_KINDS)[number];
+
+/**
  * Controlled failure reasons for failed matches, written by the worker and
  * surfaced verbatim in match details.
  */
@@ -27,6 +37,7 @@ export interface MatchParticipantSummary {
   userId: string;
   username: string;
   official: boolean;
+  boss: boolean;
   slot: number;
   rank?: number;
   ratingBefore?: number;
@@ -36,6 +47,7 @@ export interface MatchParticipantSummary {
 export interface MatchSummary {
   id: string;
   gameId: string;
+  kind: MatchKind;
   status: MatchStatus;
   createdAt: string;
   participants: MatchParticipantSummary[];
@@ -58,15 +70,27 @@ export interface GameCodeInfo {
 }
 
 export interface GameEntryStats {
+  /** Leaderboard rank; null when the user has no entry or is a system account. */
+  rank: number | null;
   rating: number;
   matchesPlayed: number;
   wins: number;
   draws: number;
   losses: number;
+  points: number;
+  placementTotal: number;
+}
+
+export interface BossRecord {
+  /** False when the server has no boss installed for this game. */
+  available: boolean;
+  attempts: number;
+  wins: number;
 }
 
 export interface GameMeResponse {
   entry: GameEntryStats;
+  boss: BossRecord;
   code: GameCodeInfo | null;
   canMatch: boolean;
   cannotMatchReason: CannotMatchReason | null;
@@ -84,6 +108,9 @@ export interface LeaderboardPlayer {
   wins: number;
   draws: number;
   losses: number;
+  /** Arena games: accumulated arena points and the sum of finishing ranks. */
+  points: number;
+  placementTotal: number;
 }
 
 export interface LeaderboardResponse {
@@ -93,11 +120,39 @@ export interface LeaderboardResponse {
   players: LeaderboardPlayer[];
 }
 
+/** Body of POST /api/games/:gameId/matches; omit both fields for ranked matchmaking. */
+export interface CreateMatchRequest {
+  /** Practice against this player. */
+  opponentId?: string;
+  /** Challenge the platform boss. */
+  boss?: true;
+}
+
+export interface ArenaLineupEntry {
+  userId: string;
+  username: string;
+  official: boolean;
+  points: number;
+  wins: number;
+  matchesPlayed: number;
+  codeUpdatedAt: string;
+}
+
+/** GET /api/games/:gameId/arena for games whose manifest declares an arena. */
+export interface ArenaStatusResponse {
+  /** The single unfinished arena run, if any; starting another is refused meanwhile. */
+  active: MatchDetail | null;
+  /** Who would enter if the arena started now, in seat order. */
+  lineup: ArenaLineupEntry[];
+  /** Completed or failed runs still kept, newest first. */
+  recent: MatchDetail[];
+}
+
 export interface PaginatedMatchesResponse {
   total: number;
   page: number;
   limit: number;
-  matches: MatchSummary[];
+  matches: MatchDetail[];
 }
 
 /** Frozen at match creation; the worker never re-resolves current releases. */

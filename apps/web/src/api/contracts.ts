@@ -1,4 +1,5 @@
 import type {
+  ArenaStatusResponse,
   AuthTokenBody,
   AuthUserBody,
   GameCatalogEntry,
@@ -9,7 +10,7 @@ import type {
   MatchSummary,
   PaginatedMatchesResponse,
 } from "@si-arena/protocol";
-import { MATCH_FAILURE_REASONS, resolveResourceLimits } from "@si-arena/protocol";
+import { MATCH_FAILURE_REASONS, MATCH_KINDS, resolveResourceLimits } from "@si-arena/protocol";
 
 function check(ok: unknown): asserts ok {
   if (!ok) throw new Error("服务器响应格式有误，请刷新后重试。");
@@ -38,6 +39,13 @@ function user(raw: unknown) {
   string(v.username);
   check(typeof v.official === "boolean");
 }
+function boolean(raw: unknown) {
+  check(typeof raw === "boolean");
+}
+function integers(raw: unknown) {
+  check(Array.isArray(raw));
+  (raw as unknown[]).forEach(integer);
+}
 function stats(raw: unknown) {
   const v = record(raw);
   number(v.rating);
@@ -65,6 +73,13 @@ export function parseGame(raw: unknown): GameCatalogEntry {
   for (const k of ["id", "name", "description", "release"]) string(v[k]);
   for (const k of ["botProtocolVersion", "minPlayers", "maxPlayers", "maxTicks"]) integer(v[k]);
   record(v.config);
+  if (v.arena !== undefined) {
+    const arena = record(v.arena);
+    integer(arena.seats);
+    integer(arena.keepMatches);
+    integers(arena.points);
+    if (arena.tieBreakGameId !== undefined) string(arena.tieBreakGameId);
+  }
   const resolvedLimits = resolveResourceLimits(record(v.resolvedLimits));
   return { ...(raw as GameCatalogEntry), resolvedLimits };
 }
@@ -83,7 +98,15 @@ export function parseUpload(raw: unknown): Omit<GameCodeInfo, "source"> {
 export function parseGameMe(raw: unknown): GameMeResponse {
   const v = record(raw);
   stats(v.entry);
-  check(typeof v.canMatch === "boolean");
+  const entry = record(v.entry);
+  check(entry.rank === null || (Number.isSafeInteger(entry.rank) && (entry.rank as number) > 0));
+  integer(entry.points);
+  integer(entry.placementTotal);
+  const boss = record(v.boss);
+  boolean(boss.available);
+  integer(boss.attempts);
+  integer(boss.wins);
+  boolean(v.canMatch);
   check(
     v.cannotMatchReason === null ||
       ["NO_CODE", "PROTOCOL_MISMATCH", "CODE_TOO_LARGE"].includes(String(v.cannotMatchReason)),
@@ -105,13 +128,15 @@ function summary(raw: unknown): MatchSummary {
   string(v.id);
   string(v.gameId);
   date(v.createdAt);
+  check(MATCH_KINDS.includes(v.kind as (typeof MATCH_KINDS)[number]));
   check(["pending", "running", "completed", "failed"].includes(String(v.status)));
   check(Array.isArray(v.participants));
   for (const rawPlayer of v.participants) {
     const p = record(rawPlayer);
     string(p.userId);
     string(p.username);
-    check(typeof p.official === "boolean");
+    boolean(p.official);
+    boolean(p.boss);
     integer(p.slot);
     for (const k of ["rank", "ratingBefore", "ratingAfter"]) if (p[k] !== undefined) number(p[k]);
   }
@@ -146,7 +171,7 @@ export function parseMatch(raw: unknown): MatchDetail {
 export function parseHistory(raw: unknown): PaginatedMatchesResponse {
   const v = page(raw);
   check(Array.isArray(v.matches));
-  v.matches.forEach(summary);
+  v.matches.forEach(parseMatch);
   return raw as PaginatedMatchesResponse;
 }
 export function parseLeaderboard(raw: unknown): LeaderboardResponse {
@@ -155,7 +180,20 @@ export function parseLeaderboard(raw: unknown): LeaderboardResponse {
   for (const p of v.players) {
     user({ ...record(p), id: record(p).userId });
     stats(p);
-    integer(record(p).rank);
+    for (const k of ["rank", "points", "placementTotal"]) integer(record(p)[k]);
   }
   return raw as LeaderboardResponse;
+}
+export function parseArenaStatus(raw: unknown): ArenaStatusResponse {
+  const v = record(raw);
+  if (v.active !== null) parseMatch(v.active);
+  check(Array.isArray(v.lineup) && Array.isArray(v.recent));
+  for (const entry of v.lineup) {
+    const p = record(entry);
+    user({ ...p, id: p.userId });
+    for (const k of ["points", "wins", "matchesPlayed"]) integer(p[k]);
+    date(p.codeUpdatedAt);
+  }
+  v.recent.forEach(parseMatch);
+  return raw as ArenaStatusResponse;
 }

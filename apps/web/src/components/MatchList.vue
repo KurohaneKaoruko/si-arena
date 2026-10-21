@@ -1,68 +1,98 @@
 <script setup lang="ts">
-import type { MatchSummary } from "@si-arena/protocol";
+import type { MatchDetail } from "@si-arena/protocol";
 import { RouterLink } from "vue-router";
 import { session } from "../auth/session";
-import { matchOutcome, ratingDelta } from "../games/match-summary";
-import AppBadge from "./ui/AppBadge.vue";
+import { kindLabel, matchOutcome, standingChange } from "../games/match-summary";
 import { gameMatchLocation } from "../games/locations";
+import { shortTime } from "../utils/time";
+import AppBadge from "./ui/AppBadge.vue";
 
-defineProps<{ matches: MatchSummary[] }>();
-function opponents(match: MatchSummary) {
+defineProps<{ matches: MatchDetail[] }>();
+const tags = {
+  success: "bg-accent text-on-accent",
+  danger: "bg-loss text-danger-pale",
+  neutral: "bg-even text-ink",
+  accent: "bg-warning text-on-accent",
+  warning: "bg-line text-ink",
+} as const;
+/** "512 : 388" for finished two-player games, own score first. */
+function scoreLine(match: MatchDetail): string | null {
+  if (match.participants.length !== 2 || !match.result) return null;
+  const me = session.user?.id;
+  const ordered = match.participants.toSorted(
+    (a, b) => Number(b.userId === me) - Number(a.userId === me),
+  );
+  const scores = ordered.map(
+    (seat) => match.result!.players.find((player) => player.id === seat.userId)?.score,
+  );
+  return scores.every((score) => score !== undefined) ? scores.join(" : ") : null;
+}
+function opponents(match: MatchDetail) {
   const others = match.participants.filter((p) => p.userId !== session.user?.id);
   return others.length ? others : match.participants;
 }
-function ownDelta(match: MatchSummary) {
-  return match.status === "failed"
-    ? "不计分"
-    : ratingDelta(match.participants.find((p) => p.userId === session.user?.id));
+function changeClass(change: string) {
+  if (change.startsWith("+")) return "text-accent";
+  if (change.startsWith("-")) return "text-danger-ink";
+  return change === "—" ? "text-faint" : "text-soft";
 }
 </script>
 
 <template>
-  <div class="min-w-0 overflow-hidden rounded-card border border-line">
-    <ul>
-      <li v-for="match in matches" :key="match.id" class="border-b border-line last:border-b-0">
-        <RouterLink
-          :to="gameMatchLocation(match.gameId, match.id)"
-          class="grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 transition hover:bg-subtle"
+  <ul class="divide-y divide-divider">
+    <li v-for="match in matches" :key="match.id">
+      <RouterLink
+        :to="gameMatchLocation(match.gameId, match.id)"
+        class="grid min-h-11 grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-1 py-3 transition hover:bg-subtle sm:grid-cols-[5.25rem_minmax(0,1fr)_auto_1rem] sm:gap-x-4 sm:px-3"
+      >
+        <span
+          class="rounded-[0.4375rem] py-1 text-center text-[13px] font-bold"
+          :class="tags[matchOutcome(match, session.user?.id).tone]"
+          >{{ matchOutcome(match, session.user?.id).label }}</span
         >
-          <span
-            class="text-sm font-medium"
-            :class="{
-              'text-success': matchOutcome(match, session.user?.id).tone === 'success',
-              'text-danger': matchOutcome(match, session.user?.id).tone === 'danger',
-              'text-accent': match.status === 'running',
-              'text-warning': match.status === 'pending',
-            }"
-            >{{ matchOutcome(match, session.user?.id).label }}</span
-          >
-          <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm"
-            ><span v-for="player in opponents(match)" :key="player.userId" class="min-w-0 break-all"
-              >{{ player.username }}
-              <AppBadge v-if="player.official" class="ml-1">官方</AppBadge></span
-            ></span
-          >
-          <span
-            class="text-right font-mono text-sm tabular-nums"
-            :class="
-              ownDelta(match).startsWith('+')
-                ? 'text-success'
-                : ownDelta(match).startsWith('-')
-                  ? 'text-danger'
-                  : 'text-soft'
-            "
-            >{{ ownDelta(match) }}</span
-          >
-          <time class="col-start-2 text-xs text-soft" :datetime="match.createdAt">{{
-            new Date(match.createdAt).toLocaleString("zh-CN", {
-              month: "numeric",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })
+        <span class="flex min-w-0 flex-col gap-0.5">
+          <span class="flex min-w-0 flex-wrap items-center gap-1.5 font-semibold">
+            <template v-if="match.participants.length > 2"
+              >{{ match.participants.length }} 人局</template
+            >
+            <template v-else>
+              对
+              <span
+                v-for="player in opponents(match)"
+                :key="player.userId"
+                class="flex min-w-0 items-center gap-1.5 break-all"
+                >{{ player.username }}<AppBadge v-if="player.official" tone="outline">官方</AppBadge
+                ><AppBadge v-if="player.boss" tone="danger">Boss</AppBadge></span
+              >
+            </template>
+            <AppBadge v-if="kindLabel(match.kind)" tone="outline">{{
+              kindLabel(match.kind)
+            }}</AppBadge>
+            <span v-if="scoreLine(match)" class="font-mono text-[13px] font-normal text-soft">{{
+              scoreLine(match)
+            }}</span>
+          </span>
+          <time class="text-[13px] text-faint" :datetime="match.createdAt">{{
+            shortTime(match.createdAt)
           }}</time>
-        </RouterLink>
-      </li>
-    </ul>
-  </div>
+        </span>
+        <span
+          class="text-right font-mono text-sm font-semibold tabular-nums"
+          :class="changeClass(standingChange(match, session.user?.id))"
+          >{{ standingChange(match, session.user?.id) }}</span
+        >
+        <svg
+          class="hidden size-4 text-line-strong sm:block"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </RouterLink>
+    </li>
+  </ul>
 </template>

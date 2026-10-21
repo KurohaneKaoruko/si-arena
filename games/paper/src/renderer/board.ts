@@ -105,7 +105,7 @@ export function drawPaperBoard(
     const owner = state.territory[index]!;
     if (owner < 0) continue;
     context.fillStyle = PAPER_PALETTE.players[owner]!;
-    context.globalAlpha = 0.28;
+    context.globalAlpha = 0.34;
     context.fillRect(
       (index % state.width) * cellWidth,
       Math.floor(index / state.width) * cellHeight,
@@ -115,7 +115,7 @@ export function drawPaperBoard(
   }
   context.globalAlpha = 1;
   context.strokeStyle = PAPER_PALETTE.grid;
-  context.lineWidth = 0.5;
+  context.lineWidth = 1;
   context.beginPath();
   for (let x = 0; x <= state.width; x++) {
     context.moveTo(x * cellWidth, 0);
@@ -126,19 +126,19 @@ export function drawPaperBoard(
     context.lineTo(width, y * cellHeight);
   }
   context.stroke();
+  context.globalAlpha = 0.82;
   for (let index = 0; index < state.trails.length; index++) {
     const owner = state.trails[index]!;
     if (owner < 0) continue;
-    const x = (index % state.width) * cellWidth,
-      y = Math.floor(index / state.width) * cellHeight;
     context.fillStyle = PAPER_PALETTE.players[owner]!;
     context.fillRect(
-      x + cellWidth * 0.18,
-      y + cellHeight * 0.18,
-      cellWidth * 0.64,
-      cellHeight * 0.64,
+      (index % state.width) * cellWidth,
+      Math.floor(index / state.width) * cellHeight,
+      cellWidth,
+      cellHeight,
     );
   }
+  context.globalAlpha = 1;
   // Captured cells flash under the heads; an empty capture closes without gaining ground.
   if (showMarks) {
     for (const event of events) {

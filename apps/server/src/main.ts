@@ -2,7 +2,7 @@ import { buildApp } from "./app";
 import { readServerConfig } from "./config";
 import { sweepExpiredAuthData } from "./db/cleanup";
 import { createDatabase } from "@si-arena/db";
-import { ensureOfficialAccounts } from "./db/official";
+import { ensureBossAccount, ensureOfficialAccounts } from "./db/official";
 import { registeredGames } from "./games";
 
 const config = readServerConfig();
@@ -30,6 +30,8 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 try {
   const result = await ensureOfficialAccounts(db, registeredGames);
   app.log.info(`Official accounts initialized for ${result.games} game(s)`);
+  const bosses = await ensureBossAccount(db, registeredGames, config.bossesDir);
+  app.log.info(`Boss installed for: ${bosses.games.join(", ") || "no game"}`);
   const sweep = setInterval(() => {
     void sweepExpiredAuthData(db).catch((error) => app.log.warn(error, "auth data sweep failed"));
   }, 10 * 60_000);

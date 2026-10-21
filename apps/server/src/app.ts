@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { arenaRoutes } from "./arena/routes";
 import { authRoutes } from "./auth/routes";
 import { gamesRoutes } from "./games/routes";
 import { matchesRoutes } from "./matches/routes";
@@ -39,6 +40,7 @@ export function buildApp(
     void app.register(authRoutes(options.db), { prefix: "/api/auth" });
     void app.register(gamesRoutes(options.db));
     void app.register(matchesRoutes(options.db, options.replaysDir));
+    void app.register(arenaRoutes(options.db));
   }
   return app;
 }

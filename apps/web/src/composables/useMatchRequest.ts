@@ -1,4 +1,5 @@
-import { onUnmounted, ref } from "vue";
+import type { CreateMatchRequest, MatchDetail } from "@si-arena/protocol";
+import { onUnmounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import { ApiError, errorMessage } from "../api/client";
 import { parseMatch } from "../api/contracts";
@@ -17,52 +18,81 @@ function randomUuid(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-/** A retry after a lost response must reuse the same request identity. */
-export function useMatchRequest(gameId: () => string) {
-  const router = useRouter();
-  const toast = useToast();
+/**
+ * A retry after a lost response must reuse the same request identity; a different
+ * request (another path or body) gets a new one. Rejected requests (4xx) are final.
+ */
+export function useIdempotentPost() {
   const pending = ref(false);
-  const error = ref("");
   let key: string | null = null;
+  let keyFor = "";
   let current: AbortController | undefined;
 
-  async function start() {
-    if (pending.value) return;
-    key ??= randomUuid();
+  /** Resolves undefined when the request was superseded or the component left. */
+  async function post(path: string, body: object): Promise<MatchDetail | undefined> {
+    if (pending.value) return undefined;
+    const identity = `${path} ${JSON.stringify(body)}`;
+    if (key === null || identity !== keyFor) {
+      key = randomUuid();
+      keyFor = identity;
+    }
     const request = new AbortController();
     current = request;
     pending.value = true;
-    error.value = "";
     try {
-      const result = await authorizedRequest(
-        `/api/games/${encodeURIComponent(gameId())}/matches`,
-        parseMatch,
-        { method: "POST", headers: { "Idempotency-Key": key }, signal: request.signal },
-      );
+      const result = await authorizedRequest(path, parseMatch, {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+        signal: request.signal,
+      });
       key = null;
-      if (!request.signal.aborted) {
-        await router.push(gameMatchLocation(gameId(), result.id));
-        return true;
-      }
+      return request.signal.aborted ? undefined : result;
     } catch (failure) {
-      if (request.signal.aborted) return;
-      if (
-        failure instanceof ApiError &&
-        failure.code === "MATCH_ALREADY_PENDING" &&
-        failure.matchId
-      ) {
-        key = null;
-        await router.push(gameMatchLocation(gameId(), failure.matchId));
-        return true;
-      }
+      if (request.signal.aborted) return undefined;
       if (failure instanceof ApiError && failure.status < 500) key = null;
-      error.value = errorMessage(failure);
-      toast.error(error.value);
+      throw failure;
     } finally {
       if (current === request) pending.value = false;
     }
   }
 
   onUnmounted(() => current?.abort());
-  return { pending, error, start };
+  return { pending, post };
+}
+
+/** Ranked matchmaking, a practice challenge or a boss challenge; all open the created match. */
+export function useMatchRequest(gameId: () => string) {
+  const router = useRouter();
+  const toast = useToast();
+  const { pending, post } = useIdempotentPost();
+  const error = ref("");
+  /** The request in flight or last sent, so callers can tell which button is busy. */
+  const body = shallowRef<CreateMatchRequest | null>(null);
+
+  async function start(request: CreateMatchRequest = {}): Promise<boolean> {
+    if (pending.value) return false;
+    body.value = request;
+    error.value = "";
+    try {
+      const match = await post(`/api/games/${encodeURIComponent(gameId())}/matches`, request);
+      if (!match) return false;
+      await router.push(gameMatchLocation(gameId(), match.id));
+      return true;
+    } catch (failure) {
+      if (
+        failure instanceof ApiError &&
+        failure.code === "MATCH_ALREADY_PENDING" &&
+        failure.matchId
+      ) {
+        await router.push(gameMatchLocation(gameId(), failure.matchId));
+        return true;
+      }
+      error.value = errorMessage(failure);
+      toast.error(error.value);
+      return false;
+    }
+  }
+
+  return { pending, error, body, start };
 }

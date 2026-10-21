@@ -5,13 +5,13 @@ import { gzipSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { migrationsFolder } from "@si-arena/db";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Client } from "pg";
 import { buildApp } from "../src/app";
 import { createDatabase } from "@si-arena/db";
-import { ensureOfficialAccounts } from "../src/db/official";
-import { gameEntries, matchParticipants, matches } from "@si-arena/db";
+import { ensureBossAccount, ensureOfficialAccounts } from "../src/db/official";
+import { gameEntries, matchParticipants, matches, users } from "@si-arena/db";
 import { registeredGames } from "../src/games";
 import type { InjectResponse } from "./helpers";
 
@@ -67,6 +67,27 @@ async function registerUser(): Promise<TestUser> {
   expect(reg.statusCode).toBe(201);
   const body = reg.json();
   return { id: body.user.id, username, token: body.token };
+}
+
+/** Makes every other ordinary player's paper code unrunnable, so only `keep` can be matched. */
+async function onlyRunnable(keep: string[]): Promise<void> {
+  const others = await database.db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.official, false), eq(users.boss, false), notInArray(users.id, keep)));
+  if (others.length === 0) return;
+  await database.db
+    .update(gameEntries)
+    .set({ botProtocolVersion: 99 })
+    .where(
+      and(
+        eq(gameEntries.gameId, "paper"),
+        inArray(
+          gameEntries.userId,
+          others.map((row) => row.id),
+        ),
+      ),
+    );
 }
 
 async function uploadOfficialBot(token: string): Promise<void> {
@@ -219,15 +240,10 @@ dbTest("concurrent uploads saturate the validation gate", async () => {
   expect(results.find((res) => res.statusCode === 429)?.json().code).toBe("RATE_LIMITED");
 });
 
-dbTest("matching falls back to the official account and is idempotent", async () => {
+dbTest("with no other player, matching is practice against the official bot", async () => {
   const user = await registerUser();
   await uploadOfficialBot(user.token);
-  // Push this user far away from every ordinary rating so the only legal
-  // opponent is the official fallback.
-  await database.db
-    .update(gameEntries)
-    .set({ rating: "2000.000000" })
-    .where(eq(gameEntries.userId, user.id));
+  await onlyRunnable([user.id]);
 
   const created = await call("POST", "/api/games/paper/matches", {
     token: user.token,
@@ -244,6 +260,7 @@ dbTest("matching falls back to the official account and is idempotent", async ()
   expect(match.participants).toHaveLength(2);
   expect(match.participants[0]).toMatchObject({ userId: user.id, slot: 0, official: false });
   expect(match.participants[1]).toMatchObject({ username: "official", slot: 1, official: true });
+  expect(match.kind).toBe("practice");
 
   const replay = await call("POST", "/api/games/paper/matches", {
     token: user.token,
@@ -434,16 +451,7 @@ dbTest(
     await uploadOfficialBot(initiator.token);
     await uploadOfficialBot(stale.token);
     await uploadOfficialBot(bulky.token);
-    // Keep everyone else out of the rating window around the fresh accounts.
-    await database.db
-      .update(gameEntries)
-      .set({ rating: "5000.000000" })
-      .where(
-        and(
-          eq(gameEntries.gameId, "paper"),
-          notInArray(gameEntries.userId, [initiator.id, stale.id, bulky.id]),
-        ),
-      );
+    await onlyRunnable([initiator.id, stale.id, bulky.id]);
     // Simulate entries left behind by a protocol bump, plus one whose stored
     // size no longer fits the current release budget.
     await database.db
@@ -473,8 +481,110 @@ dbTest(
     });
     expect(created.statusCode).toBe(201);
     expect(created.json().participants[1]).toMatchObject({ official: true });
+    expect(created.json().kind).toBe("practice");
   },
 );
+
+dbTest("matchmaking widens the rating window and prefers any real player", async () => {
+  const initiator = await registerUser();
+  const far = await registerUser();
+  await uploadOfficialBot(initiator.token);
+  await uploadOfficialBot(far.token);
+  await onlyRunnable([initiator.id, far.id]);
+  await database.db
+    .update(gameEntries)
+    .set({ rating: "2600.000000" })
+    .where(eq(gameEntries.userId, initiator.id));
+  const created = await call("POST", "/api/games/paper/matches", {
+    token: initiator.token,
+    headers: { "idempotency-key": "wide-window" },
+  });
+  expect(created.statusCode).toBe(201);
+  expect(created.json().kind).toBe("ranked");
+  expect(created.json().participants[1]).toMatchObject({ userId: far.id, official: false });
+});
+
+dbTest("challenges are practice and validate the opponent", async () => {
+  const user = await registerUser();
+  const rival = await registerUser();
+  await uploadOfficialBot(user.token);
+  await uploadOfficialBot(rival.token);
+  const challenge = (body: unknown, key: string) =>
+    call("POST", "/api/games/paper/matches", {
+      token: user.token,
+      body,
+      headers: { "idempotency-key": key },
+    });
+  const self = await challenge({ opponentId: user.id }, "self");
+  expect(self.statusCode).toBe(409);
+  expect(self.json().code).toBe("OPPONENT_IS_SELF");
+  const unknown = await challenge({ opponentId: "00000000-0000-4000-8000-000000000000" }, "nobody");
+  expect(unknown.statusCode).toBe(409);
+  expect(unknown.json().code).toBe("OPPONENT_UNAVAILABLE");
+  for (const body of [{ opponentId: "x" }, { boss: false }, { extra: 1 }, [1]]) {
+    const malformed = await challenge(body, `bad-${JSON.stringify(body)}`);
+    expect(malformed.statusCode).toBe(400);
+  }
+  const created = await challenge({ opponentId: rival.id }, "rival");
+  expect(created.statusCode).toBe(201);
+  expect(created.json().kind).toBe("practice");
+  expect(created.json().participants[1]).toMatchObject({ userId: rival.id, boss: false });
+});
+
+dbTest("the boss is private, unranked and recorded on /me", async () => {
+  const user = await registerUser();
+  await uploadOfficialBot(user.token);
+  const before = await call("GET", "/api/games/paper/me", { token: user.token });
+  expect(before.json().boss).toEqual({ available: false, attempts: 0, wins: 0 });
+  const unavailable = await call("POST", "/api/games/paper/matches", {
+    token: user.token,
+    body: { boss: true },
+    headers: { "idempotency-key": "boss-missing" },
+  });
+  expect(unavailable.statusCode).toBe(404);
+  expect(unavailable.json().code).toBe("BOSS_UNAVAILABLE");
+
+  const bossesDir = await mkdtemp(join(tmpdir(), "si-arena-bosses-"));
+  try {
+    const paper = registeredGames.find((game) => game.entry.id === "paper")!;
+    await writeFile(join(bossesDir, "paper.js"), await readFile(paper.officialBotUrl, "utf8"));
+    expect(await ensureBossAccount(database.db, registeredGames, bossesDir)).toEqual({
+      games: ["paper"],
+    });
+    const after = await call("GET", "/api/games/paper/me", { token: user.token });
+    expect(after.json().boss.available).toBe(true);
+    const created = await call("POST", "/api/games/paper/matches", {
+      token: user.token,
+      body: { boss: true },
+      headers: { "idempotency-key": "boss-challenge" },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().kind).toBe("boss");
+    expect(created.json().participants[1]).toMatchObject({ username: "boss", boss: true });
+    const board = await call("GET", "/api/games/paper/leaderboard?limit=100");
+    expect(board.json().players.some((p: { username: string }) => p.username === "boss")).toBe(
+      false,
+    );
+    // Removing the file withdraws the boss again.
+    await rm(join(bossesDir, "paper.js"));
+    await ensureBossAccount(database.db, registeredGames, bossesDir);
+    const withdrawn = await call("GET", "/api/games/paper/me", { token: user.token });
+    expect(withdrawn.json().boss.available).toBe(false);
+  } finally {
+    await rm(bossesDir, { recursive: true, force: true });
+  }
+});
+
+dbTest("games without an arena have no arena routes", async () => {
+  const user = await registerUser();
+  const status = await call("GET", "/api/games/paper/arena");
+  expect(status.statusCode).toBe(404);
+  const start = await call("POST", "/api/games/paper/arena", {
+    token: user.token,
+    headers: { "idempotency-key": "no-arena" },
+  });
+  expect(start.statusCode).toBe(404);
+});
 
 dbTest("leaderboard ranks entries with ties and pagination", async () => {
   const user = await registerUser();
@@ -483,11 +593,12 @@ dbTest("leaderboard ranks entries with ties and pagination", async () => {
   expect(board.statusCode).toBe(200);
   const body = board.json();
   expect(body.total).toBeGreaterThanOrEqual(2);
-  const official = body.players.find((player: { official: boolean }) => player.official);
-  expect(official).toMatchObject({ username: "official" });
-  expect(typeof official?.rating).toBe("number");
+  // The official bot plays practice games only and never appears on the board.
+  expect(body.players.some((player: { official: boolean }) => player.official)).toBe(false);
   const mine = body.players.find((player: { userId: string }) => player.userId === user.id);
-  expect(mine).toMatchObject({ rating: 1000, matchesPlayed: 0 });
+  expect(mine).toMatchObject({ rating: 1000, matchesPlayed: 0, points: 0, placementTotal: 0 });
+  const me = await call("GET", "/api/games/paper/me", { token: user.token });
+  expect(me.json().entry).toMatchObject({ rank: mine.rank, points: 0, placementTotal: 0 });
   // Equal internal ratings must share one rank; user id only breaks display order.
   const sameRated = body.players.filter((player: { rating: number }) => player.rating === 1000);
   expect(sameRated.length).toBeGreaterThan(1);
@@ -641,3 +752,70 @@ dbTest(
     expect((await call("GET", `/api/matches/${id}/replay`)).statusCode).toBe(503);
   },
 );
+
+async function uploadRoyaleBot(token: string): Promise<void> {
+  const royale = registeredGames.find((game) => game.entry.id === "royale");
+  if (!royale) throw new Error("royale game is not registered");
+  const res = await call("PUT", "/api/games/royale/me/code", {
+    body: await readFile(royale.officialBotUrl, "utf8"),
+    token,
+    headers: { "content-type": "text/plain" },
+  });
+  expect(res.statusCode).toBe(200);
+}
+
+dbTest("the royale arena runs one locked lineup at a time", async () => {
+  const starter = await registerUser();
+  const first = await registerUser();
+  const second = await registerUser();
+  for (const user of [first, second]) await uploadRoyaleBot(user.token);
+  await database.db
+    .update(gameEntries)
+    .set({ points: 30 })
+    .where(and(eq(gameEntries.gameId, "royale"), eq(gameEntries.userId, second.id)));
+
+  const duel = await call("POST", "/api/games/royale/matches", {
+    token: first.token,
+    headers: { "idempotency-key": "royale-duel" },
+  });
+  expect(duel.statusCode).toBe(409);
+  expect(duel.json().code).toBe("ARENA_GAME");
+
+  const status = await call("GET", "/api/games/royale/arena");
+  expect(status.statusCode).toBe(200);
+  const lineup = status.json().lineup as Array<{ userId: string; official: boolean }>;
+  // Points first; the official bot takes one free seat when fewer than five players qualify.
+  expect(lineup[0]!.userId).toBe(second.id);
+  expect(lineup.filter((seat) => seat.official)).toHaveLength(1);
+  expect(status.json().active).toBeNull();
+
+  const started = await call("POST", "/api/games/royale/arena", {
+    token: starter.token,
+    headers: { "idempotency-key": "royale-run" },
+  });
+  expect(started.statusCode).toBe(201);
+  const run = started.json();
+  expect(run.kind).toBe("arena");
+  expect(run.participants.map((seat: { userId: string }) => seat.userId)).toEqual(
+    lineup.map((seat) => seat.userId),
+  );
+  // The starter needs no royale code and need not be seated.
+  expect(run.participants.some((seat: { userId: string }) => seat.userId === starter.id)).toBe(
+    false,
+  );
+
+  const busy = await call("POST", "/api/games/royale/arena", {
+    token: first.token,
+    headers: { "idempotency-key": "royale-second" },
+  });
+  expect(busy.statusCode).toBe(409);
+  expect(busy.json()).toMatchObject({ code: "ARENA_BUSY", matchId: run.id });
+  const retried = await call("POST", "/api/games/royale/arena", {
+    token: starter.token,
+    headers: { "idempotency-key": "royale-run" },
+  });
+  expect(retried.statusCode).toBe(200);
+  expect(retried.json().id).toBe(run.id);
+  const during = await call("GET", "/api/games/royale/arena");
+  expect(during.json().active.id).toBe(run.id);
+});

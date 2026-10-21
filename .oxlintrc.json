@@ -9,7 +9,8 @@
   ],
   "categories": {
     "correctness": "error",
-    "suspicious": "warn"
+    "suspicious": "error",
+    "perf": "error"
   },
   "rules": {
     "eslint/no-unused-vars": [
@@ -17,6 +18,17 @@
       {
         "argsIgnorePattern": "^_"
       }
-    ]
-  }
+    ],
+    "eslint/no-await-in-loop": "off",
+    "oxc/no-map-spread": "off",
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }]
+  },
+  "overrides": [
+    {
+      "files": ["games/*/bots/**"],
+      "rules": {
+        "unicorn/no-array-reverse": "off"
+      }
+    }
+  ]
 }

@@ -31,6 +31,20 @@ export interface SessionOptions {
   cacheBytes?: number;
 }
 
+/** A notable moment of a match, shown as a feed line and a timeline mark. */
+export interface ReplayHighlight {
+  /** Completed ticks when it happened. */
+  tick: number;
+  text: string;
+  tone: "danger" | "neutral";
+}
+
+/** Trusted, game-specific wording for a tick's events; names maps player id to display name. */
+export type ReplayNarrator<Event> = (
+  events: DeepReadonly<Event[]>,
+  names: ReadonlyMap<string, string>,
+) => ReadonlyArray<Omit<ReplayHighlight, "tick">>;
+
 /** Validates the complete match before making any state or diagnostic available to UI. */
 export async function createReplaySession<
   State extends { tick: number },
@@ -40,7 +54,7 @@ export async function createReplaySession<
 >(
   raw: unknown,
   suppliedGame: GameDefinition<State, Observation, Action, Event>,
-  options: SessionOptions = {},
+  options: SessionOptions & { narrate?: ReplayNarrator<Event> } = {},
 ) {
   const cancelled = () => {
     if (options.signal?.aborted) throw new Error("回放加载已取消");
@@ -80,10 +94,20 @@ export async function createReplaySession<
   };
   await options.yieldControl?.();
   cancelled();
+  // Highlights come from the verifying pass itself, so they cost no extra replay.
+  const highlights: ReplayHighlight[] = [];
+  let names: ReadonlyMap<string, string> | undefined;
   await replayMatch(value, game, {
     detached: true,
-    async onTick({ state }) {
+    async onTick({ state, events }) {
       cancelled();
+      if (options.narrate) {
+        names ??= new Map(
+          (value as Replay<State, Action>).players.map((player) => [player.id, player.name]),
+        );
+        for (const item of options.narrate(events, names))
+          highlights.push({ tick: state.tick, ...item });
+      }
       if (state.tick % 50 === 0) {
         remember(state);
         options.onProgress?.(state.tick);
@@ -162,6 +186,7 @@ export async function createReplaySession<
   return {
     replay,
     errorTicks,
+    highlights: Object.freeze(highlights) as readonly ReplayHighlight[],
     frame,
     observation(completedTicks: number, playerId: string): Observation | null {
       const current = frame(completedTicks);

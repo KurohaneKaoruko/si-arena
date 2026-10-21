@@ -39,6 +39,8 @@ export function useApiResource<T>(
   options: {
     authenticated?: boolean;
     pollWhen?: (value: T) => boolean;
+    /** 轮询间隔（毫秒），默认 1 秒；失败时按该间隔的 2/4/8 倍退避。 */
+    pollInterval?: number | ((value: T) => number);
     isEmpty?: (value: T) => boolean;
     /** 加载失败时是否同时弹出顶部提示，默认开启；轮询场景可关闭。 */
     notify?: boolean;
@@ -52,6 +54,7 @@ export function useApiResource<T>(
   let current: AbortController | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let failures = 0;
+  let interval = typeof options.pollInterval === "number" ? options.pollInterval : 1000;
   let disposed = false;
   let notified = "";
   function stop() {
@@ -86,7 +89,11 @@ export function useApiResource<T>(
         refreshError.value = "";
         failures = 0;
         notified = "";
-        if (options.pollWhen?.(result)) schedule(1000);
+        if (options.pollWhen?.(result)) {
+          const every = options.pollInterval;
+          interval = typeof every === "function" ? every(result) : (every ?? 1000);
+          schedule(interval);
+        }
       }
     } catch (failure) {
       if (!request.signal.aborted) {
@@ -103,7 +110,7 @@ export function useApiResource<T>(
           (!data.value || options.pollWhen(data.value)) &&
           !(failure instanceof ApiError && failure.status < 500 && failure.status !== 429)
         )
-          schedule(Math.min(8000, 1000 * 2 ** ++failures));
+          schedule(Math.min(8, 2 ** ++failures) * interval);
       }
     } finally {
       if (current === request) pending.value = false;

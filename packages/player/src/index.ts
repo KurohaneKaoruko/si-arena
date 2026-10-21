@@ -18,6 +18,8 @@ export {
   createReplaySession,
   REPLAY_MAX_BYTES,
   type ReplayFrame,
+  type ReplayHighlight,
+  type ReplayNarrator,
   type SessionOptions,
 } from "./session";
 

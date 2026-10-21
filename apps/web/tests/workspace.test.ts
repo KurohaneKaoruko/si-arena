@@ -19,7 +19,17 @@ enableAutoUnmount(afterEach);
 const user = { id: "player", username: "Player", official: false };
 const date = "2026-10-20T00:00:00.000Z";
 const initial: GameMeResponse = {
-  entry: { rating: 1000, matchesPlayed: 0, wins: 0, draws: 0, losses: 0 },
+  entry: {
+    rank: null,
+    rating: 1000,
+    matchesPlayed: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    points: 0,
+    placementTotal: 0,
+  },
+  boss: { available: false, attempts: 0, wins: 0 },
   code: {
     source: "export default () => ({})",
     sourceBytes: 24,
@@ -34,13 +44,16 @@ function match(id: string, status: MatchDetail["status"] = "pending"): MatchDeta
   return {
     id,
     status,
+    kind: "ranked",
     gameId: "paper",
     release: paperGame.manifest.release,
     seed: 1,
     initiatorId: user.id,
     createdAt: date,
     updatedAt: date,
-    participants: [{ userId: user.id, username: user.username, official: false, slot: 0 }],
+    participants: [
+      { userId: user.id, username: user.username, official: false, boss: false, slot: 0 },
+    ],
   };
 }
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });

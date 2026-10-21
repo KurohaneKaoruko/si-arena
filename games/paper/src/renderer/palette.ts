@@ -1,8 +1,8 @@
 export const PAPER_PALETTE = Object.freeze({
-  neutral: "#fafafa",
-  grid: "#e4e4e7",
-  headOutline: "#18181b",
-  warning: "#dc2626",
-  warningInk: "#ffffff",
-  players: Object.freeze(["#4f46e5", "#ea580c"] as const),
+  neutral: "#0F131A",
+  grid: "#1A2029",
+  headOutline: "#F4F7FB",
+  warning: "#FF6B5B",
+  warningInk: "#0B0E13",
+  players: Object.freeze(["#5B8CFF", "#FFB020"] as const),
 });

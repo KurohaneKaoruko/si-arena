@@ -1,25 +1,26 @@
 <script setup lang="ts">
 withDefaults(
   defineProps<{
-    tone?: "neutral" | "accent" | "success" | "warning" | "danger" | undefined;
+    tone?: "neutral" | "outline" | "accent" | "solid" | "warning" | "danger" | undefined;
     mono?: boolean | undefined;
   }>(),
   { tone: "neutral" },
 );
 
 const tones = {
-  neutral: "border-line bg-subtle text-soft",
-  accent: "border-accent/20 bg-accent-soft text-accent",
-  success: "border-success/20 bg-success-soft text-success",
-  warning: "border-warning/25 bg-warning-soft text-warning",
-  danger: "border-danger/25 bg-danger-soft text-danger",
+  neutral: "bg-line text-ink",
+  outline: "border border-line-strong text-soft",
+  accent: "bg-accent-soft text-accent",
+  solid: "bg-accent text-on-accent",
+  warning: "bg-warning-soft text-warning",
+  danger: "border border-danger-line bg-danger-soft text-danger-ink",
 } as const;
 </script>
 
 <template>
   <span
-    class="inline-flex items-center gap-1 rounded-control border px-2 py-0.5 text-xs font-medium"
-    :class="[tones[tone], mono ? 'font-mono' : '']"
+    class="inline-flex shrink-0 items-center gap-1 rounded-chip px-1.5 py-0.5 text-xs leading-4 font-bold whitespace-nowrap"
+    :class="[tones[tone], mono ? 'font-mono font-normal' : '']"
   >
     <slot />
   </span>

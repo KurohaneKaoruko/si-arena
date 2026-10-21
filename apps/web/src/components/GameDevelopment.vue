@@ -38,6 +38,20 @@ const command = computed(
   () =>
     `npx @si-arena/cli@latest init ${props.game.id} ./${props.game.id}-bot --server ${JSON.stringify(window.location.origin)}`,
 );
+const quickStart = computed(() =>
+  [
+    command.value,
+    `cd ${props.game.id}-bot && pnpm install --frozen-lockfile`,
+    "pnpm arena dev --bot ./bot.js",
+    "pnpm arena run --bot ./bot.js --seed 42",
+  ].join("\n"),
+);
+const steps = [
+  { title: "初始化项目", text: "下载本发行的开发包并校验" },
+  { title: "让 AI 写 bot.js", text: "把统一提示词交给你的 AI" },
+  { title: "本地对战调试", text: "和官方 bot 开局、看回放" },
+  { title: "上传并匹配", text: "回到对局页发起排位" },
+];
 const setupPrompt = computed(() => {
   const directory = `./${props.game.id}-bot`;
   return [
@@ -75,135 +89,131 @@ watch(
 </script>
 
 <template>
-  <section id="development" class="max-w-4xl scroll-mt-20" aria-labelledby="development-title">
-    <header class="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
-      <div class="min-w-0">
-        <h2 id="development-title" class="text-[15px] font-semibold tracking-tight">开发资料</h2>
-      </div>
-      <AppBadge mono>{{ game.release }} · 接口 v{{ game.botProtocolVersion }}</AppBadge>
+  <section
+    id="development"
+    class="flex scroll-mt-20 flex-col gap-4"
+    aria-labelledby="development-title"
+  >
+    <header class="flex flex-wrap items-center justify-between gap-3">
+      <h2 id="development-title" class="text-xl font-bold">开发资料</h2>
+      <AppBadge tone="outline" mono
+        >{{ game.release }} · 接口 v{{ game.botProtocolVersion }}</AppBadge
+      >
     </header>
 
-    <div class="border-b border-line py-5">
-      <h3 class="text-sm font-semibold">快速开始</h3>
-      <p class="mt-1.5 text-sm leading-6 text-soft">Node.js 26+ · pnpm 12</p>
-      <div class="mt-4 flex flex-wrap items-center gap-2">
+    <section class="card flex flex-col gap-4 p-5" aria-labelledby="quick-start-title">
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 id="quick-start-title" class="text-lg font-bold">快速开始</h3>
+        <span class="text-[13px] text-faint">需要 Node.js 26+ 与 pnpm 12</span>
+      </div>
+      <ol class="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-2.5">
+        <li
+          v-for="(step, index) in steps"
+          :key="step.title"
+          class="tile flex flex-col gap-1.5 p-3.5"
+        >
+          <span class="figure text-accent">{{ String(index + 1).padStart(2, "0") }}</span>
+          <span class="font-bold">{{ step.title }}</span>
+          <span class="text-[13px] text-soft">{{ step.text }}</span>
+        </li>
+      </ol>
+      <pre class="code-block text-accent"><code>{{ quickStart }}</code></pre>
+      <div class="flex flex-wrap items-center gap-2.5">
         <AppButton variant="primary" @click="copy(command, '初始化命令')">复制初始化命令</AppButton>
-        <AppButton
-          variant="secondary"
-          @click="copy(setupPrompt, 'AI 安装提示词', () => (setupOpen = true))"
+        <AppButton @click="copy(setupPrompt, 'AI 安装提示词', () => (setupOpen = true))"
           >复制 AI 安装提示词</AppButton
         >
-        <AppButton v-if="release" variant="secondary" :href="`${releasePath}/download`" download
+        <AppButton v-if="release" :href="`${releasePath}/download`" download
           >下载开发包 ZIP</AppButton
         >
         <span v-if="release" class="font-mono text-xs text-faint"
           >{{ (release.archive.bytes / 1024 / 1024).toFixed(1) }} MiB</span
         >
       </div>
-      <pre class="code-block mt-4 text-accent"><code>{{ command }}</code></pre>
-      <details :open="setupOpen" @toggle="setupOpen = ($event.target as HTMLDetailsElement).open">
-        <summary class="w-fit cursor-pointer py-2 text-xs text-soft hover:text-ink">
+      <StateBlock v-if="releaseStatus === 'loading'" status="loading" />
+      <div v-else-if="releaseStatus === 'error'" class="flex flex-wrap items-center gap-3">
+        <p class="text-sm leading-6 text-soft">
+          此发行的下载包暂不可用，初始化命令与提示词仍可使用。
+        </p>
+        <AppButton size="sm" @click="reloadRelease">重新获取开发包</AppButton>
+      </div>
+      <details
+        class="border-t border-line pt-3"
+        :open="setupOpen"
+        @toggle="setupOpen = ($event.target as HTMLDetailsElement).open"
+      >
+        <summary class="w-fit cursor-pointer py-1 text-sm text-soft hover:text-ink">
           查看 AI 安装提示词全文（环境准备、初始化与编写 bot 一条龙）
         </summary>
         <textarea
           aria-label="AI 安装提示词"
-          class="input min-h-72 resize-y p-3.5 font-mono text-[13px] leading-6"
+          class="input mt-2 min-h-72 resize-y p-3.5 font-mono text-[13px] leading-6"
           readonly
           :value="setupPrompt"
         />
       </details>
-      <StateBlock v-if="releaseStatus === 'loading'" class="mt-4" status="loading" />
-      <div v-else-if="releaseStatus === 'error'" class="mt-4">
-        <p class="text-sm leading-6 text-soft">
-          此发行的下载包暂不可用，初始化命令与提示词仍可使用。
-        </p>
-        <AppButton class="mt-3" variant="secondary" @click="reloadRelease"
-          >重新获取开发包</AppButton
-        >
-      </div>
-    </div>
+    </section>
 
-    <div class="py-4">
-      <StateBlock v-if="status === 'loading'" status="loading" />
-      <StateBlock v-else-if="status === 'error'" status="error" :message="error" @retry="reload" />
-      <div v-else-if="data" class="space-y-4">
-        <section>
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <h3 class="text-sm font-semibold">统一参赛提示词</h3>
-            <div class="flex flex-wrap gap-2">
-              <AppButton
-                variant="secondary"
-                @click="copy(data.prompt, '参赛提示词', () => (promptOpen = true))"
-                >复制提示词</AppButton
-              >
-              <AppButton variant="secondary" :href="sourceLink(data.prompt)" download="PROMPT.md"
-                >下载提示词</AppButton
-              >
-            </div>
-          </div>
-          <details
-            :open="promptOpen"
-            @toggle="promptOpen = ($event.target as HTMLDetailsElement).open"
+    <StateBlock v-if="status === 'loading'" status="loading" />
+    <StateBlock v-else-if="status === 'error'" status="error" :message="error" @retry="reload" />
+    <template v-else-if="data">
+      <section class="card flex flex-col gap-3.5 p-5" aria-labelledby="prompt-title">
+        <h3 id="prompt-title" class="text-lg font-bold">统一参赛提示词</h3>
+        <p class="text-sm leading-7 text-soft">
+          所有玩家拿到的是同一份提示词，包含规则、SDK、限额与编写要求。
+        </p>
+        <div class="flex flex-wrap gap-2.5">
+          <AppButton @click="copy(data.prompt, '参赛提示词', () => (promptOpen = true))"
+            >复制提示词</AppButton
           >
-            <summary class="w-fit cursor-pointer py-3 text-xs text-soft hover:text-ink">
-              查看提示词全文
-            </summary>
-            <textarea
-              aria-label="统一参赛提示词"
-              class="input min-h-64 resize-y p-3.5 font-mono text-[13px] leading-6"
-              readonly
-              :value="data.prompt"
-            />
-          </details>
-        </section>
-        <details class="border-t border-line pt-4">
-          <summary
-            class="flex min-h-9 cursor-pointer items-center text-sm font-semibold transition marker:text-faint hover:text-accent"
-          >
-            SDK 与执行说明
+          <AppButton :href="sourceLink(data.prompt)" download="PROMPT.md">下载提示词</AppButton>
+        </div>
+        <details
+          :open="promptOpen"
+          @toggle="promptOpen = ($event.target as HTMLDetailsElement).open"
+        >
+          <summary class="w-fit cursor-pointer py-1 text-sm text-soft hover:text-ink">
+            查看提示词全文
           </summary>
-          <AppButton class="mt-3" variant="secondary" @click="copy(data.sdk, 'SDK 说明')"
-            >复制 SDK 说明</AppButton
-          >
-          <pre class="code-block mt-3 max-h-[32rem] whitespace-pre-wrap break-words">{{
-            data.sdk
-          }}</pre>
+          <textarea
+            aria-label="统一参赛提示词"
+            class="input mt-2 min-h-64 resize-y p-3.5 font-mono text-[13px] leading-6"
+            readonly
+            :value="data.prompt"
+          />
         </details>
-        <details class="border-t border-line pt-4">
-          <summary
-            class="flex min-h-9 cursor-pointer items-center text-sm font-semibold transition marker:text-faint hover:text-accent"
+      </section>
+      <details class="card px-5 py-4">
+        <summary class="cursor-pointer font-bold">SDK 与执行说明</summary>
+        <AppButton class="mt-3" @click="copy(data.sdk, 'SDK 说明')">复制 SDK 说明</AppButton>
+        <pre class="code-block mt-3 max-h-[32rem] break-words whitespace-pre-wrap">{{
+          data.sdk
+        }}</pre>
+      </details>
+      <details class="card px-5 py-4">
+        <summary class="cursor-pointer font-bold">官方示例 bot</summary>
+        <div class="mt-3 flex flex-wrap gap-2.5">
+          <AppButton @click="copy(data.officialBot, '官方代码')">复制官方代码</AppButton>
+          <AppButton :href="sourceLink(data.officialBot)" download="official.js"
+            >下载 official.js</AppButton
           >
-            官方示例 bot
-          </summary>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <AppButton variant="secondary" @click="copy(data.officialBot, '官方代码')"
-              >复制官方代码</AppButton
-            >
-            <AppButton
-              variant="secondary"
-              :href="sourceLink(data.officialBot)"
-              download="official.js"
-              >下载 official.js</AppButton
-            >
-          </div>
-          <pre class="code-block mt-3 max-h-96">{{ data.officialBot }}</pre>
-        </details>
-        <details class="border-t border-line pt-4">
-          <summary
-            class="flex min-h-9 cursor-pointer items-center text-sm font-semibold transition marker:text-faint hover:text-accent"
-          >
-            最小代码模板
-          </summary>
-          <AppButton
-            class="mt-3"
-            variant="secondary"
-            :href="sourceLink(data.template)"
-            download="bot.js"
-            >下载 bot.js</AppButton
-          >
-          <pre class="code-block mt-3 max-h-96">{{ data.template }}</pre>
-        </details>
-      </div>
-    </div>
+        </div>
+        <pre class="code-block mt-3 max-h-96">{{ data.officialBot }}</pre>
+      </details>
+      <details class="card px-5 py-4">
+        <summary class="cursor-pointer font-bold">最小代码模板</summary>
+        <pre class="code-block mt-3 max-h-96 text-ink">{{ data.template }}</pre>
+        <AppButton class="mt-3" :href="sourceLink(data.template)" download="bot.js"
+          >下载 bot.js</AppButton
+        >
+      </details>
+      <p class="tile p-3.5 text-[13px] leading-6 text-soft">
+        限额：源码 {{ game.resolvedLimits.codeBytes / 1024 }} KiB · CPU
+        {{ game.resolvedLimits.cpuMs }} ms / tick · 运行内存
+        {{ game.resolvedLimits.heapBytes / 1024 / 1024 }} MiB · Memory
+        {{ game.resolvedLimits.memoryBytes / 1024 }} KiB。超出时该 tick 用默认动作，保留上次成功的
+        Memory。
+      </p>
+    </template>
   </section>
 </template>

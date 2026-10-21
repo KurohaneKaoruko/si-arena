@@ -114,7 +114,6 @@ export class DevSession {
   private current!: DevStatus["current"];
   private lastCompleted: DevStatus["lastCompleted"] = null;
   private replayData: Readonly<Replay<unknown, unknown>> | undefined;
-  private trace = new MemoryTrace();
   private completedTrace: MemoryTrace | undefined;
   private controller: AbortController | undefined;
   private settling: Promise<void> = Promise.resolve();
@@ -204,7 +203,6 @@ export class DevSession {
     const controller = new AbortController();
     const trace = new MemoryTrace();
     this.controller = controller;
-    this.trace = trace;
     this.current = {
       phase: "running",
       run,
