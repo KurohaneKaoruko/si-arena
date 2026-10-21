@@ -1,11 +1,11 @@
-import type { DeepReadonly, InitInput } from "@si-arena/protocol";
+import { isJsonSnapshot, type DeepReadonly, type InitInput } from "@si-arena/protocol";
 import { PAPER_CONFIG, PAPER_MAX_TICKS } from "../constants";
 import type { PaperPlayer, PaperState } from "../sdk";
 import { readArray, readId, readInteger, readRecord } from "./validation";
 
 const CELL_COUNT = PAPER_CONFIG.width * PAPER_CONFIG.height;
 // Cache only after validating an immutable grid. Other state invariants are
-// always checked; callers receive a detached copy, never the cached array.
+// always checked; readPaperGrid callers receive a detached copy, never the cached array.
 const frozenGrids = new WeakMap<object, readonly number[]>();
 
 export function readPaperGrid(grid: unknown, label: string): number[] {
@@ -19,7 +19,28 @@ export function readPaperGrid(grid: unknown, label: string): number[] {
   return parsed;
 }
 
+/** Read-only grid: a validated engine snapshot is shared as is, anything else is copied. */
+export function viewPaperGrid(grid: unknown, label: string): readonly number[] {
+  if (!isJsonSnapshot(grid)) return readPaperGrid(grid, label);
+  if (!frozenGrids.has(grid as object)) readPaperGrid(grid, label);
+  return grid as readonly number[];
+}
+
 export function parsePaperState(raw: unknown): PaperState {
+  return readPaperState(raw, readPaperGrid);
+}
+
+/** parsePaperState for read-only use: engine snapshot grids are shared, not copied. */
+export function viewPaperState(raw: unknown): DeepReadonly<PaperState> {
+  return readPaperState(raw, viewPaperGrid);
+}
+
+type GridState<Grid> = Omit<PaperState, "territory" | "trails"> & { territory: Grid; trails: Grid };
+
+function readPaperState<Grid extends readonly number[]>(
+  raw: unknown,
+  grid: (raw: unknown, label: string) => Grid,
+): GridState<Grid> {
   const value = readRecord(
     raw,
     ["tick", "width", "height", "maxTicks", "territory", "trails", "players", "spawns", "rngState"],
@@ -70,13 +91,13 @@ export function parsePaperState(raw: unknown): PaperState {
   if (spawns[0].x === spawns[1].x && spawns[0].y === spawns[1].y) {
     throw new TypeError("Paper spawn points must differ");
   }
-  const state: PaperState = {
+  const state: GridState<Grid> = {
     tick: readInteger(value.tick, 0, PAPER_MAX_TICKS, "tick"),
     width: PAPER_CONFIG.width,
     height: PAPER_CONFIG.height,
     maxTicks: PAPER_MAX_TICKS,
-    territory: readPaperGrid(value.territory, "territory"),
-    trails: readPaperGrid(value.trails, "trails"),
+    territory: grid(value.territory, "territory"),
+    trails: grid(value.trails, "trails"),
     players: [first, second],
     spawns,
     rngState: readInteger(value.rngState, 1, 0xffffffff, "rngState"),
