@@ -1,6 +1,9 @@
 import type { MatchSummary } from "@si-arena/protocol";
+import { mount } from "@vue/test-utils";
 import { expect, test } from "vitest";
-import { matchOutcome, ratingDelta } from "../src/games/match-summary";
+import { createMemoryHistory, createRouter } from "vue-router";
+import MatchList from "../src/components/MatchList.vue";
+import { kindLabel, matchOutcome, ratingDelta, standingChange } from "../src/games/match-summary";
 
 const match: MatchSummary = {
   id: "match",
@@ -47,4 +50,41 @@ test("ties, system failure and unsettled matches do not fabricate wins", () => {
   expect(matchOutcome({ ...match, status: "pending" }, "opponent").label).toBe("等待开局");
   expect(ratingDelta({ ...match.participants[0]!, ratingAfter: 1000.000001 })).toBe("0.00");
   expect(ratingDelta(undefined)).toBe("—");
+});
+
+test("practice and boss games never show rating changes; arena runs show the place", () => {
+  expect(kindLabel("ranked")).toBeUndefined();
+  expect(standingChange(match, "initiator")).toBe("-15.88");
+  expect(standingChange({ ...match, kind: "practice" }, "initiator")).toBe("不计分");
+  expect(standingChange({ ...match, kind: "boss" }, "opponent")).toBe("不计分");
+  expect(standingChange({ ...match, status: "failed" }, "opponent")).toBe("不计分");
+  expect(standingChange({ ...match, kind: "arena" }, "initiator")).toBe("第 2 名");
+  expect(standingChange({ ...match, kind: "arena", status: "running" }, "initiator")).toBe("—");
+});
+
+test("match rows badge practice, boss and arena games", async () => {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: "/:pathMatch(.*)*", component: { template: "<p />" } }],
+  });
+  const boss = {
+    ...match,
+    id: "boss",
+    kind: "boss" as const,
+    participants: [
+      match.participants[0]!,
+      { ...match.participants[1]!, official: false, boss: true },
+    ],
+  };
+  const wrapper = mount(MatchList, {
+    props: { matches: [{ ...match, id: "practice", kind: "practice" }, boss, match] },
+    global: { plugins: [router] },
+  });
+  const rows = wrapper.findAll("li");
+  expect(rows[0]!.text()).toContain("练习");
+  expect(rows[0]!.text()).toContain("不计分");
+  expect(rows[1]!.text()).toContain("Boss");
+  expect(rows[1]!.text()).toContain("不计分");
+  expect(rows[2]!.text()).not.toContain("练习");
+  expect(rows[2]!.text()).not.toContain("不计分");
 });

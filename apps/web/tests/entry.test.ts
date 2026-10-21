@@ -278,3 +278,57 @@ test("invalid UTF-8 and oversized files never reach the upload endpoint", async 
   wrapper.unmount();
   toast.unmount();
 });
+
+test("the boss challenge appears only when a boss is installed", async () => {
+  const { wrapper, toast } = await setup(vi.fn());
+  expect(wrapper.text()).not.toContain("挑战 Boss");
+  wrapper.unmount();
+  toast.unmount();
+  const withBoss = await setup(vi.fn(), { ...me, boss: { available: true, attempts: 3, wins: 1 } });
+  expect(withBoss.wrapper.text()).toContain("1 胜 / 3 次");
+  expect(withBoss.wrapper.findAll("button").some((b) => b.text() === "挑战 Boss")).toBe(true);
+  withBoss.wrapper.unmount();
+  withBoss.toast.unmount();
+});
+
+test("a boss challenge after a lost ranked request sends its own body and idempotency key", async () => {
+  const created = {
+    id: "boss-match",
+    gameId: "paper",
+    kind: "boss",
+    status: "pending",
+    release: game.release,
+    seed: 1,
+    initiatorId: user.id,
+    createdAt: code.updatedAt,
+    updatedAt: code.updatedAt,
+    participants: [],
+  };
+  const withBoss = { ...me, boss: { available: true, attempts: 0, wins: 0 } };
+  let posts = 0;
+  const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.endsWith("/matches") && options?.method === "POST") {
+      if (posts++ === 0) throw new TypeError("response lost");
+      return response(created, 201);
+    }
+    if (url.startsWith("/api/matches/")) return response(created);
+    return response({ ...withBoss, activeMatch: { id: "boss-match", status: "pending" } });
+  });
+  const { wrapper, router, toast } = await setup(fetch, withBoss);
+  const button = (label: string) => wrapper.findAll("button").find((b) => b.text() === label)!;
+  await button("发起匹配").trigger("click");
+  await flushPromises();
+  await button("挑战 Boss").trigger("click");
+  await flushPromises();
+  const posted = fetch.mock.calls.filter(
+    ([url, options]) => url.endsWith("/matches") && options?.method === "POST",
+  );
+  expect(posted.map(([, options]) => options?.body)).toEqual(["{}", '{"boss":true}']);
+  const keys = posted.map(([, options]) => new Headers(options?.headers).get("Idempotency-Key"));
+  expect(keys[0]).toBeTruthy();
+  expect(keys[1]).toBeTruthy();
+  expect(keys[1]).not.toBe(keys[0]);
+  expect(router.currentRoute.value.query.match).toBe("boss-match");
+  wrapper.unmount();
+  toast.unmount();
+});
