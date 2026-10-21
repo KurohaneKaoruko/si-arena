@@ -135,6 +135,7 @@ defineExpose({ refresh, data });
   >
     <div
       class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[13px] text-soft"
+      :class="{ 'max-sm:hidden': compact }"
     >
       <span v-if="game.arena"
         >已赛 {{ data.entry.matchesPlayed }} 场 · 冠军 {{ data.entry.wins }} 次</span

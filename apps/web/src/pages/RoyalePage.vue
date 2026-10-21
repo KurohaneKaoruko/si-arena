@@ -80,7 +80,10 @@ function runSummary(run: MatchDetail) {
         status="empty"
         message="还没有选手上传大逃杀代码。"
       />
-      <ol v-else-if="status" class="grid grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))] gap-3">
+      <ol
+        v-else-if="status"
+        class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,10rem),1fr))] gap-3"
+      >
         <li
           v-for="(entry, seat) in status.lineup"
           :key="entry.userId"

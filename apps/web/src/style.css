@@ -38,18 +38,21 @@
   --color-even: #2a313d;
   --color-warning: #ffb020;
   --color-warning-soft: rgb(255 176 32 / 0.14);
-  --color-player-0: #5b8cff;
-  --color-player-1: #ffb020;
-  --color-player-2: #ff5fa2;
-  --color-player-3: #2ed3b7;
-  --color-player-4: #a880ff;
-
   --radius-card: 1rem;
   --radius-panel: 0.75rem;
   --radius-control: 0.625rem;
   --radius-chip: 0.3125rem;
 
   --shadow-pop: 0 18px 40px -14px rgb(0 0 0 / 0.7);
+}
+
+/* Seat colours are also read through var() in inline styles, so they are always emitted. */
+@theme static {
+  --color-player-0: #5b8cff;
+  --color-player-1: #ffb020;
+  --color-player-2: #ff5fa2;
+  --color-player-3: #2ed3b7;
+  --color-player-4: #a880ff;
 }
 
 @layer base {
@@ -220,7 +223,7 @@
 }
 .game-panel {
   min-width: 0;
-  padding: 1.25rem;
+  padding: 1rem;
 }
 .game-actions {
   position: fixed;
@@ -287,6 +290,7 @@
   }
   .game-panel {
     height: 100%;
+    padding: 1.25rem;
     overflow: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
