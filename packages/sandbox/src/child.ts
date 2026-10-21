@@ -1,6 +1,7 @@
 import { Socket } from "node:net";
 import type { ExecuteTickInput, ExecutionIdentity, ResourceLimits } from "@si-arena/protocol";
 import { FramedChannel } from "./framing";
+import type { ExecutorBinding } from "./process";
 import { isRecord } from "./json";
 import { compileSource, initializeRuntime, GuestSession } from "./runtime";
 
@@ -10,6 +11,7 @@ if (!Number.isSafeInteger(limit) || limit <= 0 || !executionId)
   throw new Error("Invalid executor startup arguments");
 const socket = new Socket({ fd: 3, readable: true, writable: true });
 let initialized = false;
+let binding: ExecutorBinding | undefined;
 let busy = false;
 const guest = new GuestSession();
 const channel = new FramedChannel(
@@ -64,38 +66,62 @@ async function dispatch(message: Record<string, unknown>): Promise<void> {
     }
     return;
   }
+  if (message.kind === "bind" && !binding && message.executionId === executionId) {
+    if (
+      typeof message.matchId !== "string" ||
+      typeof message.playerId !== "string" ||
+      typeof message.source !== "string" ||
+      typeof message.sdkSource !== "string" ||
+      !isRecord(message.limits) ||
+      typeof message.captureLogs !== "boolean"
+    )
+      throw new Error("Invalid executor binding");
+    binding = {
+      matchId: message.matchId,
+      playerId: message.playerId,
+      source: message.source,
+      sdkSource: message.sdkSource,
+      limits: message.limits as unknown as ResourceLimits,
+      captureLogs: message.captureLogs,
+    };
+    channel.send({ kind: "bound", executionId });
+    return;
+  }
   if (
     message.kind !== "tick" ||
+    !binding ||
     !isRecord(message.input) ||
-    typeof message.sdkSource !== "string" ||
     typeof message.resetEnvironment !== "boolean" ||
     typeof message.logBytes !== "number"
   )
     throw new Error("Invalid executor request");
-  const input = message.input as unknown as ExecuteTickInput;
+  const tick = message.input;
   if (
-    input.executionId !== executionId ||
-    typeof input.matchId !== "string" ||
-    typeof input.playerId !== "string" ||
-    !Number.isSafeInteger(input.tick) ||
-    input.tick < 0 ||
-    typeof input.source !== "string" ||
-    !isRecord(input.limits) ||
-    !isRecord(input.memory) ||
-    typeof input.captureLogs !== "boolean"
+    tick.executionId !== executionId ||
+    tick.matchId !== binding.matchId ||
+    tick.playerId !== binding.playerId ||
+    !Number.isSafeInteger(tick.tick) ||
+    Number(tick.tick) < 0 ||
+    !isRecord(tick.memory)
   )
     throw new Error("Invalid tick identity or payload");
+  const input = {
+    ...tick,
+    source: binding.source,
+    limits: binding.limits,
+    captureLogs: binding.captureLogs,
+  } as unknown as ExecuteTickInput;
   const identity: ExecutionIdentity = {
     matchId: input.matchId,
     playerId: input.playerId,
     tick: input.tick,
-    executionId,
+    executionId: input.executionId,
   };
   try {
     if (message.resetEnvironment) guest.close();
     const result = guest.execute(
       input,
-      message.sdkSource,
+      binding.sdkSource,
       message.logBytes,
       (log) => channel.send({ kind: "log", ...identity, log }),
       () => channel.send({ kind: "logs-truncated", ...identity }),

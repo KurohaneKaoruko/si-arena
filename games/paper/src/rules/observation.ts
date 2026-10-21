@@ -8,7 +8,7 @@ import type {
   PaperState,
   PaperVisiblePlayer,
 } from "../sdk";
-import { parsePaperState, readPaperGrid } from "./state";
+import { viewPaperGrid, viewPaperState } from "./state";
 import { readArray, readId, readInteger, readRecord } from "./validation";
 
 function position(raw: unknown): PaperPosition {
@@ -92,7 +92,8 @@ function events(raw: unknown, ids: string[]): PaperEvent[] {
   });
 }
 
-export function parsePaperObservation(raw: unknown): PaperObservation {
+/** Board grids that arrive as engine snapshots stay shared; callers must not mutate them. */
+export function parsePaperObservation(raw: unknown): DeepReadonly<PaperObservation> {
   const value = readRecord(
     raw,
     ["tick", "maxTicks", "selfId", "selfSlot", "board", "players", "events"],
@@ -108,8 +109,8 @@ export function parsePaperObservation(raw: unknown): PaperObservation {
   const board = {
     width: PAPER_CONFIG.width,
     height: PAPER_CONFIG.height,
-    territory: readPaperGrid(b.territory, "territory"),
-    trails: readPaperGrid(b.trails, "trails"),
+    territory: viewPaperGrid(b.territory, "territory"),
+    trails: viewPaperGrid(b.trails, "trails"),
   };
   const players = readArray(value.players, 2, "players").map(
     (rawPlayer, slot): PaperVisiblePlayer => {
@@ -165,13 +166,14 @@ export function observePaper(
   playerId: string,
   context?: { events: DeepReadonly<PaperEvent[]> },
 ): PaperObservation | null {
-  const snapshot = parsePaperState(state);
+  const snapshot = viewPaperState(state);
   const player = snapshot.players.find((p) => p.id === playerId);
   if (!player) throw new TypeError("Unknown Paper player");
   if (snapshot.tick >= PAPER_MAX_TICKS) return null;
   const players = snapshot.players.map((p): PaperVisiblePlayer => {
-    if (!p.position) throw new TypeError("Missing Paper head");
-    return { id: p.id, slot: p.slot, position: p.position, spawn: snapshot.spawns[p.slot] };
+    const spawn = snapshot.spawns[p.slot];
+    if (!p.position || !spawn) throw new TypeError("Missing Paper head");
+    return { id: p.id, slot: p.slot, position: { ...p.position }, spawn: { ...spawn } };
   }) as [PaperVisiblePlayer, PaperVisiblePlayer];
   return {
     tick: snapshot.tick,
@@ -181,8 +183,9 @@ export function observePaper(
     board: {
       width: snapshot.width,
       height: snapshot.height,
-      territory: snapshot.territory,
-      trails: snapshot.trails,
+      // Engine snapshot grids are immutable and shared; any other state was copied above.
+      territory: snapshot.territory as number[],
+      trails: snapshot.trails as number[],
     },
     players,
     events: events(

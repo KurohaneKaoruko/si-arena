@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import {
   cloneJson,
   resolveResourceLimits,
+  snapshotJson,
   toJsonValue,
   truncateUtf8,
-  type ExecuteTickInput,
   type ExecutionError,
   type ExecutionErrorType,
   type ExecutionIdentity,
@@ -14,7 +14,7 @@ import {
   type ResourceLimits,
 } from "@si-arena/protocol";
 import { isRecord } from "./json";
-import { ExecutorProcess, ExecutorStopped } from "./process";
+import { ExecutorProcess, ExecutorStopped, type ExecutorBinding } from "./process";
 import {
   MatchLogBudget,
   SandboxSystemError,
@@ -73,10 +73,20 @@ export class SandboxPlayer<Action extends JsonValue> {
     options: SandboxOptions<Action>,
   ): Promise<SandboxPlayer<Action>> {
     const player = new SandboxPlayer(options);
-    player.executor = await ExecutorProcess.start(player.limits, options.isolation);
+    player.executor = await ExecutorProcess.start(player.limits, options.isolation, player.binding);
     return player;
   }
 
+  private get binding(): ExecutorBinding {
+    return {
+      matchId: this.options.matchId,
+      playerId: this.options.playerId,
+      source: this.source,
+      sdkSource: this.sdkSource,
+      limits: this.limits,
+      captureLogs: this.options.captureLogs ?? false,
+    };
+  }
   get memory(): JsonObject {
     return cloneJson(this.committed, this.limits.memoryBytes);
   }
@@ -97,7 +107,7 @@ export class SandboxPlayer<Action extends JsonValue> {
     let observed: JsonValue;
     let fallback: Action;
     try {
-      observed = toJsonValue(observation, this.limits.observationBytes);
+      observed = snapshotJson(observation, this.limits.observationBytes) as JsonValue;
       fallback = cloneJson(defaultAction, this.limits.actionBytes);
     } catch {
       throw new SandboxSystemError("Observation is invalid or exceeds release budget");
@@ -146,19 +156,11 @@ export class SandboxPlayer<Action extends JsonValue> {
         return failed({ type: "EXECUTOR_ERROR", message: "Player executor is restarting" });
       }
       identity = { ...identity, executionId: executor.id };
-      const input: ExecuteTickInput = {
-        ...identity,
-        source: this.source,
-        observation: observed,
-        memory: this.committed,
-        limits: this.limits,
-        captureLogs: this.options.captureLogs ?? false,
-      };
+      // Source, SDK and limits were bound when the process started.
       const request = {
         kind: "tick",
         resetEnvironment: this.resetEnvironment,
-        input,
-        sdkSource: this.sdkSource,
+        input: { ...identity, observation: observed, memory: this.committed },
         logBytes: Math.min(this.limits.logs.tickBytes, this.logBudget.remainingBytes),
       };
       if (Buffer.byteLength(JSON.stringify(request)) > this.limits.ipcBytes)
@@ -238,7 +240,8 @@ export class SandboxPlayer<Action extends JsonValue> {
       let memory: JsonObject;
       let action: JsonValue;
       try {
-        memory = toJsonValue(output.memory, this.limits.memoryBytes) as JsonObject;
+        // Frozen, so the memory getter copies it without another strict walk.
+        memory = snapshotJson(output.memory, this.limits.memoryBytes) as JsonObject;
       } catch {
         return {
           ...failed({ type: "MEMORY_INVALID", message: "Candidate Memory failed validation" }),
@@ -287,7 +290,11 @@ export class SandboxPlayer<Action extends JsonValue> {
     this.rebuilding = (async () => {
       await old?.close();
       if (this.closed) return;
-      this.executor = await ExecutorProcess.start(this.limits, this.options.isolation);
+      this.executor = await ExecutorProcess.start(
+        this.limits,
+        this.options.isolation,
+        this.binding,
+      );
       if (this.closed) {
         await this.executor.close();
         this.executor = undefined;

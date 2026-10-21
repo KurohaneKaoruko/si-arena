@@ -2,11 +2,17 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
-import type { ResourceLimits } from "@si-arena/protocol";
+import type { ExecuteTickInput, ResourceLimits } from "@si-arena/protocol";
 import { FramedChannel } from "./framing";
 import { isRecord } from "./json";
 import { isolateProcess, type ProcessGroup } from "./isolation";
 import { SandboxSystemError, type ProcessIsolation } from "./types";
+
+/** Per-match constants sent once per process instead of with every tick. */
+export type ExecutorBinding = Pick<
+  ExecuteTickInput,
+  "matchId" | "playerId" | "source" | "limits" | "captureLogs"
+> & { sdkSource: string };
 
 export class ExecutorStopped extends Error {
   constructor(readonly reason: "EXECUTION_TIMEOUT" | "EXECUTOR_ERROR" | "HEAP_LIMIT") {
@@ -39,10 +45,11 @@ export class ExecutorProcess {
   static async start(
     limits: ResourceLimits,
     isolation: ProcessIsolation,
+    binding?: ExecutorBinding,
   ): Promise<ExecutorProcess> {
     const executor = new ExecutorProcess();
     try {
-      await executor.initialize(limits, isolation);
+      await executor.initialize(limits, isolation, binding);
       return executor;
     } catch (error) {
       await executor.close();
@@ -50,7 +57,11 @@ export class ExecutorProcess {
     }
   }
 
-  private async initialize(limits: ResourceLimits, isolation: ProcessIsolation): Promise<void> {
+  private async initialize(
+    limits: ResourceLimits,
+    isolation: ProcessIsolation,
+    binding: ExecutorBinding | undefined,
+  ): Promise<void> {
     const startedAt = performance.now();
     const sourceMode = import.meta.url.endsWith(".ts");
     const entry = new URL(sourceMode ? "./child.ts" : "./child.js", import.meta.url);
@@ -110,6 +121,16 @@ export class ExecutorProcess {
           throw new SandboxSystemError("Executor initialization failed");
         },
       );
+      if (binding)
+        await this.request(
+          { kind: "bind", executionId: this.id, ...binding },
+          Math.max(1, limits.startupMs - (performance.now() - startedAt)),
+          (message) => {
+            if (message.executionId !== this.id) return false;
+            if (message.kind === "bound") return true;
+            throw new SandboxSystemError("Executor binding failed");
+          },
+        );
     } catch {
       throw new SandboxSystemError("Executor initialization failed or timed out");
     }

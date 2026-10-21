@@ -1,6 +1,7 @@
 import {
   cloneJson,
   freezeJson,
+  snapshotJson,
   utf8Bytes,
   type GameResult,
   type DeepReadonly,
@@ -58,7 +59,7 @@ export async function replayMatch<
   try {
     game = snapshotGame(game);
     const value =
-      options.detached === true ? raw : cloneJson(raw, options.maxBytes ?? 32 * 1024 * 1024);
+      options.detached === true ? raw : snapshotJson(raw, options.maxBytes ?? 32 * 1024 * 1024);
     const replay = record(value, "replay", [
       "formatVersion",
       "matchId",
@@ -116,8 +117,8 @@ export async function replayMatch<
       const active = players.flatMap((player) => {
         const observation = game.rules.observe(state, player.id, { events: previousEvents });
         if (observation === null) return [];
-        cloneJson(
-          game.parseObservation(cloneJson(observation, limits.observationBytes), {
+        snapshotJson(
+          game.parseObservation(snapshotJson(observation, limits.observationBytes), {
             ...context,
             playerId: player.id,
             tick,
@@ -134,14 +135,16 @@ export async function replayMatch<
       matchLogBytes += diagnostics.logBytes;
       if (matchLogBytes > limits.logs.matchBytes)
         throw new TypeError("Replay exceeds match log budget");
-      const output = game.rules.step(state, freezeJson(cloneJson(actions)));
+      const output = game.rules.step(state, snapshotJson(actions));
       state = checkedState(game, output.nextState, tick + 1, context);
-      const events = freezeJson(cloneJson(output.events));
+      const events = snapshotJson(output.events);
       if (!Array.isArray(events)) throw new TypeError("Invalid rule events");
       previousEvents = events;
       if (output.result !== undefined) terminal = parseResult(output.result, players, tick + 1);
-      const saved = cloneJson(entry) as unknown as ReplayTick<Action>;
-      await options.onTick?.({ state, events, record: freezeJson(saved) });
+      if (options.onTick) {
+        const saved = snapshotJson(entry) as unknown as DeepReadonly<ReplayTick<Action>>;
+        await options.onTick({ state, events, record: saved });
+      }
     }
     if (!terminal) throw new TypeError("Replay does not reach a terminal result");
     const expected = parseResult(replay.result, players, replay.ticks.length, true);

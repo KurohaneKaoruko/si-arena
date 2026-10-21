@@ -7,7 +7,7 @@ import { paperRules, parsePaperState } from "@si-arena/game-paper/rules";
 import { actions, deepFreeze, idle, init, move, outside, stepFrozen, world } from "./helpers";
 import { required, eventOf } from "./helpers";
 import { paperGame } from "@si-arena/game-paper/game";
-import { cloneJson } from "@si-arena/protocol";
+import { cloneJson, snapshotJson } from "@si-arena/protocol";
 
 const validInit = () => ({
   seed: 2,
@@ -326,6 +326,29 @@ test("cached frozen grids stay detached and never admit invalid immutable or cha
   expect(() => parsePaperState(mutable)).toThrow();
   const inconsistent = { ...frozen, players: frozen.players.map((p) => ({ ...p, id: "same" })) };
   expect(() => parsePaperState(inconsistent)).toThrow();
+});
+
+test("engine snapshots share validated grids read-only; invalid snapshot grids still fail", () => {
+  const snapshot = snapshotJson(init());
+  const observation = required(paperRules.observe(snapshot, "alpha"));
+  expect(observation.board.territory).toBe(snapshot.territory);
+  expect(() => {
+    observation.board.trails[0] = 0;
+  }).toThrow(TypeError);
+  const context = {
+    config: paperManifest.config,
+    players: snapshot.players,
+    playerId: "alpha",
+    tick: 0,
+  };
+  const parsed = paperGame.parseObservation(snapshotJson(observation), context);
+  expect(parsed.board.trails).toBe(snapshot.trails);
+  expect(paperGame.parseState(snapshot, context).territory).toBe(snapshot.territory);
+  // Detached callers keep their own mutable copies.
+  expect(parsePaperState(snapshot).territory).not.toBe(snapshot.territory);
+  const invalid = init();
+  invalid.trails[0] = 7;
+  expect(() => paperRules.observe(snapshotJson(invalid), "alpha")).toThrow();
 });
 
 test("step requires every active player's canonical action and rejects extras", () => {

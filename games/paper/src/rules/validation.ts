@@ -1,3 +1,5 @@
+import { isJsonSnapshot } from "@si-arena/protocol";
+
 /** Validate data properties before reading them; accessors are not part of the JSON contract. */
 export function readRecord(
   raw: unknown,
@@ -18,6 +20,8 @@ export function readRecord(
   ) {
     throw new TypeError(`${label} has missing or unexpected fields`);
   }
+  // Snapshots were already checked for data properties when they were taken.
+  if (isJsonSnapshot(raw)) return raw as Record<string, unknown>;
   const descriptors = Object.getOwnPropertyDescriptors(raw);
   for (const key of keys) {
     const descriptor = descriptors[key];
@@ -29,6 +33,7 @@ export function readRecord(
 }
 
 export function readArray(raw: unknown, length: number, label: string): unknown[] {
+  if (Array.isArray(raw) && raw.length === length && isJsonSnapshot(raw)) return raw;
   if (!Array.isArray(raw) || raw.length !== length || Reflect.ownKeys(raw).length !== length + 1) {
     throw new TypeError(`${label} must be a dense array of length ${length}`);
   }

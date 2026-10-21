@@ -69,7 +69,42 @@ export function stringifyJson(
   return parts.join("");
 }
 
+/** Encoded byte size of every deep-frozen node that passed the strict walk below. */
+const snapshots = new WeakMap<object, number>();
+
+/** True for data returned by snapshotJson: strict, deep-frozen and safe to share. */
+export function isJsonSnapshot(value: unknown): boolean {
+  return value !== null && typeof value === "object" && snapshots.has(value);
+}
+
 export function cloneJson<T>(value: T, maxBytes?: number): T {
+  return copyJson(value, maxBytes, false) as T;
+}
+
+/**
+ * Strict JSON validation like cloneJson, but the result is deep-frozen and
+ * remembered. Snapshots are reused by reference instead of copied, so passing immutable data through several boundaries
+ * costs one walk instead of one per boundary.
+ */
+export function snapshotJson<T>(value: T, maxBytes?: number): DeepReadonly<T> {
+  return copyJson(value, maxBytes, true) as DeepReadonly<T>;
+}
+
+/** Plain mutable copy of a snapshot; its structure was already validated. */
+function thaw(item: object): JsonValue {
+  // Same null-prototype construction as the strict walk, so no inherited setter runs.
+  const array = Array.isArray(item);
+  const copied = (array ? [] : {}) as Record<string, JsonValue>;
+  Object.setPrototypeOf(copied, null);
+  for (const key of Object.keys(item)) {
+    const child = (item as Record<string, JsonValue>)[key]!;
+    copied[key] = child !== null && typeof child === "object" ? thaw(child) : child;
+  }
+  Object.setPrototypeOf(copied, array ? Array.prototype : Object.prototype);
+  return copied as JsonValue;
+}
+
+function copyJson(value: unknown, maxBytes: number | undefined, freeze: boolean): JsonValue {
   const ancestors = new Set<object>();
   const limit = maxBytes ?? Number.MAX_SAFE_INTEGER;
   let bytes = 0;
@@ -95,14 +130,20 @@ export function cloneJson<T>(value: T, maxBytes?: number): T {
       charge(smallInteger ? (item < 0 ? 2 : 1) : JSON.stringify(item).length);
       return item === 0 ? 0 : item;
     }
-    if (typeof item !== "object" || ancestors.has(item))
-      throw new TypeError("Expected strict JSON data");
+    if (typeof item !== "object") throw new TypeError("Expected strict JSON data");
+    const known = snapshots.get(item);
+    if (known !== undefined) {
+      charge(known);
+      return freeze ? (item as JsonValue) : thaw(item);
+    }
+    if (ancestors.has(item)) throw new TypeError("Expected strict JSON data");
     const array = Array.isArray(item);
     const prototype: unknown = Object.getPrototypeOf(item);
     if (!array && prototype !== Object.prototype && prototype !== null)
       throw new TypeError("Expected a plain JSON object");
     ancestors.add(item);
     const keys = Reflect.ownKeys(item);
+    const start = bytes;
     charge(2);
     let result: JsonValue;
     if (array) {
@@ -137,9 +178,13 @@ export function cloneJson<T>(value: T, maxBytes?: number): T {
       result = copied;
     }
     ancestors.delete(item);
+    if (!freeze) return result;
+    // Only copies built here are registered, so every snapshot is protocol-owned data.
+    Object.freeze(result);
+    snapshots.set(result as object, bytes - start);
     return result;
   };
-  return visit(value) as T;
+  return visit(value);
 }
 
 export function toJsonValue(value: unknown, maxBytes?: number): JsonValue {

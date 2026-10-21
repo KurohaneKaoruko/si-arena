@@ -1,10 +1,11 @@
 import type { DeepReadonly, JsonObject } from "@si-arena/protocol";
 import { paperCatalogEntry } from "./manifest";
-import { paperRules, parsePaperState } from "./rules";
+import { paperRules } from "./rules";
+import { viewPaperState } from "./rules/state";
 import { readRecord } from "./rules/validation";
 import { parsePaperObservation } from "./rules/observation";
 import { PAPER_CONFIG } from "./constants";
-import type { PaperObservation } from "./sdk";
+import type { PaperObservation, PaperState } from "./sdk";
 export { PAPER_SDK_SOURCE } from "./sdk/source";
 
 /** Registered, trusted game definition. Importing it never loads renderer or bot code. */
@@ -23,8 +24,8 @@ export const paperGame = {
       config: DeepReadonly<JsonObject>;
       players: readonly { readonly id: string; readonly slot: number }[];
     },
-  ) {
-    const state = parsePaperState(raw);
+  ): PaperState {
+    const state = viewPaperState(raw);
     if (
       context.players.length !== 2 ||
       state.players.some(
@@ -33,7 +34,8 @@ export const paperGame = {
       )
     )
       throw new TypeError("Paper state participants differ from match slots");
-    return state;
+    // The engine snapshots parser output at once, so snapshot grids are shared, not copied.
+    return state as PaperState;
   },
   parseObservation(
     raw: unknown,
@@ -54,7 +56,7 @@ export const paperGame = {
       context.players.length !== 2
     )
       throw new TypeError("Paper observation participants or tick mismatch");
-    return observation;
+    return observation as PaperObservation;
   },
 };
 
