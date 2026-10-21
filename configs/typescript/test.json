@@ -25,6 +25,7 @@
   "exclude": [
     "../../apps/web/tests/**",
     "../../packages/player/tests/**",
-    "../../games/paper/tests/**"
+    "../../games/paper/tests/**",
+    "../../games/royale/tests/**"
   ]
 }

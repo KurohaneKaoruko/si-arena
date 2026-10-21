@@ -425,6 +425,19 @@ importers:
         specifier: workspace:*
         version: link:../../packages/protocol
 
+  games/royale:
+    dependencies:
+      '@si-arena/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+    devDependencies:
+      '@si-arena/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@si-arena/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
+
   packages/cli:
     dependencies:
       '@si-arena/engine':
