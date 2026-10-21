@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { RouterLink, useRoute } from "vue-router";
+import { moveTabFocus } from "../utils/tablist";
 
 const props = defineProps<{ gameId: string; activeTab: string }>();
 const route = useRoute();
@@ -15,26 +16,10 @@ const links = computed(() => {
     { id: "development", label: "开发资料", to: { path: `${base}/development`, query: selected } },
   ];
 });
-function keydown(event: KeyboardEvent) {
-  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-  const target = event.currentTarget as HTMLElement;
-  const tabs = [...target.querySelectorAll<HTMLElement>('[role="tab"]')];
-  const index = tabs.indexOf(event.target as HTMLElement);
-  if (index < 0) return;
-  const next =
-    event.key === "Home"
-      ? 0
-      : event.key === "End"
-        ? tabs.length - 1
-        : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-  event.preventDefault();
-  tabs[next]?.focus();
-  tabs[next]?.click();
-}
 </script>
 
 <template>
-  <nav class="game-tabs" role="tablist" aria-label="游戏导航" @keydown="keydown">
+  <nav class="game-tabs" role="tablist" aria-label="工作台内容" @keydown="moveTabFocus">
     <RouterLink
       v-for="link in links"
       :key="link.id"
@@ -44,10 +29,10 @@ function keydown(event: KeyboardEvent) {
       :aria-controls="`game-panel-${link.id}`"
       :tabindex="activeTab === link.id ? 0 : -1"
       :to="link.to"
-      class="shrink-0 whitespace-nowrap border-b-2 px-2 py-3 text-[13px] transition"
+      class="flex min-h-12 shrink-0 items-center border-b-2 px-3.5 text-sm whitespace-nowrap transition"
       :class="
         activeTab === link.id
-          ? 'border-accent font-medium text-accent'
+          ? 'border-accent font-medium text-ink'
           : 'border-transparent text-soft hover:text-ink'
       "
       >{{ link.label }}</RouterLink

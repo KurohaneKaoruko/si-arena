@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { RouterLink, RouterView, useRoute } from "vue-router";
+import { RouterView, useRoute } from "vue-router";
 import { parseGame } from "../api/contracts";
 import { session } from "../auth/session";
 import { useApiResource } from "../composables/useApiResource";
@@ -9,6 +9,7 @@ import GameEntry from "../components/GameEntry.vue";
 import GameMatch from "../components/GameMatch.vue";
 import GameNavigation from "../components/GameNavigation.vue";
 import GamePreview from "../components/GamePreview.vue";
+import GameStageHeader from "../components/GameStageHeader.vue";
 import GamePage from "./GamePage.vue";
 import StateBlock from "../components/ui/StateBlock.vue";
 
@@ -68,70 +69,65 @@ function settled() {
   <div class="game-workbench" :style="{ '--game-actions-height': `${actionsHeight}px` }">
     <StateBlock v-if="status === 'loading'" status="loading" />
     <StateBlock v-else-if="status === 'error'" status="error" :message="error" @retry="reload" />
-    <template v-else-if="game">
-      <header class="game-heading">
-        <RouterLink to="/" class="text-xs text-soft hover:text-ink">游戏大厅</RouterLink>
-        <h1 class="text-lg font-semibold tracking-tight">{{ game.name }}</h1>
-      </header>
-      <div :key="game.id" class="game-columns">
-        <GameMatch
-          v-if="selectedMatch"
-          :key="`${game.id}:${selectedMatch}`"
-          :game="game"
-          :match-id="selectedMatch"
-          :details-target="detailsTarget"
-          @settled="settled"
-        />
-        <GamePreview v-else :game="game" />
-        <aside class="game-sidebar" aria-label="游戏工作台">
-          <GameNavigation :game-id="game.id" :active-tab="tab" />
-          <div class="game-content">
-            <section
-              v-show="tab === 'play'"
-              id="game-panel-play"
-              class="game-panel"
-              role="tabpanel"
-              aria-labelledby="game-tab-play"
-            >
-              <GamePage
+    <div v-else-if="game" :key="game.id" class="game-columns">
+      <GameMatch
+        v-if="selectedMatch"
+        :key="`${game.id}:${selectedMatch}`"
+        :game="game"
+        :match-id="selectedMatch"
+        :details-target="detailsTarget"
+        @settled="settled"
+      />
+      <section v-else class="game-stage" aria-label="比赛画面">
+        <GameStageHeader :game="game" :title="game.name" />
+        <GamePreview :game="game" />
+      </section>
+      <aside class="game-sidebar" aria-label="游戏工作台">
+        <GameNavigation :game-id="game.id" :active-tab="tab" />
+        <div class="game-content">
+          <section
+            v-show="tab === 'play'"
+            id="game-panel-play"
+            class="game-panel"
+            role="tabpanel"
+            aria-labelledby="game-tab-play"
+          >
+            <GamePage :game="game" :code="entry?.data?.code ?? null" :entry-ready="!!entry?.data" />
+          </section>
+          <section
+            v-show="tab === 'match'"
+            id="game-panel-match"
+            class="game-panel"
+            role="tabpanel"
+            aria-labelledby="game-tab-match"
+          >
+            <p v-if="!selectedMatch" class="text-sm text-soft">
+              尚未选择比赛。发起匹配，或在「我的比赛」里打开一场。
+            </p>
+            <div ref="detailsTarget" class="space-y-4" />
+          </section>
+          <div
+            v-if="tab !== 'play' && tab !== 'match'"
+            :id="`game-panel-${tab}`"
+            class="game-panel"
+            role="tabpanel"
+            :aria-labelledby="`game-tab-${tab}`"
+          >
+            <RouterView v-slot="{ Component }"
+              ><component
+                :is="Component"
+                ref="panel"
+                :key="`${game.id}:${route.path}`"
                 :game="game"
-                :code="entry?.data?.code ?? null"
-                :entry-ready="!!entry?.data"
-              />
-            </section>
-            <section
-              v-show="tab === 'match'"
-              id="game-panel-match"
-              class="game-panel"
-              role="tabpanel"
-              aria-labelledby="game-tab-match"
-            >
-              <p v-if="!selectedMatch" class="text-sm text-soft">尚未选择比赛</p>
-              <div ref="detailsTarget" class="space-y-4" />
-            </section>
-            <div
-              v-if="tab !== 'play' && tab !== 'match'"
-              :id="`game-panel-${tab}`"
-              class="game-panel"
-              role="tabpanel"
-              :aria-labelledby="`game-tab-${tab}`"
-            >
-              <RouterView v-slot="{ Component }"
-                ><component
-                  :is="Component"
-                  ref="panel"
-                  :key="`${game.id}:${route.path}`"
-                  :game="game"
-              /></RouterView>
-            </div>
+            /></RouterView>
           </div>
-          <div id="participate" ref="actions" class="game-actions">
-            <AccountGate
-              ><GameEntry ref="entry" :key="`${game.id}:${session.user?.id}`" :game="game" compact
-            /></AccountGate>
-          </div>
-        </aside>
-      </div>
-    </template>
+        </div>
+        <div id="participate" ref="actions" class="game-actions">
+          <AccountGate
+            ><GameEntry ref="entry" :key="`${game.id}:${session.user?.id}`" :game="game" compact
+          /></AccountGate>
+        </div>
+      </aside>
+    </div>
   </div>
 </template>

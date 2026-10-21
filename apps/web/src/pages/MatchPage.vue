@@ -23,5 +23,5 @@ watch(data, (match) => {
 <template>
   <StateBlock v-if="status === 'error'" status="error" :message="error" @retry="reload" />
   <StateBlock v-else status="loading" />
-  <AppButton v-if="status === 'error'" class="mt-4" to="/">游戏大厅</AppButton>
+  <AppButton v-if="status === 'error'" class="mt-4" to="/">返回大厅</AppButton>
 </template>

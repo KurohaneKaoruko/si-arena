@@ -75,7 +75,7 @@ defineExpose({ redraw });
     <p
       v-if="error"
       role="alert"
-      class="absolute inset-x-3 bottom-3 rounded-control bg-surface p-3 text-sm text-danger"
+      class="absolute inset-x-3 bottom-3 rounded-control border border-danger-line bg-danger-soft p-3 text-sm text-danger-ink"
     >
       {{ error }}
     </p>

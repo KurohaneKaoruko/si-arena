@@ -12,6 +12,8 @@
     "typecheck:test": "vue-tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
+    "@fontsource/chakra-petch": "catalog:",
+    "@fontsource/jetbrains-mono": "catalog:",
     "@si-arena/game-paper": "workspace:*",
     "@si-arena/player": "workspace:*",
     "@si-arena/protocol": "workspace:*",
