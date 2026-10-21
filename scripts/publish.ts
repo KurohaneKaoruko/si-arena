@@ -22,6 +22,7 @@ const PUBLIC_PACKAGES = [
   { name: "@si-arena/engine", directory: "packages/engine" },
   { name: "@si-arena/player", directory: "packages/player" },
   { name: "@si-arena/game-paper", directory: "games/paper" },
+  { name: "@si-arena/game-royale", directory: "games/royale" },
   { name: "@si-arena/cli", directory: "packages/cli" },
 ] as const;
 

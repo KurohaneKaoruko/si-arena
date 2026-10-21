@@ -13,6 +13,7 @@ versioning:
         "@si-arena/engine",
         "@si-arena/player",
         "@si-arena/game-paper",
+        "@si-arena/game-royale",
         "@si-arena/cli",
       ]
   ignore:

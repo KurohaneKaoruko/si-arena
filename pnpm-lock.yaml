@@ -283,6 +283,9 @@ importers:
       '@si-arena/game-paper':
         specifier: workspace:*
         version: link:games/paper
+      '@si-arena/game-royale':
+        specifier: workspace:*
+        version: link:games/royale
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:packages/protocol
@@ -436,6 +439,19 @@ importers:
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+
+  games/royale:
+    dependencies:
+      '@si-arena/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+    devDependencies:
+      '@si-arena/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@si-arena/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
 
   packages/cli:
     dependencies:

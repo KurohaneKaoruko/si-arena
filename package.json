@@ -33,6 +33,7 @@
     "@si-arena/cli": "workspace:*",
     "@si-arena/engine": "workspace:*",
     "@si-arena/game-paper": "workspace:*",
+    "@si-arena/game-royale": "workspace:*",
     "@si-arena/protocol": "workspace:*",
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",

@@ -33,11 +33,11 @@ pnpm arena replay ./replays/实际文件名.json.gz --verify --logs
 ```sh
 pnpm build:packages
 pnpm arena --help
-pnpm arena run --bot ./games/paper/bots/official.js --seed 42
-pnpm arena run --bot ./my-bot.js --opponent ./another-bot.js --matches 20 --seed 42
+pnpm arena run --game paper --bot ./games/paper/bots/official.js --seed 42
+pnpm arena run --game paper --bot ./my-bot.js --opponent ./another-bot.js --matches 20 --seed 42
 ```
 
-根脚本加载 [可信注册配置](../../configs/arena.local.mjs)，已注册圈地。`--bot` 指定玩家文件；省略 `--opponent` 时补入官方 bot。多人游戏允许重复传入 `--opponent`，指定对手后不再自动补位，人数必须在游戏范围内。
+根脚本加载 [可信注册配置](../../configs/arena.local.mjs)，已注册圈地与圈地大逃杀，用 `--game` 选择。`--bot` 指定玩家文件；省略 `--opponent` 时补入官方 bot。多人游戏允许重复传入 `--opponent`，指定对手后不再自动补位，人数必须在游戏范围内。
 
 源码作为 UTF-8 文本读取，先在隔离进程中检查大小和语法，再进入比赛，不作为 Node 模块导入。圈地的玩家入口示例：
 
