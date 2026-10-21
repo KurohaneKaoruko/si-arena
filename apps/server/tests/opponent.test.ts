@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { clampMatchPage, clampMatchPageLimit } from "@si-arena/protocol";
-import { OPPONENT_RATING_WINDOW, selectOpponent } from "../src/matches/opponent";
+import { OPPONENT_RATING_WINDOWS, selectOpponent } from "../src/matches/opponent";
 import { parsePagination } from "../src/http/pagination";
 
 test("picks the candidate with the smallest absolute rating difference", () => {
@@ -11,38 +11,50 @@ test("picks the candidate with the smallest absolute rating difference", () => {
       { userId: "near", rating: 1120 },
       { userId: "far-down", rating: 850 },
     ],
-    null,
+    [],
   );
   expect(pick).toBe("near");
 });
 
-test("honors the rating window and returns null without ordinary candidates", () => {
-  expect(selectOpponent(1000, [], null)).toBeNull();
+test("widens the rating window step by step instead of giving up", () => {
+  expect(OPPONENT_RATING_WINDOWS[0]).toBe(250);
+  expect(selectOpponent(1000, [], [])).toBeNull();
+  expect(selectOpponent(1000, [{ userId: "edge", rating: 1250 }], [])).toBe("edge");
+  expect(selectOpponent(1000, [{ userId: "wider", rating: 1400 }], [])).toBe("wider");
+  expect(selectOpponent(1000, [{ userId: "far", rating: 3000 }], [])).toBe("far");
+  // A narrower window wins even over a recent-free but far candidate set.
   expect(
     selectOpponent(
       1000,
-      [{ userId: "edge-plus", rating: 1000 + OPPONENT_RATING_WINDOW + 1 }],
-      null,
+      [
+        { userId: "a", rating: 1600 },
+        { userId: "b", rating: 1200 },
+      ],
+      [],
     ),
-  ).toBeNull();
+  ).toBe("b");
 });
 
-test("the window boundary itself still qualifies", () => {
-  expect(selectOpponent(1000, [{ userId: "edge", rating: 1250 }], null)).toBe("edge");
-  expect(selectOpponent(1000, [{ userId: "edge", rating: 750 }], null)).toBe("edge");
-});
-
-test("skips the most recent opponent only when alternatives remain", () => {
+test("skips every recent opponent while someone else qualifies, at any gap", () => {
   const pick = selectOpponent(
     1000,
     [
-      { userId: "recent", rating: 1005 },
-      { userId: "other", rating: 1010 },
+      { userId: "recent-1", rating: 1005 },
+      { userId: "recent-2", rating: 1001 },
+      { userId: "fresh-far", rating: 1900 },
     ],
-    "recent",
+    ["recent-1", "recent-2"],
   );
-  expect(pick).toBe("other");
-  expect(selectOpponent(1000, [{ userId: "recent", rating: 1005 }], "recent")).toBe("recent");
+  expect(pick).toBe("fresh-far");
+});
+
+test("when everyone is recent, only the very last opponent is skipped", () => {
+  const candidates = [
+    { userId: "last", rating: 1000 },
+    { userId: "earlier", rating: 1200 },
+  ];
+  expect(selectOpponent(1000, candidates, ["last", "earlier"])).toBe("earlier");
+  expect(selectOpponent(1000, [{ userId: "last", rating: 1000 }], ["last"])).toBe("last");
 });
 
 test("breaks rating ties randomly but only among the closest candidates", () => {
@@ -56,7 +68,7 @@ test("breaks rating ties randomly but only among the closest candidates", () => 
           { userId: "tied-down", rating: 990 },
           { userId: "far", rating: 1150 },
         ],
-        null,
+        [],
       ) ?? "",
     );
   }

@@ -25,6 +25,7 @@ export const matchParticipants = pgTable(
     slot: integer("slot").notNull(),
     nameSnapshot: text("name_snapshot").notNull(),
     officialSnapshot: boolean("official_snapshot").notNull(),
+    bossSnapshot: boolean("boss_snapshot").notNull().default(false),
     rank: integer("rank"),
     ratingBefore: numeric("rating_before", { precision: 12, scale: 6 }),
     ratingAfter: numeric("rating_after", { precision: 12, scale: 6 }),

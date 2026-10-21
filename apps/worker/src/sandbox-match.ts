@@ -1,5 +1,5 @@
 import type { JsonObject, JsonValue } from "@si-arena/protocol";
-import type { GameResult, ResourceLimits } from "@si-arena/protocol";
+import type { ArenaSettings, GameResult, ResourceLimits } from "@si-arena/protocol";
 import type { GameDefinition, MatchSummary, ReplayPlayer } from "@si-arena/engine";
 import { runMatch } from "@si-arena/engine";
 import { ReplayFileSink } from "@si-arena/engine/node";
@@ -30,6 +30,7 @@ export interface SandboxMatchOutcome {
 export interface SandboxGameRegistration {
   gameId: string;
   release: string;
+  arena?: ArenaSettings;
   run(request: SandboxMatchRequest): Promise<SandboxMatchOutcome>;
 }
 
@@ -50,6 +51,7 @@ export function defineSandboxGame<
   return {
     gameId: game.manifest.id,
     release: game.manifest.release,
+    ...(game.manifest.arena ? { arena: game.manifest.arena } : {}),
     async run(request) {
       const logBudget = new MatchLogBudget(request.limits.logs.matchBytes);
       const sink = new ReplayFileSink<State, Action>(request.replayPath, MAX_REPLAY_BYTES);

@@ -21,5 +21,10 @@ export function readServerConfig(env: NodeJS.ProcessEnv = process.env) {
       fileURLToPath(new URL("../../../", import.meta.url)),
       env.DEVKITS_DIR ?? "data/releases",
     ),
+    /** Private boss bots, one `<gameId>.js` per game; never served or packaged. */
+    bossesDir: resolve(
+      fileURLToPath(new URL("../../../", import.meta.url)),
+      env.BOSSES_DIR ?? "data/bosses",
+    ),
   };
 }

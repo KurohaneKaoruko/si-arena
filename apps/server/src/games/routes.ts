@@ -1,13 +1,16 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
+  type BossRecord,
   type CannotMatchReason,
   type GameCatalogEntry,
   type GameMeResponse,
 } from "@si-arena/protocol";
 import { requireSession } from "../auth/session";
-import { gameEntries, matches, users } from "@si-arena/db";
+import { gameEntries, matchParticipants, matches, users } from "@si-arena/db";
+import { runnableEntry } from "../matches/create";
 import { sendError } from "../http/errors";
 import { parsePagination } from "../http/pagination";
 import { gameCatalog } from "../games";
@@ -20,6 +23,44 @@ const MAX_CODE_BYTES = Math.max(
 
 function findGame(gameId: string): GameCatalogEntry | undefined {
   return gameCatalog.get(gameId);
+}
+
+const selfSeat = alias(matchParticipants, "self_seat");
+const bossSeat = alias(matchParticipants, "boss_seat");
+const tieBreakEntry = alias(gameEntries, "tie_break_entry");
+
+async function bossRecord(
+  db: NodePgDatabase,
+  game: GameCatalogEntry,
+  userId: string,
+): Promise<BossRecord> {
+  const [boss] = await db
+    .select({ id: users.id })
+    .from(gameEntries)
+    .innerJoin(users, eq(gameEntries.userId, users.id))
+    .where(and(runnableEntry(game), eq(users.boss, true)))
+    .limit(1);
+  const [tally] = await db
+    .select({
+      attempts: sql<string>`count(*)`,
+      wins: sql<string>`count(*) filter (where ${selfSeat.rank} = 1 and ${bossSeat.rank} > 1)`,
+    })
+    .from(matches)
+    .innerJoin(selfSeat, eq(selfSeat.matchId, matches.id))
+    .innerJoin(bossSeat, and(eq(bossSeat.matchId, matches.id), eq(bossSeat.bossSnapshot, true)))
+    .where(
+      and(
+        eq(matches.gameId, game.id),
+        eq(matches.kind, "boss"),
+        eq(matches.status, "completed"),
+        eq(selfSeat.userId, userId),
+      ),
+    );
+  return {
+    available: boss !== undefined,
+    attempts: Number(tally?.attempts ?? 0),
+    wins: Number(tally?.wins ?? 0),
+  };
 }
 
 function cannotMatchReason(
@@ -74,6 +115,7 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
         )
         .limit(1);
       const response: GameMeResponse = {
+        boss: await bossRecord(db, game, session.userId),
         entry: {
           rating: entry === undefined ? 1000 : Number(entry.rating),
           matchesPlayed: entry?.matchesPlayed ?? 0,
@@ -175,13 +217,29 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
         const game = findGame(request.params.gameId);
         if (!game) return sendError(reply, 404, "GAME_NOT_FOUND", "游戏不存在");
         const { page, limit, offset } = parsePagination(request.url);
+        // Official and boss accounts play but never appear on the leaderboard.
+        const ranked = and(
+          eq(gameEntries.gameId, game.id),
+          eq(users.official, false),
+          eq(users.boss, false),
+        );
+        const arena = game.arena;
+        const order =
+          arena === undefined
+            ? [desc(gameEntries.rating), asc(gameEntries.userId)]
+            : [
+                desc(gameEntries.points),
+                sql`coalesce(${tieBreakEntry.rating}, 1000) desc`,
+                asc(gameEntries.userId),
+              ];
         const totals = await db
           .select({ count: sql<string>`count(*)` })
           .from(gameEntries)
-          .where(eq(gameEntries.gameId, game.id));
+          .innerJoin(users, eq(gameEntries.userId, users.id))
+          .where(ranked);
         const rows = await db
           .select({
-            rank: sql<string>`rank() over (order by ${gameEntries.rating} desc)`,
+            rank: sql<string>`rank() over (order by ${arena === undefined ? gameEntries.rating : gameEntries.points} desc)`,
             userId: gameEntries.userId,
             username: users.normalizedUsername,
             official: users.official,
@@ -190,11 +248,20 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
             wins: gameEntries.wins,
             draws: gameEntries.draws,
             losses: gameEntries.losses,
+            points: gameEntries.points,
+            placementTotal: gameEntries.placementTotal,
           })
           .from(gameEntries)
           .innerJoin(users, eq(gameEntries.userId, users.id))
-          .where(eq(gameEntries.gameId, game.id))
-          .orderBy(desc(gameEntries.rating), asc(gameEntries.userId))
+          .leftJoin(
+            tieBreakEntry,
+            and(
+              eq(tieBreakEntry.userId, gameEntries.userId),
+              eq(tieBreakEntry.gameId, arena?.tieBreakGameId ?? ""),
+            ),
+          )
+          .where(ranked)
+          .orderBy(...order)
           .limit(limit)
           .offset(offset);
         return {
@@ -211,6 +278,8 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
             wins: row.wins,
             draws: row.draws,
             losses: row.losses,
+            points: row.points,
+            placementTotal: row.placementTotal,
           })),
         };
       },

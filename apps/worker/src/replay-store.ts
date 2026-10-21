@@ -91,6 +91,11 @@ export class ReplayStore {
     }
   }
 
+  /** Removes the public replay of a match whose row was deleted. */
+  async remove(matchId: string): Promise<void> {
+    await rm(this.finalPath(matchId), { force: true });
+  }
+
   /**
    * Deletes stale candidates and orphaned finals. Creating matches or touching
    * referenced files is out of scope by design.

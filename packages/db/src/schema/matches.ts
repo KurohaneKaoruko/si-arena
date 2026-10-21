@@ -15,6 +15,7 @@ import type {
   GameResult,
   JsonObject,
   MatchFailureReason,
+  MatchKind,
   ResourceLimits,
 } from "@si-arena/protocol";
 import { users } from "./users";
@@ -41,6 +42,7 @@ export const matches = pgTable(
       .notNull()
       .references(() => users.id),
     idempotencyKey: text("idempotency_key").notNull(),
+    kind: text("kind").$type<MatchKind>().notNull().default("ranked"),
     status: text("status").notNull(),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
     executionId: uuid("execution_id"),
@@ -55,6 +57,11 @@ export const matches = pgTable(
     uniqueIndex("matches_initiator_active_key")
       .on(table.initiatorId, table.gameId)
       .where(sql`status IN ('pending', 'running')`),
+    // One unfinished run per arena game, whoever started it.
+    uniqueIndex("matches_arena_active_key")
+      .on(table.gameId)
+      .where(sql`kind = 'arena' AND status IN ('pending', 'running')`),
+    index("matches_game_kind_created_idx").on(table.gameId, table.kind, table.createdAt),
     index("matches_status_created_idx").on(table.status, table.createdAt),
     index("matches_lease_idx")
       .on(table.leaseExpiresAt)
@@ -65,5 +72,6 @@ export const matches = pgTable(
       "matches_status_values",
       sql`${table.status} IN ('pending', 'running', 'completed', 'failed')`,
     ),
+    check("matches_kind_values", sql`${table.kind} IN ('ranked', 'practice', 'boss', 'arena')`),
   ],
 );

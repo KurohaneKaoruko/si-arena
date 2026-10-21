@@ -5,6 +5,7 @@ export const PASSWORD_MAX_CODE_POINTS = 24;
 
 /** Reserved for the deployment-initialized official account; regular users cannot register it. */
 export const RESERVED_USERNAME_OFFICIAL = "official";
+export const RESERVED_USERNAME_BOSS = "boss";
 
 export interface AuthUser {
   id: string;
@@ -53,7 +54,8 @@ export function validateUsername(username: string): string | null {
   if (length < USERNAME_MIN_CODE_POINTS || length > USERNAME_MAX_CODE_POINTS) {
     return `用户名长度需在 ${USERNAME_MIN_CODE_POINTS}-${USERNAME_MAX_CODE_POINTS} 个字符之间`;
   }
-  if (normalized === RESERVED_USERNAME_OFFICIAL) return "该用户名为官方保留名";
+  if (normalized === RESERVED_USERNAME_OFFICIAL || normalized === RESERVED_USERNAME_BOSS)
+    return "该用户名为官方保留名";
   return null;
 }
 

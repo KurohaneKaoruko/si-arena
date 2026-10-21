@@ -141,6 +141,111 @@ async function stagedSettlement(): Promise<SettleInput> {
   };
 }
 
+/** A claimed match of any kind and size, ready to settle with the given ranks. */
+async function stagedRun(
+  kind: "practice" | "arena",
+  seats: Array<{ official?: boolean }>,
+  ranks: number[],
+): Promise<SettleInput> {
+  const people = [];
+  for (const seat of seats) {
+    const user = await createUser();
+    if (seat.official)
+      await database.db.update(users).set({ official: true }).where(eq(users.id, user.id));
+    await createEntry(user.id);
+    people.push({ ...user, official: seat.official ?? false });
+  }
+  const [match] = await database.db
+    .insert(matches)
+    .values({
+      gameId: paperCatalogEntry.id,
+      release: paperCatalogEntry.release,
+      config: paperCatalogEntry.config,
+      resolvedLimits: paperCatalogEntry.resolvedLimits,
+      botProtocolVersion: paperCatalogEntry.botProtocolVersion,
+      seed: 7,
+      initiatorId: people[0]!.id,
+      idempotencyKey: `worker-test-${matchCounter++}`,
+      kind,
+      status: "pending",
+    })
+    .returning();
+  await database.db.insert(matchParticipants).values(
+    people.map((person, slot) => ({
+      matchId: match!.id,
+      userId: person.id,
+      slot,
+      nameSnapshot: person.username,
+      officialSnapshot: person.official,
+    })),
+  );
+  const claim = await claimNextMatch(database.db, claimableReleases());
+  expect(claim?.id).toBe(match!.id);
+  const candidatePath = store.candidatePath(match!.id, claim!.executionId);
+  await writeFile(candidatePath, `${kind} settlement fixture`);
+  return {
+    matchId: match!.id,
+    executionId: claim!.executionId,
+    candidatePath,
+    replayFile: await store.inspect(candidatePath, match!.id),
+    result: {
+      reason: "fixture",
+      completedTicks: 1,
+      players: people.map((person, index) => ({ id: person.id, rank: ranks[index]!, score: 0 })),
+    },
+  };
+}
+
+async function entryOf(userId: string) {
+  const [entry] = await database.db
+    .select()
+    .from(gameEntries)
+    .where(eq(gameEntries.userId, userId));
+  return entry!;
+}
+
+dbTest("practice settlement records ranks without touching anyone's standing", async () => {
+  const input = await stagedRun("practice", [{}, { official: true }], [1, 2]);
+  expect((await settleMatch(database.db, store, input)).outcome).toBe("completed");
+  const seats = await database.db
+    .select()
+    .from(matchParticipants)
+    .where(eq(matchParticipants.matchId, input.matchId))
+    .orderBy(matchParticipants.slot);
+  expect(seats.map((seat) => [seat.rank, seat.ratingAfter])).toEqual([
+    [1, null],
+    [2, null],
+  ]);
+  for (const player of input.result.players)
+    expect(await entryOf(player.id)).toMatchObject({ rating: "1000.000000", matchesPlayed: 0 });
+});
+
+dbTest("arena settlement scores points by rank and prunes old runs", async () => {
+  const arena = { seats: 5, keepMatches: 1, points: [10, 6, 3, 1, 0] };
+  const first = await stagedRun("arena", [{}, {}, { official: true }], [2, 1, 3]);
+  const settled = await settleMatch(database.db, store, { ...first, arena });
+  expect(settled).toEqual({ outcome: "completed", prunedMatchIds: [] });
+  const [a, b, official] = first.result.players;
+  expect(await entryOf(a!.id)).toMatchObject({
+    points: 6,
+    placementTotal: 2,
+    matchesPlayed: 1,
+    wins: 0,
+    rating: "1000.000000",
+  });
+  expect(await entryOf(b!.id)).toMatchObject({ points: 10, placementTotal: 1, wins: 1 });
+  expect(await entryOf(official!.id)).toMatchObject({ points: 0, matchesPlayed: 0 });
+
+  const second = await stagedRun("arena", [{}, {}], [1, 1]);
+  const next = await settleMatch(database.db, store, { ...second, arena });
+  expect(next.prunedMatchIds).toEqual([first.matchId]);
+  expect(
+    await database.db.select().from(matches).where(eq(matches.id, first.matchId)),
+  ).toHaveLength(0);
+  for (const player of second.result.players)
+    expect(await entryOf(player.id)).toMatchObject({ points: 10, wins: 1 });
+});
+
 beforeAll(async () => {
   admin = new Client({ connectionString: databaseUrl });
   await admin.connect();
@@ -252,7 +357,7 @@ dbTest(
       replayFile: row.replayFile!,
       candidatePath: store.candidatePath(pending.id, claim!.executionId),
     });
-    expect(again).toBe("refused");
+    expect(again.outcome).toBe("refused");
     const unchanged = await matchRow(pending.id);
     expect(unchanged.status).toBe("completed");
     expect(unchanged.updatedAt).toEqual(row.updatedAt);
@@ -317,7 +422,7 @@ dbTest("settlement is refused without matching execution rights", async () => {
     },
     candidatePath: store.candidatePath(pending.id, claim!.executionId),
   });
-  expect(outcome).toBe("refused");
+  expect(outcome.outcome).toBe("refused");
   const row = await matchRow(pending.id);
   expect(row.status).toBe("running");
   expect(row.replayFile).toBeNull();
@@ -375,8 +480,8 @@ dbTest(
       await database.db.execute(sql`DROP FUNCTION reject_completion()`);
     }
 
-    expect(await settleMatch(database.db, store, input)).toBe("completed");
-    expect(await settleMatch(database.db, store, input)).toBe("refused");
+    expect((await settleMatch(database.db, store, input)).outcome).toBe("completed");
+    expect((await settleMatch(database.db, store, input)).outcome).toBe("refused");
     const completed = await matchRow(input.matchId);
     expect(completed.status).toBe("completed");
     expect(completed.replayFile).toEqual(input.replayFile);
@@ -408,7 +513,7 @@ dbTest("expired leases cannot be renewed or settled before the expiry sweep", as
   const before = await matchRow(input.matchId);
 
   expect(await renewLease(database.db, input.matchId, input.executionId)).toBe(false);
-  expect(await settleMatch(database.db, store, input)).toBe("refused");
+  expect((await settleMatch(database.db, store, input)).outcome).toBe("refused");
   const after = await matchRow(input.matchId);
   expect(after.leaseExpiresAt).toEqual(expiredAt);
   expect(after.updatedAt).toEqual(before.updatedAt);
