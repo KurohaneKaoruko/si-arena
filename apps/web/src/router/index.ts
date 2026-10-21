@@ -7,13 +7,13 @@ export const router = createRouter({
       path: "/login",
       component: () => import("../pages/AuthPage.vue"),
       props: { mode: "login" },
-      meta: { title: "登录" },
+      meta: { title: "登录", bare: true },
     },
     {
       path: "/register",
       component: () => import("../pages/AuthPage.vue"),
       props: { mode: "register" },
-      meta: { title: "注册" },
+      meta: { title: "注册", bare: true },
     },
     {
       path: "/account",
@@ -29,13 +29,23 @@ export const router = createRouter({
       path: "/replays",
       name: "replay",
       component: () => import("../pages/ReplayPage.vue"),
-      meta: { title: "回放播放器" },
+      meta: { title: "本地回放" },
     },
     {
       path: "/",
-      name: "games",
-      component: () => import("../pages/GamesPage.vue"),
-      meta: { title: "游戏大厅" },
+      name: "lobby",
+      component: () => import("../pages/LobbyPage.vue"),
+      meta: { title: "大厅", backdrop: true },
+    },
+    {
+      path: "/royale",
+      component: () => import("../pages/RoyalePage.vue"),
+      meta: { title: "大逃杀" },
+    },
+    {
+      path: "/leaderboard",
+      component: () => import("../pages/RankingsPage.vue"),
+      meta: { title: "排行榜" },
     },
     {
       path: "/games/:gameId",
@@ -98,5 +108,5 @@ router.beforeEach((to) => {
 });
 
 router.afterEach((to) => {
-  document.title = `${String(to.meta.title ?? "游戏大厅")} · SI Arena`;
+  document.title = `${String(to.meta.title ?? "大厅")} · SI Arena`;
 });
