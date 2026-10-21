@@ -1,9 +1,35 @@
-import type { MatchParticipantSummary, MatchSummary } from "@si-arena/protocol";
+import type { MatchKind, MatchParticipantSummary, MatchSummary } from "@si-arena/protocol";
 
 export function ratingDelta(player: MatchParticipantSummary | undefined): string {
   if (player?.ratingBefore === undefined || player.ratingAfter === undefined) return "—";
   const value = Math.round((player.ratingAfter - player.ratingBefore) * 100) / 100;
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
+}
+
+const kindLabels: Record<MatchKind, string | undefined> = {
+  ranked: undefined,
+  practice: "练习",
+  boss: "Boss",
+  arena: "竞技场",
+};
+
+/** Badge text for matches that are not ordinary ranked games. */
+export function kindLabel(kind: MatchKind): string | undefined {
+  return kindLabels[kind];
+}
+
+/** Practice and boss games never move ratings; system failures never score. */
+export function isUnscored(match: MatchSummary): boolean {
+  return match.status === "failed" || match.kind === "practice" || match.kind === "boss";
+}
+
+/** How the match changed the viewer's standing: rating delta, arena place or 不计分. */
+export function standingChange(match: MatchSummary, userId?: string): string {
+  if (isUnscored(match)) return "不计分";
+  const self = match.participants.find((p) => p.userId === userId);
+  if (match.kind === "arena")
+    return match.status === "completed" && self?.rank !== undefined ? `第 ${self.rank} 名` : "—";
+  return ratingDelta(self);
 }
 
 export function matchOutcome(match: MatchSummary, userId?: string) {
