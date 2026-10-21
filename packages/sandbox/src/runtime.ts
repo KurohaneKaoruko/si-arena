@@ -102,6 +102,19 @@ export interface RuntimeOutput {
 
 let validatedSource: string | null = null;
 
+/**
+ * Run the trusted AST check while the executor binds, so tick 0 does not spend
+ * its wall-clock budget on it. A rejected source is reported by the first tick.
+ */
+export function prevalidateSource(source: string): void {
+  try {
+    checkSource(source);
+    validatedSource = source;
+  } catch (error) {
+    if (!(error instanceof SyntaxError || error instanceof RangeError)) throw error;
+  }
+}
+
 /** One player's volatile VM. Only the parent owns committed JSON Memory. */
 export class GuestSession {
   private vm: MeteredRuntime | undefined;

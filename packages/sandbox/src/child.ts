@@ -4,7 +4,7 @@ import type { ExecuteTickInput, ExecutionIdentity, ResourceLimits } from "@si-ar
 import { FramedChannel } from "./framing";
 import type { ExecutorBinding } from "./process";
 import { isRecord } from "./json";
-import { compileSource, initializeRuntime, GuestSession } from "./runtime";
+import { compileSource, GuestSession, initializeRuntime, prevalidateSource } from "./runtime";
 
 // Let hot QuickJS WASM functions reach the optimizing tier during the startup
 // warm-up instead of inside a billed tick. An unknown flag is ignored, so a V8
@@ -94,6 +94,7 @@ async function dispatch(message: Record<string, unknown>): Promise<void> {
       limits: message.limits as unknown as ResourceLimits,
       captureLogs: message.captureLogs,
     };
+    prevalidateSource(binding.source);
     channel.send({ kind: "bound", executionId });
     return;
   }
