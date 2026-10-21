@@ -596,7 +596,9 @@ dbTest("leaderboard ranks entries with ties and pagination", async () => {
   // The official bot plays practice games only and never appears on the board.
   expect(body.players.some((player: { official: boolean }) => player.official)).toBe(false);
   const mine = body.players.find((player: { userId: string }) => player.userId === user.id);
-  expect(mine).toMatchObject({ rating: 1000, matchesPlayed: 0 });
+  expect(mine).toMatchObject({ rating: 1000, matchesPlayed: 0, points: 0, placementTotal: 0 });
+  const me = await call("GET", "/api/games/paper/me", { token: user.token });
+  expect(me.json().entry).toMatchObject({ rank: mine.rank, points: 0, placementTotal: 0 });
   // Equal internal ratings must share one rank; user id only breaks display order.
   const sameRated = body.players.filter((player: { rating: number }) => player.rating === 1000);
   expect(sameRated.length).toBeGreaterThan(1);

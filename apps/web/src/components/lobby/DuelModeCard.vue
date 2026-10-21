@@ -42,24 +42,22 @@ const bossBusy = computed(() => match.pending.value && match.body.value?.boss ==
           <dd class="figure mt-1.5 text-[26px]">{{ data ? data.entry.rating.toFixed(0) : "—" }}</dd>
         </div>
         <div class="tile p-3.5">
+          <dt class="text-xs text-faint">名次</dt>
+          <dd class="figure mt-1.5 text-[26px]">
+            {{ data?.entry.rank ? `#${data.entry.rank}` : "—" }}
+          </dd>
+        </div>
+        <div class="tile p-3.5">
           <dt class="text-xs text-faint">胜 / 平 / 负</dt>
           <dd class="figure mt-1.5 text-[26px]">
             {{ data ? `${data.entry.wins}/${data.entry.draws}/${data.entry.losses}` : "—" }}
           </dd>
         </div>
-        <div class="tile p-3.5">
-          <dt class="text-xs text-faint">{{ data?.boss.available ? "Boss 胜 / 挑战" : "已赛" }}</dt>
-          <dd class="figure mt-1.5 text-[26px]">
-            {{
-              !data
-                ? "—"
-                : data.boss.available
-                  ? `${data.boss.wins}/${data.boss.attempts}`
-                  : data.entry.matchesPlayed
-            }}
-          </dd>
-        </div>
       </dl>
+      <p v-if="data?.boss.available" class="text-sm text-soft">
+        Boss 战绩：胜 <b class="figure text-ink">{{ data.boss.wins }}</b> / 挑战
+        <b class="figure text-ink">{{ data.boss.attempts }}</b>
+      </p>
     </template>
     <div class="mt-auto flex flex-wrap gap-2.5">
       <AppButton

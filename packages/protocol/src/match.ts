@@ -70,11 +70,15 @@ export interface GameCodeInfo {
 }
 
 export interface GameEntryStats {
+  /** Leaderboard rank; null when the user has no entry or is a system account. */
+  rank: number | null;
   rating: number;
   matchesPlayed: number;
   wins: number;
   draws: number;
   losses: number;
+  points: number;
+  placementTotal: number;
 }
 
 export interface BossRecord {
@@ -148,7 +152,7 @@ export interface PaginatedMatchesResponse {
   total: number;
   page: number;
   limit: number;
-  matches: MatchSummary[];
+  matches: MatchDetail[];
 }
 
 /** Frozen at match creation; the worker never re-resolves current releases. */

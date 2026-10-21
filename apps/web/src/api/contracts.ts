@@ -98,6 +98,10 @@ export function parseUpload(raw: unknown): Omit<GameCodeInfo, "source"> {
 export function parseGameMe(raw: unknown): GameMeResponse {
   const v = record(raw);
   stats(v.entry);
+  const entry = record(v.entry);
+  check(entry.rank === null || (Number.isSafeInteger(entry.rank) && (entry.rank as number) > 0));
+  integer(entry.points);
+  integer(entry.placementTotal);
   const boss = record(v.boss);
   boolean(boss.available);
   integer(boss.attempts);
@@ -167,7 +171,7 @@ export function parseMatch(raw: unknown): MatchDetail {
 export function parseHistory(raw: unknown): PaginatedMatchesResponse {
   const v = page(raw);
   check(Array.isArray(v.matches));
-  v.matches.forEach(summary);
+  v.matches.forEach(parseMatch);
   return raw as PaginatedMatchesResponse;
 }
 export function parseLeaderboard(raw: unknown): LeaderboardResponse {

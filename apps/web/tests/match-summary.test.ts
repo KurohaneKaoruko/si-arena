@@ -1,16 +1,20 @@
-import type { MatchSummary } from "@si-arena/protocol";
+import type { MatchDetail } from "@si-arena/protocol";
 import { mount } from "@vue/test-utils";
 import { expect, test } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 import MatchList from "../src/components/MatchList.vue";
 import { kindLabel, matchOutcome, ratingDelta, standingChange } from "../src/games/match-summary";
 
-const match: MatchSummary = {
+const match: MatchDetail = {
   id: "match",
   gameId: "paper",
   kind: "ranked",
   status: "completed",
   createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  release: "paper@0.2.0",
+  seed: 1,
+  initiatorId: "initiator",
   participants: [
     {
       userId: "initiator",

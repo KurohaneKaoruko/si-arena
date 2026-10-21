@@ -17,7 +17,16 @@ const code = {
   updatedAt: new Date().toISOString(),
 };
 const me: GameMeResponse = {
-  entry: { rating: 1000, matchesPlayed: 0, wins: 0, draws: 0, losses: 0 },
+  entry: {
+    rank: null,
+    rating: 1000,
+    matchesPlayed: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    points: 0,
+    placementTotal: 0,
+  },
   boss: { available: false, attempts: 0, wins: 0 },
   code,
   canMatch: true,

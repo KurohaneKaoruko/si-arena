@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MatchSummary } from "@si-arena/protocol";
+import type { MatchDetail } from "@si-arena/protocol";
 import { RouterLink } from "vue-router";
 import { session } from "../auth/session";
 import { kindLabel, matchOutcome, standingChange } from "../games/match-summary";
@@ -7,7 +7,7 @@ import { gameMatchLocation } from "../games/locations";
 import { shortTime } from "../utils/time";
 import AppBadge from "./ui/AppBadge.vue";
 
-defineProps<{ matches: MatchSummary[] }>();
+defineProps<{ matches: MatchDetail[] }>();
 const tags = {
   success: "bg-accent text-on-accent",
   danger: "bg-loss text-danger-pale",
@@ -15,7 +15,19 @@ const tags = {
   accent: "bg-warning text-on-accent",
   warning: "bg-line text-ink",
 } as const;
-function opponents(match: MatchSummary) {
+/** "512 : 388" for finished two-player games, own score first. */
+function scoreLine(match: MatchDetail): string | null {
+  if (match.participants.length !== 2 || !match.result) return null;
+  const me = session.user?.id;
+  const ordered = match.participants.toSorted(
+    (a, b) => Number(b.userId === me) - Number(a.userId === me),
+  );
+  const scores = ordered.map(
+    (seat) => match.result!.players.find((player) => player.id === seat.userId)?.score,
+  );
+  return scores.every((score) => score !== undefined) ? scores.join(" : ") : null;
+}
+function opponents(match: MatchDetail) {
   const others = match.participants.filter((p) => p.userId !== session.user?.id);
   return others.length ? others : match.participants;
 }
@@ -56,6 +68,9 @@ function changeClass(change: string) {
             <AppBadge v-if="kindLabel(match.kind)" tone="outline">{{
               kindLabel(match.kind)
             }}</AppBadge>
+            <span v-if="scoreLine(match)" class="font-mono text-[13px] font-normal text-soft">{{
+              scoreLine(match)
+            }}</span>
           </span>
           <time class="text-[13px] text-faint" :datetime="match.createdAt">{{
             shortTime(match.createdAt)

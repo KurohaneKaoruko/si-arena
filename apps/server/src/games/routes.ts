@@ -63,6 +63,26 @@ async function bossRecord(
   };
 }
 
+/** Same ordering key as the leaderboard: rating, or points for arena games; ties share a rank. */
+async function leaderboardRank(
+  db: NodePgDatabase,
+  game: GameCatalogEntry,
+  entry: { rating: string; points: number },
+): Promise<number> {
+  const ahead =
+    game.arena === undefined
+      ? sql`${gameEntries.rating} > ${entry.rating}`
+      : sql`${gameEntries.points} > ${entry.points}`;
+  const [row] = await db
+    .select({ count: sql<string>`count(*)` })
+    .from(gameEntries)
+    .innerJoin(users, eq(gameEntries.userId, users.id))
+    .where(
+      and(eq(gameEntries.gameId, game.id), eq(users.official, false), eq(users.boss, false), ahead),
+    );
+  return Number(row?.count ?? 0) + 1;
+}
+
 function cannotMatchReason(
   entry: { botProtocolVersion: number; sourceBytes: number } | undefined,
   game: GameCatalogEntry,
@@ -117,6 +137,10 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
       const response: GameMeResponse = {
         boss: await bossRecord(db, game, session.userId),
         entry: {
+          rank:
+            entry === undefined || session.official ? null : await leaderboardRank(db, game, entry),
+          points: entry?.points ?? 0,
+          placementTotal: entry?.placementTotal ?? 0,
           rating: entry === undefined ? 1000 : Number(entry.rating),
           matchesPlayed: entry?.matchesPlayed ?? 0,
           wins: entry?.wins ?? 0,

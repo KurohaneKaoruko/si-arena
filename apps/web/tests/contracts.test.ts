@@ -45,7 +45,16 @@ test("rejects malformed external game, entry, ranking and result responses at th
 
 test("entry responses validate active initiated matches independently from code eligibility", () => {
   const me = {
-    entry: { rating: 1000, matchesPlayed: 0, wins: 0, draws: 0, losses: 0 },
+    entry: {
+      rank: 3,
+      rating: 1000,
+      matchesPlayed: 0,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      points: 0,
+      placementTotal: 0,
+    },
     boss: { available: true, attempts: 2, wins: 1 },
     code: null,
     canMatch: false,
@@ -53,6 +62,8 @@ test("entry responses validate active initiated matches independently from code 
     activeMatch: null,
   };
   expect(parseGameMe(me).activeMatch).toBeNull();
+  expect(parseGameMe({ ...me, entry: { ...me.entry, rank: null } }).entry.rank).toBeNull();
+  expect(() => parseGameMe({ ...me, entry: { ...me.entry, rank: 0 } })).toThrow();
   expect(
     parseGameMe({ ...me, activeMatch: { id: "active", status: "running" } }).activeMatch?.id,
   ).toBe("active");
