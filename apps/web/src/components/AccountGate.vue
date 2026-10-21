@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { RouterLink, useRoute } from "vue-router";
+import { useRoute } from "vue-router";
 import { session, restoreSession } from "../auth/session";
 import AppButton from "./ui/AppButton.vue";
 import StateBlock from "./ui/StateBlock.vue";

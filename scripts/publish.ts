@@ -70,7 +70,7 @@ try {
   runPnpm(["--filter", "@si-arena/cli", "pack", "--pack-destination", temporary], {
     timeoutMs: 10 * 60_000,
   });
-  const [archive] = (await readdir(temporary)).filter((file) => file.endsWith(".tgz"));
+  const archive = (await readdir(temporary)).find((file) => file.endsWith(".tgz"));
   if (!archive) throw new Error("Packing @si-arena/cli produced no tarball");
   await extract({ file: join(temporary, archive), cwd: temporary, strict: true });
   const packedManifest = JSON.parse(

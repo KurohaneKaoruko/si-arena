@@ -233,7 +233,9 @@ try {
       DEVKIT_MAX_EXTRACTED_BYTES
     )
       throw new Error("Development package exceeds uncompressed limit");
-    const zip = zipSync(contents, { level: 6, mtime: new Date("1980-01-01T00:00:00Z") });
+    // Local midnight: fflate writes local DOS time, so a UTC instant falls
+    // before 1980 west of UTC and makes the archive depend on the time zone.
+    const zip = zipSync(contents, { level: 6, mtime: new Date(1980, 0, 1) });
     if (zip.length > DEVKIT_MAX_ARCHIVE_BYTES)
       throw new Error("Development package exceeds ZIP limit");
     const metadata: GameReleaseMetadata = parseGameReleaseMetadata({

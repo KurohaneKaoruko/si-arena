@@ -207,7 +207,7 @@ function stubbedRegistration() {
       config: {},
       resolvedLimits: resolveResourceLimits({}),
     },
-    async prepare(botPaths: readonly string[], prepareSignal?: AbortSignal) {
+    async prepare(_botPaths: readonly string[], prepareSignal?: AbortSignal) {
       if (failPrepare)
         throw new Error("bot.js: ENTRYPOINT_ERROR: Invalid or unsupported player module");
       signals.push(prepareSignal ?? new AbortController().signal);

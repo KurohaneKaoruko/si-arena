@@ -94,6 +94,7 @@ export const router = createRouter({
 router.beforeEach((to) => {
   if (to.hash === "#development" && /^\/games\/[^/]+\/?$/.test(to.path))
     return { path: `${to.path.replace(/\/$/, "")}/development`, query: to.query, replace: true };
+  return true;
 });
 
 router.afterEach((to) => {

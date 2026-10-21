@@ -26,8 +26,8 @@ export function useMatchRequest(gameId: () => string) {
   let key: string | null = null;
   let current: AbortController | undefined;
 
-  async function start() {
-    if (pending.value) return;
+  async function start(): Promise<boolean> {
+    if (pending.value) return false;
     key ??= randomUuid();
     const request = new AbortController();
     current = request;
@@ -40,12 +40,11 @@ export function useMatchRequest(gameId: () => string) {
         { method: "POST", headers: { "Idempotency-Key": key }, signal: request.signal },
       );
       key = null;
-      if (!request.signal.aborted) {
-        await router.push(gameMatchLocation(gameId(), result.id));
-        return true;
-      }
+      if (request.signal.aborted) return false;
+      await router.push(gameMatchLocation(gameId(), result.id));
+      return true;
     } catch (failure) {
-      if (request.signal.aborted) return;
+      if (request.signal.aborted) return false;
       if (
         failure instanceof ApiError &&
         failure.code === "MATCH_ALREADY_PENDING" &&
@@ -58,6 +57,7 @@ export function useMatchRequest(gameId: () => string) {
       if (failure instanceof ApiError && failure.status < 500) key = null;
       error.value = errorMessage(failure);
       toast.error(error.value);
+      return false;
     } finally {
       if (current === request) pending.value = false;
     }
