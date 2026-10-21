@@ -4,12 +4,12 @@
 
 | 实体 | 主要字段与约束 |
 | --- | --- |
-| `users` | 用户 ID、唯一规范用户名（即展示名）、密码摘要与参数、官方标记；官方标记不可由普通用户修改 |
+| `users` | 用户 ID、唯一规范用户名（即展示名）、密码摘要与参数、官方标记、Boss 标记；两个标记都不可由普通用户修改 |
 | `sessions` | 会话 token 的 SHA-256 摘要、用户 ID、创建时间与到期时间 |
 | `auth_rate_limits` | 认证限流作用域、主体摘要、窗口开始时间与计数，窗口内原子递增 |
-| `game_entries` | `(game_id, user_id)` 唯一；最新源码、源码字节数、代码协议版本、更新时间、排位分、比赛数、胜平负计数 |
-| `matches` | 比赛 ID、游戏及冻结发行、发起者、幂等标识、状态、resolvedLimits、实际配置、种子、租约、执行标识、结果、回放引用、时间戳、失败原因 |
-| `match_participants` | `(match_id, user_id)` 唯一；固定席位、创建时用户名与官方标记快照、局内成绩、结算前后排位 |
+| `game_entries` | `(game_id, user_id)` 唯一；最新源码、源码字节数、代码协议版本、更新时间、排位分、比赛数、胜平负计数；竞技场游戏另有积分与名次总和 |
+| `matches` | 比赛 ID、游戏及冻结发行、发起者、幂等标识、类型（`ranked`、`practice`、`boss`、`arena`）、状态、resolvedLimits、实际配置、种子、租约、执行标识、结果、回放引用、时间戳、失败原因 |
+| `match_participants` | `(match_id, user_id)` 唯一；固定席位、创建时用户名与官方、Boss 标记快照、局内成绩、结算前后排位 |
 
 首版游戏目录、规则说明和发行清单来自可信游戏包，不必额外建一套数据库 CMS。任务状态放在 `matches`，无需再建一张重复的任务业务表。
 
@@ -68,7 +68,7 @@ server 与 worker 共用 `REPLAYS_DIR`（默认 `data/replays`），相对路径
 
 ## 注册、登录与会话
 
-用户通过用户名和密码注册登录，不接入 GitHub、邮箱验证码或其他外部身份服务。用户名为 2–24 个 Unicode 码点（仅校验长度，不允许空字节），按小写规范化后作为唯一身份与展示名；`official` 为保留用户名，官方账号由部署初始化创建，不接受普通登录。密码为 6–24 个 Unicode 码点（仅校验长度，不允许空字节），按原输入处理，不 trim 或静默截断。
+用户通过用户名和密码注册登录，不接入 GitHub、邮箱验证码或其他外部身份服务。用户名为 2–24 个 Unicode 码点（仅校验长度，不允许空字节），按小写规范化后作为唯一身份与展示名；`official` 与 `boss` 为保留用户名，官方账号和 Boss 账号由部署初始化创建，不接受普通登录。密码为 6–24 个 Unicode 码点（仅校验长度，不允许空字节），按原输入处理，不 trim 或静默截断。
 
 采用 Node.js 异步 `crypto.scrypt`，参数为 `N=131072`、`r=8`、`p=1`、`maxmem=256MiB`，每个密码使用独立 16 字节随机盐，派生 64 字节摘要；参数与摘要以 `scrypt$N=…$r=…$p=…$<salt>$<digest>` 自描述字符串一起保存。比较解出摘要后使用定长的 timing-safe 比较，数据库不保存明文密码。参数采用 [OWASP 的 scrypt 配置](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)，接口使用 [Node.js crypto](https://nodejs.org/docs/latest-v24.x/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback)。API 每进程最多并行 2 个密码哈希任务，超出的认证请求返回 429，不进入无界等待队列。
 
@@ -86,17 +86,33 @@ server 与 worker 共用 `REPLAYS_DIR`（默认 `data/replays`），相对路径
 
 官方账号在 server 启动时幂等初始化：upsert `official` 用户（无密码、带官方标记），并为每个已注册游戏读取其官方 bot 源码，写入或更新 `game_entries` 的源码、字节数与协议版本；排位分与比赛统计不受初始化影响。官方 bot 源码超过当前发行 `codeBytes` 限制时启动失败并报告明确错误。
 
+Boss 账号同样在启动时初始化：upsert `boss` 用户（无密码、带 Boss 标记），读取 `BOSSES_DIR`（默认 `data/bosses`）下的 `<gameId>.js` 作为该游戏的 Boss 代码；文件不存在的游戏删除 Boss 的参赛记录，挑战入口随之关闭。Boss 源码不通过任何接口、开发包或 npm 包公开。
+
 ### 游戏参赛与匹配 API 契约
 
-`GET /games/:gameId/me`（认证）返回 `{ "entry": { rating, matchesPlayed, wins, draws, losses }, "code": { source, sourceBytes, botProtocolVersion, updatedAt } | null, canMatch, cannotMatchReason, activeMatch: { id, status } | null }`；`cannotMatchReason` 取 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`，可为 null。`activeMatch` 仅查询本人在此游戏发起且状态为 `pending` 或 `running` 的比赛，被动参赛和终态比赛不包含在内。此字段用于恢复「查看当前比赛」入口，不代替匹配接口的幂等检查和数据库唯一约束。
+`GET /games/:gameId/me`（认证）返回 `{ "entry": { rating, matchesPlayed, wins, draws, losses }, "boss": { available, attempts, wins }, "code": { source, sourceBytes, botProtocolVersion, updatedAt } | null, canMatch, cannotMatchReason, activeMatch: { id, status } | null }`；`cannotMatchReason` 取 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`，可为 null。`activeMatch` 仅查询本人在此游戏发起且状态为 `pending` 或 `running` 的比赛，被动参赛和终态比赛不包含在内。此字段用于恢复「查看当前比赛」入口，不代替匹配接口的幂等检查和数据库唯一约束。
 
 `PUT /games/:gameId/me/code`（认证）请求体为 `text/plain` 的源码文本，请求字节上限为当前发行 `resolvedLimits.codeBytes`。请求体必须是合法 UTF-8 文本，解码失败或空请求体返回 400 `VALIDATION_ERROR`。服务端运行沙箱静态校验（受限 AST 检查 + 同版 QuickJS compileOnly），同时校验数每进程最多 2，饱和返回 429。成功覆盖最新源码并返回 `{ sourceBytes, botProtocolVersion, updatedAt }`，排位分与比赛统计保持不变；校验失败返回 400 `CODE_INVALID`，原代码不变；超限返回 413。
 
-`POST /games/:gameId/matches`（认证）必须携带 1–100 字符的 `Idempotency-Key` 请求头。相同用户与键的重复请求返回 200 和已有比赛；同键不同游戏返回 409 `IDEMPOTENCY_MISMATCH`。建局在单事务中选择对手、冻结游戏发行/配置/resolvedLimits/botProtocolVersion 与随机 uint32 种子，写入 `pending` 比赛与两名参与者（发起者 slot 0，用户名与官方标记快照）。对手选择：同游戏非本人、非官方、排位分差不超过 250 的选手中取绝对分差最小者（并列随机），存在其他候选时排除最近一场已完成比赛的对手；无普通候选时直接选官方账号（不受分差限制）。已有未完成主动比赛时返回 409 `MATCH_ALREADY_PENDING` 并携带 `matchId`；未上传代码、协议不兼容或超体积分别返回 409 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`。成功创建返回 201，响应为比赛详情。
+`POST /games/:gameId/matches`（认证）必须携带 1–100 字符的 `Idempotency-Key` 请求头，请求体可省略或为 JSON：`{}` 表示主动匹配，`{ "opponentId" }` 表示指定对手练习，`{ "boss": true }` 表示挑战 Boss，其他形状返回 400 `VALIDATION_ERROR`。相同用户与键的重复请求返回 200 和已有比赛；同键不同游戏返回 409 `IDEMPOTENCY_MISMATCH`。建局在单事务中确定对手与比赛类型、冻结游戏发行/配置/resolvedLimits/botProtocolVersion 与随机 uint32 种子，写入 `pending` 比赛与两名参与者（发起者 slot 0，用户名与官方、Boss 标记快照）。
 
-`GET /games/:gameId/leaderboard`（公开）分页参数 `page`（默认 1，钳制到 1–1,000,000）与 `limit`（默认 50，钳制到 1–100）；缺省或空参数取默认值，非法数值视为默认，越界数值被钳制，不会因极端参数报错。返回 `{ total, page, limit, players: [{ rank, userId, username, official, rating, matchesPlayed, wins, draws, losses }] }`，名次用窗口函数按内部精确分计算，精确分相同并列，展示顺序按稳定用户 ID。
+- 主动匹配按 [排位与匹配](../designs/ranked.md) 选择普通用户：跳过最近 5 场排位赛的对手（全部是近期对手时只跳过最近一场），分差窗口依次为 250、500、1000、不限，取窗口内分差最小者并随机打破并列，类型为 `ranked`；没有任何普通候选时与官方账号进行 `practice`。
+- 指定对手必须是本游戏代码可运行的非 Boss 用户（可以是官方账号），类型为 `practice`；挑战自己返回 409 `OPPONENT_IS_SELF`，对手不存在或代码不可运行返回 409 `OPPONENT_UNAVAILABLE`。
+- 挑战 Boss 的类型为 `boss`；未安装 Boss 时返回 404 `BOSS_UNAVAILABLE`。
+- 声明了竞技场的游戏不接受此接口，返回 409 `ARENA_GAME`。
 
-`GET /games/:gameId/me/matches`（认证）按创建时间倒序分页返回 `{ total, page, limit, matches }`（分页参数与钳制规则同排行榜），包含用户作为发起者或对手的比赛。`GET /matches/:matchId`（公开）返回 `{ id, gameId, status, createdAt, updatedAt, release, seed, initiatorId, participants, result?, failureReason? }`；`participants` 为创建时快照，`completed` 比赛附带 `result` 与结算后的 `rank`/`ratingBefore`/`ratingAfter`，`failed` 附带受控 `failureReason`；未知 ID 返回 404 `MATCH_NOT_FOUND`。
+已有未完成主动比赛时返回 409 `MATCH_ALREADY_PENDING` 并携带 `matchId`；未上传代码、协议不兼容或超体积分别返回 409 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`。成功创建返回 201，响应为比赛详情。只有 `ranked` 比赛结算时改变双方排位分与战绩；`practice` 与 `boss` 只记录名次。
+
+`GET /games/:gameId/leaderboard`（公开）分页参数 `page`（默认 1，钳制到 1–1,000,000）与 `limit`（默认 50，钳制到 1–100）；缺省或空参数取默认值，非法数值视为默认，越界数值被钳制，不会因极端参数报错。返回 `{ total, page, limit, players: [{ rank, userId, username, official, rating, matchesPlayed, wins, draws, losses, points, placementTotal }] }`，不含官方账号与 Boss。普通游戏名次用窗口函数按内部精确分计算，精确分相同并列，展示顺序按稳定用户 ID；竞技场游戏按积分排名，同分并列，展示顺序依次按积分、`tieBreakGameId` 游戏的排位分（无记录按 1000）和用户 ID。
+
+声明了竞技场（manifest `arena`）的游戏另有：
+
+- `GET /games/:gameId/arena`（公开）返回 `{ active, lineup, recent }`：唯一未完成的竞技场比赛（无则为 null）、此刻开局的入场名单（按积分、平分规则取前 `seats` 名代码可运行的普通用户，不足时官方账号补一个席位）、保留中的已结束比赛（最多 `keepMatches` 场，新的在前）。
+- `POST /games/:gameId/arena`（认证，`Idempotency-Key`）在单事务中锁定入场名单并创建 `arena` 比赛，开局者不必入场；已有未完成的竞技场比赛返回 409 `ARENA_BUSY` 并携带 `matchId`，可入场人数少于 `minPlayers` 返回 409 `ARENA_TOO_FEW_PLAYERS`。数据库对每个游戏未完成的竞技场比赛建立部分唯一索引。
+
+竞技场比赛结算时，普通参赛者按名次累加 `points[rank-1]` 积分、名次总和、比赛数与冠军次数，官方账号只记录名次；随后删除最近 `keepMatches` 场以外的已结束竞技场比赛及其回放文件。
+
+`GET /games/:gameId/me/matches`（认证）按创建时间倒序分页返回 `{ total, page, limit, matches }`（分页参数与钳制规则同排行榜），包含用户作为发起者或对手的比赛。`GET /matches/:matchId`（公开）返回 `{ id, gameId, kind, status, createdAt, updatedAt, release, seed, initiatorId, participants, result?, failureReason? }`；`participants` 为创建时快照，`completed` 比赛附带 `result` 与结算后的 `rank`/`ratingBefore`/`ratingAfter`，`failed` 附带受控 `failureReason`；未知 ID 返回 404 `MATCH_NOT_FOUND`。
 
 ## API
 
@@ -143,9 +159,10 @@ server 与 worker 共用 `REPLAYS_DIR`（默认 `data/replays`），相对路径
 - `users(normalized_username)` 唯一；`sessions(token_hash)` 唯一，`sessions(user_id)` 和 `sessions(expires_at)` 用于撤销与清理。
 - `matches(initiator_id, idempotency_key)` 唯一，幂等标识不允许为空绕过。
 - `matches(initiator_id, game_id)` 在 `status IN ('pending', 'running')` 时唯一，约束未完成主动请求。
+- `matches(game_id)` 在 `kind = 'arena' AND status IN ('pending', 'running')` 时唯一，保证每个竞技场同一时间只跑一场；`matches(game_id, kind, created_at)` 用于竞技场历史与近期对手查询。
 - `matches(status, created_at)` 用于任务领取；运行租约索引用于过期处理。
 - `match_participants(user_id, match_id)` 用于用户比赛记录。
 
-匹配参与者必须至少两名且用户 ID 不重复，发起者必须在参与者中；匹配与官方回退均排除本人，禁止自对弈刷分。参与者在创建比赛时固定，最终结果的用户集合必须与之完全一致。
+匹配参与者必须至少两名且用户 ID 不重复；两人比赛的发起者必须在参与者中，竞技场的开局者可以不在其中；匹配、挑战与官方回退均排除本人，禁止自对弈刷分。参与者在创建比赛时固定，最终结果的用户集合必须与之完全一致。
 
 所有主键使用 UUID，时间使用 `timestamptz`，JSON 结果与配置使用 `jsonb`。比赛状态使用受约束文本枚举，状态、执行标识与结算字段在同一事务更新。`auth_rate_limits(scope, subject_hash, window_start)` 唯一；这些约束由 Drizzle 迁移创建，不依赖应用查询约定替代数据库约束。
