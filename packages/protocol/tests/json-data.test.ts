@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { isDeepStrictEqual } from "node:util";
-import { cloneJson, stringifyJson, utf8Bytes } from "../src";
+import { cloneJson, isJsonSnapshot, snapshotJson, stringifyJson, utf8Bytes } from "../src";
 
 test("strict JSON rejects silent coercion, hooks, sparse arrays and cycles", () => {
   const sparse: unknown[] = [];
@@ -109,6 +109,12 @@ test("direct cloning matches JSON encoding, exact byte budgets, and normalizes p
     expect(isDeepStrictEqual(copied, JSON.parse(encoded))).toBe(true);
     expect(() => cloneJson(value, bytes - 1)).toThrow(RangeError);
     expect(stringifyJson(copied)).toBe(encoded);
+    const snapshot = snapshotJson(value, bytes);
+    expect(isDeepStrictEqual(snapshot, JSON.parse(encoded))).toBe(true);
+    expect(() => snapshotJson(value, bytes - 1)).toThrow(RangeError);
+    // Reused snapshots keep charging their full encoded size.
+    expect(() => snapshotJson([snapshot], bytes + 1)).toThrow(RangeError);
+    expect(snapshotJson([snapshot], bytes + 2)[0]).toBe(snapshot);
   }
   expect(Object.is(cloneJson(-0), -0)).toBe(false);
   expect(Object.getPrototypeOf(cloneJson(nullPrototype))).toBe(Object.prototype);
@@ -152,9 +158,43 @@ test("direct cloning rejects invalid nested JSON and never calls accessors or to
       },
     },
   ];
-  for (const value of invalid) expect(() => cloneJson({ value })).toThrow();
+  for (const value of invalid) {
+    expect(() => cloneJson({ value })).toThrow();
+    expect(() => snapshotJson({ value })).toThrow();
+  }
   const cycle: { self?: unknown } = {};
   cycle.self = cycle;
   expect(() => cloneJson(cycle)).toThrow();
   expect(calls).toBe(0);
+});
+
+test("snapshots are deep-frozen, shared without re-walking, and thaw into detached copies", () => {
+  const grid = [0, 1, -1];
+  const snapshot = snapshotJson({ board: { grid }, players: [{ id: "a" }] });
+  expect(Object.isFrozen(snapshot) && Object.isFrozen(snapshot.board.grid)).toBe(true);
+  expect(snapshot.board.grid).not.toBe(grid);
+  expect(isJsonSnapshot(snapshot.players[0])).toBe(true);
+  expect(isJsonSnapshot(grid)).toBe(false);
+  // A new wrapper around snapshot children reuses them by reference.
+  const view = snapshotJson({ grid: snapshot.board.grid, extra: 1 });
+  expect(view.grid).toBe(snapshot.board.grid);
+  expect(snapshotJson(snapshot)).toBe(snapshot);
+  // Frozen, already normalized input is adopted; -0 or null prototypes still copy.
+  const frozen = Object.freeze([1, Object.freeze({ x: 2 })]);
+  expect(snapshotJson(frozen)).toBe(frozen);
+  const negative = Object.freeze([-0]);
+  expect(Object.is(snapshotJson(negative)[0], 0)).toBe(true);
+  const bare = Object.freeze(Object.assign(Object.create(null), { x: 1 }));
+  expect(Object.getPrototypeOf(snapshotJson(bare))).toBe(Object.prototype);
+  // cloneJson never hands out shared or frozen data.
+  const thawed = cloneJson({ a: snapshot, b: snapshot });
+  expect(thawed.a).toStrictEqual(thawed.b);
+  expect(thawed.a).not.toBe(thawed.b);
+  expect(Object.isFrozen(thawed.a.board.grid)).toBe(false);
+  (thawed.a.board.grid as number[])[0] = 9;
+  expect(snapshot.board.grid[0]).toBe(0);
+  const literal = snapshotJson(JSON.parse('{"__proto__":{"x":1}}') as Record<string, unknown>);
+  const copied = cloneJson(literal);
+  expect(Object.hasOwn(copied, "__proto__")).toBe(true);
+  expect(Object.getPrototypeOf(copied)).toBe(Object.prototype);
 });
