@@ -83,8 +83,7 @@ export function cloneJson<T>(value: T, maxBytes?: number): T {
 
 /**
  * Strict JSON validation like cloneJson, but the result is deep-frozen and
- * remembered. Snapshots (and frozen, already normalized input) are reused
- * instead of copied, so passing immutable data through several boundaries
+ * remembered. Snapshots are reused by reference instead of copied, so passing immutable data through several boundaries
  * costs one walk instead of one per boundary.
  */
 export function snapshotJson<T>(value: T, maxBytes?: number): DeepReadonly<T> {
@@ -145,10 +144,6 @@ function copyJson(value: unknown, maxBytes: number | undefined, freeze: boolean)
     ancestors.add(item);
     const keys = Reflect.ownKeys(item);
     const start = bytes;
-    // Frozen input whose children all come back unchanged already is a valid
-    // snapshot; adopt it instead of keeping a second identical copy.
-    let unchanged =
-      freeze && Object.isFrozen(item) && prototype === (array ? Array.prototype : Object.prototype);
     charge(2);
     let result: JsonValue;
     if (array) {
@@ -164,7 +159,6 @@ function copyJson(value: unknown, maxBytes: number | undefined, freeze: boolean)
           throw new TypeError("Expected a dense data array");
         if (index) charge(1);
         copied[index] = visit(property.value);
-        unchanged &&= Object.is(copied[index], property.value);
       }
       Object.setPrototypeOf(copied, Array.prototype);
       result = copied;
@@ -179,16 +173,16 @@ function copyJson(value: unknown, maxBytes: number | undefined, freeze: boolean)
         if (index) charge(1);
         charge(utf8Bytes(JSON.stringify(key)) + 1);
         copied[key] = visit(property.value);
-        unchanged &&= Object.is(copied[key], property.value);
       }
       Object.setPrototypeOf(copied, Object.prototype);
       result = copied;
     }
     ancestors.delete(item);
     if (!freeze) return result;
-    const snapshot = unchanged ? (item as JsonValue) : (Object.freeze(result) as JsonValue);
-    snapshots.set(snapshot as object, bytes - start);
-    return snapshot;
+    // Only copies built here are registered, so every snapshot is protocol-owned data.
+    Object.freeze(result);
+    snapshots.set(result as object, bytes - start);
+    return result;
   };
   return visit(value);
 }

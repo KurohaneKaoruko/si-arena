@@ -179,9 +179,11 @@ test("snapshots are deep-frozen, shared without re-walking, and thaw into detach
   const view = snapshotJson({ grid: snapshot.board.grid, extra: 1 });
   expect(view.grid).toBe(snapshot.board.grid);
   expect(snapshotJson(snapshot)).toBe(snapshot);
-  // Frozen, already normalized input is adopted; -0 or null prototypes still copy.
+  // Only protocol-built copies become snapshots, even for caller-frozen input.
   const frozen = Object.freeze([1, Object.freeze({ x: 2 })]);
-  expect(snapshotJson(frozen)).toBe(frozen);
+  expect(snapshotJson(frozen)).not.toBe(frozen);
+  expect(snapshotJson(frozen)).toStrictEqual(frozen);
+  expect(isJsonSnapshot(frozen)).toBe(false);
   const negative = Object.freeze([-0]);
   expect(Object.is(snapshotJson(negative)[0], 0)).toBe(true);
   const bare = Object.freeze(Object.assign(Object.create(null), { x: 1 }));
