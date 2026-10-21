@@ -81,7 +81,9 @@ export function defineLocalGame<
     async prepare(botPaths, signal) {
       checkCancelled(signal);
       if (!botPaths.length) throw new Error("At least one local bot file is required");
-      const count = botPaths.length === 1 ? manifest.minPlayers : botPaths.length;
+      // A lone bot meets official bots: a full arena for arena games, else the minimum.
+      const count =
+        botPaths.length === 1 ? (manifest.arena?.seats ?? manifest.minPlayers) : botPaths.length;
       if (count < manifest.minPlayers || count > manifest.maxPlayers)
         throw new Error(`Game requires ${manifest.minPlayers}–${manifest.maxPlayers} players`);
       const inputs = Array.from({ length: count }, (_, slot) => {
