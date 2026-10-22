@@ -10,7 +10,7 @@
 | 数据 | PostgreSQL 18 + Drizzle ORM + node-postgres |
 | 任务 | 首版 PostgreSQL 任务表，短事务领取、租约、幂等终态 |
 | 比赛运行 | 独立 Node.js worker，调用共享引擎和游戏包 |
-| 玩家执行 | isolated-vm（V8 isolate），独立执行子进程 |
+| 玩家执行 | isolated-vm（V8 isolate），独立比赛进程 |
 | 可视化 | 通用 Vue 播放器 + 游戏 renderer；首款网格游戏使用 Canvas |
 
 选择 Fastify 是为了直接实现业务 API，并与前端、引擎、本地工具共享 TS 协议和包。它的插件和 schema 机制用于组织可信服务代码，不把 Fastify 插件等同于游戏插件。[Fastify 文档](https://fastify.dev/docs/latest/Reference/)
@@ -26,12 +26,13 @@ flowchart TD
     Web[Vue 网站] -->|上传 / 主动匹配 / 查询| API[Fastify 业务服务]
     API --> DB[(PostgreSQL)]
     Worker[比赛 worker] -->|领取已有任务 / 结算| DB
-    Worker --> Engine[共享 tick 引擎 + 游戏规则]
-    Worker --> RunnerA[玩家 A 执行子进程]
-    Worker --> RunnerB[玩家 B 执行子进程]
-    RunnerA --> QA[V8 isolate]
-    RunnerB --> QB[V8 isolate]
-    Worker --> Replays[回放文件存储]
+    Worker --> Runner[每场比赛执行进程]
+    Runner --> Engine[共享 tick 引擎 + 游戏规则]
+    Runner --> QA[玩家 A isolate]
+    Runner --> QB[玩家 B isolate]
+    Runner --> Candidate[可靠回放候选]
+    Candidate --> Worker
+    Worker --> Replays[公开回放存储]
     Web -->|读取回放| Replays
     Web --> Player[共享播放器 + 游戏渲染器]
 ```
@@ -46,9 +47,9 @@ flowchart TD
 
 ### 比赛 worker
 
-领取已存在任务，读取本场代码到内存，加载可信游戏规则，驱动 tick，调用玩家执行子进程，生成回放并结算。
+领取已存在任务，读取本场代码到内存，通过 runner 启动比赛进程。比赛进程加载可信游戏规则、驱动 tick 并保存回放候选；worker 确认有效租约后发布公开回放并结算。
 
-worker 持有权威世界和最近成功的 Memory，玩家执行进程不持有业务凭证。一个玩家执行进程异常不能销毁另一个玩家的执行进程，也不能直接修改世界。
+比赛进程在 isolate 外持有权威世界和最近成功的 Memory，不持有业务凭证。玩家普通执行异常仅重建对应 isolate；比赛进程崩溃则该场系统失败、不计分，其他比赛继续。
 
 ### 游戏规则与玩家代码
 
@@ -64,7 +65,7 @@ worker 持有权威世界和最近成功的 Memory，玩家执行进程不持有
 - worker 执行期间续租；数据库锁不跨越整场比赛持有。
 - `pending` 尚未开始的任务可以重新领取。
 - `running` 的主 worker 失联且无法证明执行结果完整时，本场标记失败、不计分。
-- 玩家执行子进程丢失时，只记录该玩家 tick 失败并重建，不等同于主 worker 丢失。
+- 玩家执行异常丢弃当前动作与候选 Memory，下一 tick 从旧 Memory 重建 isolate；比赛进程丢失则整场失败，不进行进程级续跑。
 - 完整回放和最终结果已可靠形成且执行租约有效时，允许重试保存与幂等结算；失去租约不得提交。
 - 已排队比赛开局前发现最新代码不再兼容其冻结发行时，以 ENTRY_CHANGED_BEFORE_START 失败、不计分，不强行运行或自动换规则。
 
@@ -74,11 +75,11 @@ worker 持有权威世界和最近成功的 Memory，玩家执行进程不持有
 
 ## 部署与存储
 
-采用 Linux 单机部署，API、主 worker 和玩家执行子进程具有独立生命周期。PostgreSQL 为独立依赖，回放保存到受控数据目录，数据库保存文件引用及摘要。每个 worker 同时执行 2 场圈地比赛。具体部署形态、镜像编排与上线步骤见 [部署与发布](deployment.md)。
+采用 Linux 单机部署，API、主 worker 和比赛执行子进程具有独立生命周期。PostgreSQL 为独立依赖，回放保存到受控数据目录，数据库保存文件引用及摘要。每个 worker 同时执行 2 场圈地比赛。具体部署形态、镜像编排与上线步骤见 [部署与发布](deployment.md)。
 
 比赛创建时固定规则发行、实际配置和完整 resolvedLimits；worker 只领取本机已安装且资源容量可满足的发行。每位玩家的最新代码在开局时按该冻结协议再次检查。发行标识不等于代码兼容版本，兼容规则见 [游戏模块](monorepo-and-modules.md)。
 
-线上执行环境使用 Linux 与 cgroup v2，玩家执行子进程具有独立资源组、独立网络命名空间、只读运行文件系统、低权限用户和运行器的 seccomp 配置，不继承 API/数据库密钥。资源组的 `memory.max` 使用该游戏发行的 `resolvedLimits.processMemoryBytes`（平台默认 268435456，即 256MiB），同时设置 `memory.swap.max=0` 和 `pids.max=16`。隔离设施无法建立时拒绝启动比赛执行服务，不回退到无隔离执行。
+生产部署可配置 Linux cgroup v2；比赛进程内的 isolate 负责玩家级限额，进程级崩溃为整场系统失败。启用 cgroup 时，比赛执行子进程具有独立资源组，不继承 API/数据库密钥。网络命名空间、只读运行文件系统、低权限用户与 seccomp 属于部署侧配置，runner 本身只负责 cgroup 限制。资源组的 `memory.max` 使用该游戏发行的 `resolvedLimits.runnerMemoryBytes`（平台默认 536870912，即 512MiB），同时设置 `memory.swap.max=0` 和 `pids.max=64`。隔离设施无法建立时拒绝启动比赛执行服务，不回退到无隔离执行。
 
 本地 CLI 复用相同执行代码，但不要求用户安装 PostgreSQL 或运行平台服务。可移植性与操作系统级隔离能力是两回事，不能把本地默认运行方式直接当作线上配置。
 

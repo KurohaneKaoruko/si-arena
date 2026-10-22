@@ -32,11 +32,11 @@ CLI 不携带全部游戏，新游戏通过同一发行 API 与下载包接入�
 
 ## 本地命令与可信注册
 
-`arena run --bot <file>` 执行单场或顺序批量比赛。`--opponent <file>` 可重复指定本地对手，省略时补入官方 bot。每批开始前读取并检查源码，每场重新创建 Memory。`--matches` 范围 1–1000，`--seed` 从指定 uint32 开始递增并回绕。`--out` 目录保存不可覆盖的 gzip 回放；取消时删除未完成文件，保留已完成文件。
+`arena run --bot <file>` 执行单场或默认并行的批量比赛。`--opponent <file>` 可重复指定本地对手，省略时补入官方 bot。每批开始前读取并检查源码，每场重新创建 Memory。`--jobs` 指定并行场数，默认取 CPU 人数配额与可用内存预算的较小值，`--jobs 1` 串行；结果按种子序号输出，系统失败场次单独报告，其他场继续，批次返回非零退出码。`--matches` 范围 1–1000，`--seed` 从指定 uint32 开始递增并回绕。`--out` 目录保存不可覆盖的 gzip 回放；取消时删除未完成文件，保留已完成文件。
 
 终端回放入口为 `arena replay <file> --verify`；`--logs` 打印完整校验成功后的日志、错误和截断标记，不执行玩家代码。标准输出使用 JSON Lines，分别给出发行与限额、单场结果、批量摘要或回放校验结果。
 
-CLI 通过 `defineLocalGame({ game, sdkSource, officialBotUrl })` 注册游戏，不依赖具体游戏包。发行启动器可通过 `runCli` 注入注册集合；仓库工具使用显式 `--registry <local-module>` 加载可信配置。模块运行在宿主中，不能是玩家源码，也不能由回放指定；CLI 不自动发现配置、不加载远程模块。多个游戏使用 `--game` 选择，同一注册固定规则发行，历史回放必须匹配对应发行。
+CLI 通过 `defineLocalGame({ game, module, officialBotUrl })` 注册游戏，不依赖具体游戏包。发行启动器可通过 `runCli` 注入注册集合；仓库工具使用显式 `--registry <local-module>` 加载可信配置。模块运行在宿主中，不能是玩家源码，也不能由回放指定；CLI 不自动发现配置、不加载远程模块。多个游戏使用 `--game` 选择，同一注册固定规则发行，历史回放必须匹配对应发行。
 
 注册配置负责组装可信的软件组件，不能取代下载时的发行清单与完整性校验。下载发行仍按 release.json 和外部元数据协议固定组件。已实现的命令操作见 [CLI README](../../packages/cli/README.md)。
 
@@ -62,6 +62,7 @@ paper-devkit/
     si-arena-engine-<version>.tgz
     si-arena-protocol-<version>.tgz
     si-arena-sandbox-<version>.tgz
+    si-arena-runner-<version>.tgz
     si-arena-player-<version>.tgz
     si-arena-game-<gameId>-<version>.tgz
   dist/viewer/
@@ -78,7 +79,7 @@ paper-devkit/
 
 pnpm 打包会转换 workspace 依赖声明，但不会自动把所有依赖实体都包含进 ZIP；产物脚本必须保证每个声明都可解析到已发布包、随包本地归档或已经打入的产物。[pnpm 文档](https://pnpm.io/workspaces)
 
-内部包通过 pnpm pack 形成随包本地归档，开发包的依赖与 pnpm-workspace.yaml overrides 将整条内部依赖链指向 vendor/，不要求内部包已经发布到 npm。归档保留公开 exports、类型与沙箱子进程，安装后按原包布局解析；viewer 额外构建成共享 Vue 控件和 renderer 的静态产物。SDK 类型、运行源码、官方 JS 与许可证同时放入开发目录。不得因树摇或资源路径改写遗漏动态加载文件。
+内部包通过 pnpm pack 形成随包本地归档，开发包的依赖与 pnpm-workspace.yaml overrides 将整条内部依赖链指向 vendor/，不要求内部包已经发布到 npm。归档保留公开 exports、类型与比赛子进程，安装后按原包布局解析；viewer 额外构建成共享 Vue 控件和 renderer 的静态产物。SDK 类型、运行源码、官方 JS 与许可证同时放入开发目录。不得因树摇或资源路径改写遗漏动态加载文件。
 
 仓库命令为 `pnpm build:devkits`，在完整构建后读取 `configs/devkits.ts` 的可信注册。构建入口拒绝不同步的根锁文件，用同一 catalog、供应链策略和已有解析生成独立锁文件，记录根锁文件 SHA-256；初始化不执行 pnpm，用户安装时使用开发包固定的锁文件。server 从 `DEVKITS_DIR`（默认根目录 `data/releases`）提供 `<gameId>/<release>/metadata.json` 和 `devkit.zip`。发布目录通过相邻候选目录原子移入，已有发行内容不同则失败，不覆盖历史产物。
 
@@ -88,7 +89,7 @@ pnpm 打包会转换 workspace 依赖声明，但不会自动把所有依赖实�
 
 CLI 启动时检查 Node 主版本，初始化和本地执行均要求 Node.js 26 及以上。运行环境采用 Node.js 26 与 pnpm 12，包配置声明 `node: >=26`、`pnpm: >=12`。每次发行在清单和锁文件中记录构建所用精确版本及依赖，不在安装时漂移版本。构建入口读取根 package.json 的 packageManager 和锁文件，拒绝锁文件不同步的构建。
 
-回放播放器使用可信发行注册表查找规则与 renderer。当前圈地只注册 paper@0.2.0，不支持无用户的 v1；其他发行或协议不匹配时拒绝。后续如需支持历史发行，必须显式提供其可信规则与 renderer，不保留用户历史 bot。
+回放播放器使用可信发行注册表查找规则与 renderer。当前圈地只注册 paper@0.3.0，不支持无用户的 v1；其他发行或协议不匹配时拒绝。后续如需支持历史发行，必须显式提供其可信规则与 renderer，不保留用户历史 bot。
 
 ## 本地 CLI
 
@@ -127,7 +128,7 @@ viewer 使用与网站相同的通用播放器和游戏 renderer。调试 API �
 
 ### 沙箱
 
-覆盖死循环、分配失败、深递归、异常对象、日志洪泛、Memory 与动作输出超限、进程失去响应。检查其他玩家仍可执行，失败后下一 tick 有新的调用，旧 Memory 不被部分修改。
+覆盖死循环、分配失败、深递归、异常对象、日志洪泛、Memory 与动作输出超限。检查其他 isolate 仍可执行，失败后下一 tick 有新的调用，旧 Memory 不被部分修改。比赛进程崩溃或失去响应时整场系统失败、不计分、不发布有效回放，其他比赛继续。
 
 ### 平台
 

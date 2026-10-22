@@ -16,7 +16,7 @@ function options(): Omit<SandboxOptions<JsonValue>, "defaultAction"> {
     sdkSource:
       "export default (o,{submit})=>{submit({type:'move'});return {...o,submit,move(n){submit({type:'move',n})}}}",
     limits: resolveResourceLimits({ cpuMs: 100, wallMs: 1000 }),
-    isolation: { kind: "local" },
+
     captureLogs: true,
     parseAction(action) {
       return { ok: true, action };

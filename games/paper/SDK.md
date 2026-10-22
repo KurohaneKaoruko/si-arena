@@ -1,6 +1,6 @@
 # 网格圈地玩家 API
 
-当前发行为 `paper@0.2.0`、玩家接口 v2。玩家提交自包含的 UTF-8 JavaScript ESM，默认导出同步函数，每 tick 调用一次：
+当前发行为 `paper@0.3.0`、玩家接口 v2。玩家提交自包含的 UTF-8 JavaScript ESM，默认导出同步函数，每 tick 调用一次：
 
 ```js
 /** @param {import("@si-arena/game-paper/sdk").PaperTickInput} input */

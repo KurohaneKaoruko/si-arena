@@ -253,7 +253,7 @@ dbTest("with no other player, matching is practice against the official bot", as
   const match = created.json();
   expect(match.status).toBe("pending");
   expect(match.gameId).toBe("paper");
-  expect(match.release).toBe("paper@0.2.0");
+  expect(match.release).toBe("paper@0.3.0");
   expect(Number.isInteger(match.seed)).toBe(true);
   expect(match.seed).toBeGreaterThanOrEqual(0);
   expect(match.seed).toBeLessThanOrEqual(4294967295);

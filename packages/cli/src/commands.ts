@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { availableParallelism } from "node:os";
 import { parseArgs } from "node:util";
 import { readReplayFile } from "@si-arena/engine/node";
 import { checkCancelled, ENGINE_COMPATIBILITY, type LocalGameRegistration } from "./local-game";
@@ -23,9 +24,10 @@ Options:
   --release <id>     Download a fixed historical release
   --registry <file>  Explicitly trust and load a local game registration module
   --game <id>        Select a registered game (optional with one game)
-  --bot <file>       Player JavaScript source, executed only in an isolated V8 process
+  --bot <file>       Player JavaScript source, executed in its own V8 isolate
   --opponent <file>  Local opponent (repeatable); default: official bot(s)
-  --matches <n>      Sequential matches, 1–1000 (default: 1)
+  --matches <n>      Batch matches, 1–1000 (default: 1)
+  --jobs <n>        Concurrent matches (default: bounded by CPU and memory; 1 for serial)
   --seed <uint32>    First seed; increment with uint32 wrap (default: 42)
   --out <directory>  Replay directory (default: ./replays)
   --verify          Verify replay without executing bots
@@ -64,6 +66,7 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
       bot: { type: "string" },
       opponent: { type: "string", multiple: true },
       matches: { type: "string" },
+      jobs: { type: "string" },
       seed: { type: "string" },
       out: { type: "string" },
       verify: { type: "boolean" },
@@ -82,7 +85,7 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
           "registry",
           "game",
           ...(command === "run"
-            ? ["bot", "opponent", "matches", "seed", "out"]
+            ? ["bot", "opponent", "matches", "jobs", "seed", "out"]
             : command === "dev"
               ? ["bot", "opponent", "seed"]
               : ["verify", "logs"]),
@@ -140,6 +143,8 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
     return;
   }
   const matches = integerOption(values.matches ?? "1", 1, 1000, "matches");
+  const requestedJobs =
+    values.jobs === undefined ? undefined : integerOption(values.jobs, 1, 1000, "jobs");
   const firstSeed = integerOption(values.seed ?? "42", 0, 0xffffffff, "seed");
   checkCancelled(context.signal);
   if (values.registry && context.games)
@@ -194,28 +199,73 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
   });
   const directory = resolve(cwd, values.out ?? "replays");
   const tally = { wins: 0, draws: 0, losses: 0 };
-  let errorCount = 0;
-  for (let index = 0; index < matches; index++) {
-    checkCancelled(context.signal);
-    const seed = (firstSeed + index) >>> 0;
-    const path = join(
-      directory,
-      `match-${String(index + 1).padStart(4, "0")}-seed-${seed}-${randomUUID()}.json.gz`,
-    );
-    const summary = await prepared.run({
-      seed,
-      replay: path,
-      ...(context.signal ? { signal: context.signal } : {}),
-    });
-    const self = summary.result.players.find((player) => player.id === "bot")!;
-    if (self.rank !== 1) tally.losses++;
-    else if (summary.result.players.some((player) => player.id !== "bot" && player.rank === 1))
-      tally.draws++;
-    else tally.wins++;
-    errorCount += summary.errorCount;
-    output({ type: "match", index: index + 1, seed, replay: path, ...summary });
-  }
-  output({ type: "batch", matches, firstSeed, ...tally, errorCount, replayDirectory: directory });
+  const memorySlots = Math.floor(
+    process.availableMemory() / game.manifest.resolvedLimits.runnerMemoryBytes,
+  );
+  if (memorySlots < 1) throw new Error("Insufficient memory for one match runner");
+  const jobs = Math.min(
+    matches,
+    memorySlots,
+    requestedJobs ?? Math.max(1, Math.floor(availableParallelism() / prepared.players.length)),
+  );
+  let errorCount = 0,
+    failedMatches = 0,
+    nextIndex = 0,
+    nextOutput = 0;
+  const completed = new Map<number, Record<string, unknown>>();
+  const runNext = async () => {
+    for (;;) {
+      checkCancelled(context.signal);
+      const index = nextIndex++;
+      if (index >= matches) return;
+      const seed = (firstSeed + index) >>> 0;
+      const path = join(
+        directory,
+        `match-${String(index + 1).padStart(4, "0")}-seed-${seed}-${randomUUID()}.json.gz`,
+      );
+      try {
+        const summary = await prepared.run({
+          seed,
+          replay: path,
+          ...(context.signal ? { signal: context.signal } : {}),
+        });
+        const self = summary.result.players.find((player) => player.id === "bot")!;
+        if (self.rank !== 1) tally.losses++;
+        else if (summary.result.players.some((player) => player.id !== "bot" && player.rank === 1))
+          tally.draws++;
+        else tally.wins++;
+        errorCount += summary.errorCount;
+        completed.set(index, { type: "match", index: index + 1, seed, replay: path, ...summary });
+      } catch (error) {
+        if (context.signal?.aborted) throw error;
+        failedMatches++;
+        completed.set(index, {
+          type: "match-error",
+          index: index + 1,
+          seed,
+          message: error instanceof Error ? error.message : "Match runner failed",
+        });
+      }
+      while (completed.has(nextOutput)) {
+        output(completed.get(nextOutput)!);
+        completed.delete(nextOutput++);
+      }
+    }
+  };
+  const finished = await Promise.allSettled(Array.from({ length: jobs }, runNext));
+  const cancelled = finished.find((item) => item.status === "rejected");
+  if (cancelled?.status === "rejected") throw cancelled.reason;
+  output({
+    type: "batch",
+    matches,
+    firstSeed,
+    jobs,
+    ...tally,
+    errorCount,
+    failedMatches,
+    replayDirectory: directory,
+  });
+  if (failedMatches) throw new Error(`${failedMatches} match(es) failed with system errors`);
 }
 
 function integerOption(raw: string, min: number, max: number, name: string): number {

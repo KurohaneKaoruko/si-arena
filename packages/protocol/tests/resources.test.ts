@@ -1,6 +1,10 @@
 import type { ResourceLimitOverrides } from "../src/index";
 import { test, expect } from "vitest";
-import { DEFAULT_RESOURCE_LIMITS, resolveResourceLimits } from "../src/index";
+import {
+  DEFAULT_RESOURCE_LIMITS,
+  resolveResourceLimits,
+  assertGameResourceLimits,
+} from "../src/index";
 
 // Deliberately bypass static types for malformed JSON boundary tests.
 const resolveUnknown = (value: unknown) => resolveResourceLimits(value as ResourceLimitOverrides);
@@ -27,11 +31,17 @@ test("invalid and contradictory resource configurations fail instead of silently
   }
   expect(() => resolveResourceLimits({ cpuMs: 501 })).toThrow(/wallMs/);
   expect(() => resolveResourceLimits({ errorBytes: 64 })).toThrow(/diagnostic envelope/);
-  expect(() => resolveResourceLimits({ heapBytes: 256 * 1024 * 1024 })).toThrow(
-    /processMemoryBytes/,
+  expect(() => resolveResourceLimits({ heapBytes: 512 * 1024 * 1024 })).toThrow(
+    /runnerMemoryBytes/,
   );
   expect(() => resolveUnknown({ unknown: 1 })).toThrow(/Unknown resource/);
   expect(() => resolveUnknown({ logs: { unknown: 1 } })).toThrow(/Unknown log/);
   expect(() => resolveUnknown({ logs: [] })).toThrow(/logs must be an object/);
   expect(() => resolveUnknown([])).toThrow(/limits must be an object/);
+});
+
+test("release budgets cover the aggregate player heaps and host reserve", () => {
+  const limits = resolveResourceLimits({ heapBytes: 128 * 1024 * 1024 });
+  expect(() => assertGameResourceLimits(limits, 2)).not.toThrow();
+  expect(() => assertGameResourceLimits(limits, 5)).toThrow("all player heaps");
 });

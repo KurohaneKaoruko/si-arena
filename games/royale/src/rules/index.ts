@@ -1,4 +1,9 @@
-import type { DeepReadonly, GameResult, GameRules } from "@si-arena/protocol";
+import {
+  isJsonSnapshot,
+  type DeepReadonly,
+  type GameResult,
+  type GameRules,
+} from "@si-arena/protocol";
 import { ROYALE_CONFIG, royaleZoneTarget } from "../constants";
 import type {
   RoyaleAction,
@@ -213,6 +218,13 @@ function step(
     player.death = { tick, causes: [...list] };
   }
   next.tick = tick;
+  // Reuse only already validated immutable inputs, after all writes are complete.
+  // Following ticks clone before writing; old worlds and replay caches stay unchanged.
+  for (const key of ["territory", "trails"] as const) {
+    const previous = state[key];
+    if (isJsonSnapshot(previous) && next[key].every((cell, index) => cell === previous[index]))
+      next[key] = previous as number[];
+  }
   const result = outcome(next);
   return result ? { nextState: next, events, result } : { nextState: next, events };
 }

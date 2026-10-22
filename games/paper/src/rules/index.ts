@@ -1,4 +1,9 @@
-import type { DeepReadonly, GameResult, GameRules } from "@si-arena/protocol";
+import {
+  isJsonSnapshot,
+  type DeepReadonly,
+  type GameResult,
+  type GameRules,
+} from "@si-arena/protocol";
 import type {
   PaperAction,
   PaperObservation,
@@ -85,6 +90,7 @@ function outcome(state: PaperState): PaperResult | undefined {
 }
 /** Remove every trail cell of one slot; the territory of that slot is untouched. */
 function clearTrail(state: PaperState, slot: 0 | 1): void {
+  if (!state.trails.includes(slot)) return;
   for (let cell = 0; cell < state.trails.length; cell++) {
     if (state.trails[cell] === slot) state.trails[cell] = -1;
   }
@@ -204,7 +210,7 @@ function step(
     closing.has(1) ? captureCells(nextState, 1) : new Set<number>(),
   ] as const;
   const gained: [number[], number[]] = [[], []];
-  for (let index = 0; index < nextState.territory.length; index++) {
+  for (let index = 0; closing.size && index < nextState.territory.length; index++) {
     const first = claims[0].has(index) && nextState.territory[index] !== 0;
     const second = claims[1].has(index) && nextState.territory[index] !== 1;
     if (first === second) continue;
@@ -225,6 +231,13 @@ function step(
     }
   }
   nextState.tick++;
+  // Reuse only already validated immutable inputs, after all writes are complete.
+  // Following ticks clone before writing; old worlds and replay caches stay unchanged.
+  for (const key of ["territory", "trails"] as const) {
+    const previous = state[key];
+    if (isJsonSnapshot(previous) && nextState[key].every((cell, index) => cell === previous[index]))
+      nextState[key] = previous as number[];
+  }
   const result = outcome(nextState);
   return result ? { nextState, events, result } : { nextState, events };
 }

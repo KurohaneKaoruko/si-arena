@@ -9,7 +9,7 @@
 ```sh
 pnpm exec arena init paper ./paper-bot --server http://127.0.0.1:3000
 # 指定历史发行，不读取 current 别名
-pnpm exec arena init paper ./paper-bot --release paper@0.2.0 --server http://127.0.0.1:3000
+pnpm exec arena init paper ./paper-bot --release paper@0.3.0 --server http://127.0.0.1:3000
 ```
 
 对外入口是 `npx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>`（需要已发布的 npm 包）。CLI 默认连接 loopback，平台地址由 `--server` 传入；自托管构建可设置 `SI_ARENA_SERVER_URL` 烧入自己的默认地址。`--server` 允许 HTTP 与 HTTPS，下载仅使用同源元数据中的固定发行地址，不跟随 HTTP 重定向。
@@ -97,9 +97,19 @@ CLI 运行依赖不包含具体游戏。由可信发行或开发者显式提供�
 ```js
 // arena.config.mjs：可信宿主配置，不是玩家源码。
 import { defineLocalGame } from "@si-arena/cli";
-import { paperGame, PAPER_SDK_SOURCE, officialBotUrl } from "@si-arena/game-paper/game";
+import { paperGame, officialBotUrl } from "@si-arena/game-paper/game";
 
-export default [defineLocalGame({ game: paperGame, sdkSource: PAPER_SDK_SOURCE, officialBotUrl })];
+export default [
+  defineLocalGame({
+    game: paperGame,
+    officialBotUrl,
+    module: {
+      url: import.meta.resolve("@si-arena/game-paper/game"),
+      gameExport: "paperGame",
+      sdkSourceExport: "PAPER_SDK_SOURCE",
+    },
+  }),
+];
 ```
 
 ```sh
@@ -112,3 +122,5 @@ arena --registry ./arena.config.mjs replay ./replays/match.json.gz --verify
 其他工具可调用 `runCli(args, { games, cwd, write, signal })`，或注册对象的 `prepare`、`run`、`verify`。`prepare` 固定并验证源码，`run` 每次创建新比赛，`verify` 只读取回放。具体游戏类型保留在 `defineLocalGame` 闭包中，通用命令无需增加游戏分支。
 
 完整开发包约定见 [分发设计](../../docs/architecture/distribution-and-development.md)。本地和网站 `/replays` 共用浏览器播放器，见 [播放器说明](../player/README.md)。
+
+批量运行默认按 CPU、参赛人数与可用内存限制并发，`--jobs 1` 串行。输出仍按种子序号排序。系统失败输出 `match-error`，其他场继续；`batch.failedMatches` 统计失败数，失败批次返回非零退出码。每场独立进程，普通玩家故障只重建对应 isolate，比赛进程崩溃则整场不计分。

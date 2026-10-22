@@ -286,6 +286,9 @@ importers:
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:packages/protocol
+      '@si-arena/runner':
+        specifier: workspace:*
+        version: link:packages/runner
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.5
@@ -346,9 +349,9 @@ importers:
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@si-arena/sandbox':
+      '@si-arena/runner':
         specifier: workspace:*
-        version: link:../../packages/sandbox
+        version: link:../../packages/runner
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.4(@types/pg@8.23.1)(pg@8.23.1)
@@ -426,9 +429,9 @@ importers:
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@si-arena/sandbox':
+      '@si-arena/runner':
         specifier: workspace:*
-        version: link:../../packages/sandbox
+        version: link:../../packages/runner
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.4(@types/pg@8.23.1)(pg@8.23.1)
@@ -467,9 +470,9 @@ importers:
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@si-arena/sandbox':
+      '@si-arena/runner':
         specifier: workspace:*
-        version: link:../sandbox
+        version: link:../runner
       fflate:
         specifier: 'catalog:'
         version: 0.8.3
@@ -520,6 +523,22 @@ importers:
         version: 3.5.44(typescript@6.0.3)
 
   packages/protocol: {}
+
+  packages/runner:
+    dependencies:
+      '@si-arena/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@si-arena/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@si-arena/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
+    devDependencies:
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.15
 
   packages/sandbox:
     dependencies:

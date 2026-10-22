@@ -1,5 +1,6 @@
 /** Trusted guest code. Capture intrinsics before loading the SDK and player module. */
-export const BOOTSTRAP = String.raw`(function(emitLog) {
+export const BOOTSTRAP = String.raw`(function(emitLog, beginBudget) {
+  "use strict";
   const stringify = JSON.stringify;
   const parse = JSON.parse;
   const ownKeys = Reflect.ownKeys;
@@ -191,8 +192,7 @@ export const BOOTSTRAP = String.raw`(function(emitLog) {
     }
     return '{"ok":false,"error":' + encoded + ',"logsTruncated":' + logsTruncated + '}';
   }
-  return {
-    begin(text) {
+  function prepare(text, createGame) {
       config = parse(text);
       game = action = undefined;
       submitted = false;
@@ -200,8 +200,6 @@ export const BOOTSTRAP = String.raw`(function(emitLog) {
       failure = undefined;
       logLines = logBytes = 0;
       logsTruncated = false;
-    },
-    prepare(createGame) {
       const tickConfig = config;
       function checkActive() {
         if (config !== tickConfig || phase === 'closed') fail('INVALID_ACTION', 'Commands belong to their current tick only');
@@ -219,8 +217,8 @@ export const BOOTSTRAP = String.raw`(function(emitLog) {
         try { encode(action, config.limits.actionBytes, 'INVALID_ACTION', 'INVALID_ACTION', false); }
         catch (_) { failure = undefined; throw new Error('Trusted game API default action must be strict JSON data'); }
       } finally { phase = 'closed'; }
-    },
-    run(fn) {
+    }
+  function run(fn) {
       failure = undefined;
       phase = 'player';
       try {
@@ -237,5 +235,9 @@ export const BOOTSTRAP = String.raw`(function(emitLog) {
         return errorResult(failure || resourceFailure(error, text) || { type: 'RUNTIME_ERROR', ...text });
       } finally { phase = 'closed'; }
     }
-  };
+  return {prepare, run, tick(text, createGame, fn) {
+    prepare(text, createGame);
+    beginBudget();
+    return run(fn);
+  }};
 })`;

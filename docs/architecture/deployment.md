@@ -43,7 +43,7 @@ pnpm build:devkits
 docker compose --env-file .env.prod -f deploy/compose.prod.yaml --profile tools run --rm seed-releases
 ```
 
-`seed-releases` 把宿主 `./data/releases` 拷入 `releases_data` 卷，供 server 的发行下载路由读取。发行目录不可变：修改开发包内容时递增游戏 release，保留旧目录，再重跑上面的 seed 命令。当前圈地发行为 `paper@0.2.0` / 玩家接口 v2。v1 没有用户，不提供旧执行或旧回放兼容；网页和开发包仅注册当前发行，发行或协议不匹配时拒绝回放。
+`seed-releases` 把宿主 `./data/releases` 拷入 `releases_data` 卷，供 server 的发行下载路由读取。发行目录不可变：修改开发包内容时递增游戏 release，保留旧目录，再重跑上面的 seed 命令。当前圈地发行为 `paper@0.3.0` / 玩家接口 v2。v1 没有用户，不提供旧执行或旧回放兼容；网页和开发包仅注册当前发行，发行或协议不匹配时拒绝回放。
 
 日常更新：`git pull && docker compose --env-file .env.prod -f deploy/compose.prod.yaml up -d --build`，迁移服务会在启动前自动应用新的数据库变更。
 
@@ -93,4 +93,4 @@ pnpm publish:packages [--otp <验证码>]
 
 ## 沙箱隔离加固（可选）
 
-容器内 worker 默认 `WORKER_ISOLATION=local`：isolate 的 CPU、堆、栈与墙钟限制全部生效，但子进程 RSS 无 cgroup 上限。需要内核级内存硬限时，改用 `WORKER_ISOLATION=cgroup-v2` 并通过 `WORKER_CGROUP_ROOT` 指向宿主已委托（systemd `Delegate=`）的 cgroup v2 目录，将该目录挂载进 worker 容器。此时每个执行器获得独立资源组（`memory.max` 按发行 `resolvedLimits.processMemoryBytes`、`memory.swap.max=0`、`pids.max=64`、OOM 组杀）；隔离设施建立失败时拒绝执行，不回退。网络命名空间、只读根文件系统等容器层加固属部署侧责任，按需在 compose 或宿主配置。见 [沙箱](sandbox.md) 与 [资源限额](resource-limits.md)。
+容器内 worker 默认 `WORKER_ISOLATION=local`：isolate 的 CPU、堆、栈与墙钟限制全部生效，但子进程 RSS 无 cgroup 上限。需要内核级内存硬限时，改用 `WORKER_ISOLATION=cgroup-v2` 并通过 `WORKER_CGROUP_ROOT` 指向宿主已委托（systemd `Delegate=`）的 cgroup v2 目录，将该目录挂载进 worker 容器。此时每场比赛进程获得独立资源组（`memory.max` 按发行 `resolvedLimits.runnerMemoryBytes`、`memory.swap.max=0`、`pids.max=64`、OOM 组杀）；隔离设施建立失败时拒绝执行，不回退。网络命名空间、只读根文件系统等容器层加固属部署侧责任，按需在 compose 或宿主配置。见 [沙箱](sandbox.md) 与 [资源限额](resource-limits.md)。

@@ -38,7 +38,7 @@
   "dependencies": {
     "@si-arena/engine": "workspace:*",
     "@si-arena/protocol": "workspace:*",
-    "@si-arena/sandbox": "workspace:*",
+    "@si-arena/runner": "workspace:*",
     "fflate": "catalog:"
   },
   "engines": {

@@ -79,7 +79,7 @@ test("match kinds, boss flags, arena points and arena status are validated stric
     gameId: "royale",
     kind: "arena",
     status: "failed",
-    release: "royale@0.1.0",
+    release: "royale@0.2.0",
     seed: 1,
     initiatorId: "p",
     participants: [player],

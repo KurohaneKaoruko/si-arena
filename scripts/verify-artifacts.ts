@@ -123,6 +123,7 @@ import { paperManifest } from "@si-arena/game-paper";
 import { paperRules } from "@si-arena/game-paper/rules";
 import type { PaperResult } from "@si-arena/game-paper/rules";
 import { SandboxPlayer, createSandboxExecutor } from "@si-arena/sandbox";
+import {runMatchProcess} from "@si-arena/runner";
 import { resolveResourceLimits } from "@si-arena/protocol";
 import { paperGame } from "@si-arena/game-paper/game";
 import type { PaperState, PaperAction } from "@si-arena/game-paper/sdk";
@@ -130,7 +131,7 @@ import { MemoryReplaySink, runMatch, replayMatch } from "@si-arena/engine";
 import { createReplaySession } from "@si-arena/player";
 import { defineLocalGame } from "@si-arena/cli";
 import { PAPER_SDK_SOURCE, officialBotUrl } from "@si-arena/game-paper/game";
-const registration = defineLocalGame({game:paperGame,sdkSource:PAPER_SDK_SOURCE,officialBotUrl});
+const registration = defineLocalGame({game:paperGame,officialBotUrl,module:{url:import.meta.resolve("@si-arena/game-paper/game"),gameExport:"paperGame",sdkSourceExport:"PAPER_SDK_SOURCE"}});
 if(registration.manifest.id!=="paper")throw new Error("Packed CLI registration failed");
 let state = paperRules.init({
   seed: 2, config: paperManifest.config,
@@ -145,7 +146,7 @@ if (result?.completedTicks !== 500 || result.players.some(p => p.rank !== 1 || p
   throw new Error("Standalone match returned an unexpected result");
 }
 import { royaleGame, ROYALE_SDK_SOURCE, officialBotUrl as royaleBotUrl } from "@si-arena/game-royale/game";
-const royaleRegistration = defineLocalGame({game:royaleGame,sdkSource:ROYALE_SDK_SOURCE,officialBotUrl:royaleBotUrl});
+const royaleRegistration = defineLocalGame({game:royaleGame,officialBotUrl:royaleBotUrl,module:{url:import.meta.resolve("@si-arena/game-royale/game"),gameExport:"royaleGame",sdkSourceExport:"ROYALE_SDK_SOURCE"}});
 if(royaleRegistration.manifest.id!=="royale"||royaleRegistration.manifest.maxPlayers!==5)throw new Error("Packed royale registration failed");
 let royaleState = royaleGame.rules.init({
   seed: 2, config: royaleGame.manifest.config,
@@ -162,7 +163,7 @@ if (royaleResult?.reason !== "tick-limit" || royaleResult.players.some(p => p.ra
 const bot = await SandboxPlayer.create({
   matchId: "artifact", playerId: "alpha", source: "let calls=0;export default ({game,Memory})=>{calls++;Memory.n=(Memory.n??0)+1;Memory.calls=calls;game.act()}",
   sdkSource: "export default (o,{submit})=>{submit({type:'idle'});return {act(){submit({type:o.fail?'invalid':'idle'})}}}",
-  limits: resolveResourceLimits({cpuMs:100}), isolation: {kind:"local"},
+  limits: resolveResourceLimits({cpuMs:100}),
   parseAction: paperRules.parseAction, defaultAction: {type:"idle"},
 });
 try {
@@ -174,6 +175,8 @@ try {
       failed.memory.n !== 2 || !recovered.ok || recovered.memory.n !== 3 || recovered.memory.calls !== 1)
     throw new Error("Packed persistent sandbox or checkpoint recovery failed");
 } finally { await bot.close(); }
+const processMatch = await runMatchProcess({module:{url:import.meta.resolve("@si-arena/game-paper/game"),gameExport:"paperGame",sdkSourceExport:"PAPER_SDK_SOURCE"},manifest:paperGame.manifest,matchId:"packed-runner",seed:2,isolation:{kind:"local"},sources:["export default ()=>{}","export default ()=>{}"],players:[{id:"alpha",slot:0,name:"Alpha",official:false},{id:"beta",slot:1,name:"Beta",official:true}]});
+if(processMatch.errorCount || processMatch.result.completedTicks!==500 || (await replayMatch(processMatch.replayData,paperGame)).finalStateHash!==processMatch.finalStateHash)throw new Error("Packed match process failed");
 const sink = new MemoryReplaySink<PaperState,PaperAction>();
 const played = await runMatch({
   matchId:"packed-engine", game:paperGame, seed:2, sink,
@@ -182,7 +185,7 @@ const played = await runMatch({
     return createSandboxExecutor({...context,playerId:player.id,
       source:player.id==="alpha"?"export default ({game})=>{game.self.move('left')}":"export default ()=>{}",
       sdkSource:PAPER_SDK_SOURCE,
-      isolation:{kind:"local"},parseAction:paperRules.parseAction,
+      parseAction:paperRules.parseAction,
     });
   },
 });
@@ -233,7 +236,7 @@ if(playback.frame(played.result.completedTicks).state.tick!==played.result.compl
     `
 import {defineLocalGame} from "@si-arena/cli";
 import {paperGame,PAPER_SDK_SOURCE,officialBotUrl} from "@si-arena/game-paper/game";
-export default [defineLocalGame({game:paperGame,sdkSource:PAPER_SDK_SOURCE,officialBotUrl})];
+export default [defineLocalGame({game:paperGame,officialBotUrl,module:{url:import.meta.resolve("@si-arena/game-paper/game"),gameExport:"paperGame",sdkSourceExport:"PAPER_SDK_SOURCE"}})];
 `,
   );
   await writeFile(

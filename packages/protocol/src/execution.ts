@@ -43,3 +43,5 @@ export interface ExecuteTickInput extends ExecutionIdentity {
 
 export type ExecuteTickResult = ExecutionIdentity &
   ({ ok: true; action: JsonValue; memory: JsonObject } | { ok: false; error: ExecutionError });
+
+export const SANDBOX_RUNTIME = "v8-isolate" as const;

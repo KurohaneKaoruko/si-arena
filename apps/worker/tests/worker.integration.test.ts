@@ -3,7 +3,7 @@ import { createReadStream } from "node:fs";
 import { readFile, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Client } from "pg";
@@ -21,7 +21,7 @@ import { replayMatch } from "@si-arena/engine";
 import { readReplayFile } from "@si-arena/engine/node";
 import { claimNextMatch, failExpiredLeases, renewLease } from "../src/claim";
 import { runClaimedMatch, type WorkerJobContext } from "../src/execute";
-import { claimableReleases } from "../src/games";
+import { claimableReleases, findWorkerGame } from "../src/games";
 import { ReplayStore } from "../src/replay-store";
 import { settleMatch, type SettleInput } from "../src/settle";
 
@@ -598,3 +598,52 @@ dbTest("expired leases are failed by the sweep and claims skip unknown releases"
   expect(ids.has(two.id)).toBe(true);
   expect(ids.size).toBe(2);
 });
+
+dbTest(
+  "a match runner system failure cannot publish a replay or change either rating",
+  async () => {
+    const first = await createUser();
+    const second = await createUser();
+    await createEntry(first.id);
+    await createEntry(second.id);
+    const pending = await createPendingMatch(first, second);
+    const claim = await claimNextMatch(database.db, claimableReleases());
+    expect(claim!.id).toBe(pending.id);
+    const registration = findWorkerGame(claim!.gameId, claim!.release)!;
+    const run = vi
+      .spyOn(registration, "run")
+      .mockRejectedValueOnce(new Error("Match runner exited"));
+    try {
+      await expect(runClaimedMatch(ctx, claim!)).rejects.toThrow("Match runner exited");
+    } finally {
+      run.mockRestore();
+    }
+    const row = await matchRow(pending.id);
+    expect(row.status).toBe("failed");
+    expect(row.failureReason).toBe("EXECUTION_FAILED");
+    expect(row.replayFile).toBeNull();
+    await expect(stat(store.finalPath(pending.id))).rejects.toThrow();
+    await expect(stat(store.candidatePath(pending.id, claim!.executionId))).rejects.toThrow();
+    for (const player of [first, second]) {
+      const [entry] = await database.db
+        .select()
+        .from(gameEntries)
+        .where(eq(gameEntries.userId, player.id));
+      expect(entry).toMatchObject({ matchesPlayed: 0, rating: "1000.000000" });
+    }
+  },
+);
+
+dbTest(
+  "claiming leaves matches pending when their frozen runner budget exceeds capacity",
+  async () => {
+    const first = await createUser(),
+      second = await createUser();
+    const pending = await createPendingMatch(first, second);
+    const budget = pending.resolvedLimits.runnerMemoryBytes;
+    expect(await claimNextMatch(database.db, claimableReleases(), budget - 1)).toBeNull();
+    expect((await matchRow(pending.id)).status).toBe("pending");
+    const claim = await claimNextMatch(database.db, claimableReleases(), budget);
+    expect(claim?.id).toBe(pending.id);
+  },
+);

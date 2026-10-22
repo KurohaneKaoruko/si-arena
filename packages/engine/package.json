@@ -34,8 +34,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsdown --config ../../tsdown.config.ts --watch",
     "prepack": "pnpm build",
-    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project engine",
-    "example:paper": "node examples/paper-match.mjs"
+    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project engine"
   },
   "dependencies": {
     "@si-arena/protocol": "workspace:*"

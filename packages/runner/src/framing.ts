@@ -50,8 +50,8 @@ export class FramedChannel {
     stream.on("error", onError);
   }
 
-  send(value: unknown): void {
-    if (this.closed) throw new Error("IPC is closed");
+  send(value: unknown, callback?: (error?: Error | null) => void): void {
+    if (this.closed || this.stream.destroyed) throw new Error("IPC is closed");
     const body = Buffer.from(JSON.stringify(value));
     if (body.length > this.maxBytes) throw new RangeError("IPC message exceeds configured limit");
     // write() does not cap the queue. Close instead of accumulating arbitrary output.
@@ -59,7 +59,31 @@ export class FramedChannel {
       throw new RangeError("IPC queue exceeds configured limit");
     const header = Buffer.allocUnsafe(4);
     header.writeUInt32BE(body.length);
-    this.stream.write(Buffer.concat([header, body]));
+    this.stream.write(Buffer.concat([header, body]), callback);
+  }
+
+  /** Serial producers wait for transport capacity before preparing another frame. */
+  async sendAndDrain(value: unknown): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        this.stream.off("error", finished);
+        this.stream.off("close", closed);
+      };
+      const finished = (error?: Error | null) => {
+        cleanup();
+        if (error) reject(error);
+        else resolve();
+      };
+      const closed = () => finished(new Error("IPC is closed"));
+      this.stream.once("error", finished);
+      this.stream.once("close", closed);
+      try {
+        this.send(value, finished);
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
+    });
   }
 
   close(): void {

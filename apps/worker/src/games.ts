@@ -1,12 +1,26 @@
-import { PAPER_SDK_SOURCE, paperGame } from "@si-arena/game-paper/game";
-import { ROYALE_SDK_SOURCE, royaleGame } from "@si-arena/game-royale/game";
+import { paperGame } from "@si-arena/game-paper/game";
+import { royaleGame } from "@si-arena/game-royale/game";
 import { defineSandboxGame, type SandboxGameRegistration } from "./sandbox-match";
 
 // New games join by registering their trusted definition here; the rest of the
 // worker stays game-agnostic.
 const registrations: readonly SandboxGameRegistration[] = [
-  defineSandboxGame({ game: paperGame, sdkSource: PAPER_SDK_SOURCE }),
-  defineSandboxGame({ game: royaleGame, sdkSource: ROYALE_SDK_SOURCE }),
+  defineSandboxGame({
+    game: paperGame,
+    module: {
+      url: import.meta.resolve("@si-arena/game-paper/game"),
+      gameExport: "paperGame",
+      sdkSourceExport: "PAPER_SDK_SOURCE",
+    },
+  }),
+  defineSandboxGame({
+    game: royaleGame,
+    module: {
+      url: import.meta.resolve("@si-arena/game-royale/game"),
+      gameExport: "royaleGame",
+      sdkSourceExport: "ROYALE_SDK_SOURCE",
+    },
+  }),
 ];
 
 /** The worker only claims matches whose frozen release it has installed. */

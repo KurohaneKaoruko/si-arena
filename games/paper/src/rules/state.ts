@@ -12,27 +12,62 @@ export function readPaperGrid(grid: unknown, label: string): number[] {
   const immutable = Array.isArray(grid) && Object.isFrozen(grid);
   if (immutable) {
     const cached = frozenGrids.get(grid);
-    if (cached) return cached.slice();
+    // V8 uses a slow generic slice path for frozen arrays; the native iterator copies dense snapshots directly.
+    if (cached) return Array.from(cached);
   }
   const parsed = readArray(grid, CELL_COUNT, label).map((cell) => readInteger(cell, -1, 1, label));
-  if (immutable) frozenGrids.set(grid, Object.freeze(parsed.slice()));
+  if (immutable)
+    frozenGrids.set(
+      grid,
+      isJsonSnapshot(grid) ? (grid as readonly number[]) : Object.freeze(parsed.slice()),
+    );
   return parsed;
 }
 
 /** Read-only grid: a validated engine snapshot is shared as is, anything else is copied. */
 export function viewPaperGrid(grid: unknown, label: string): readonly number[] {
   if (!isJsonSnapshot(grid)) return readPaperGrid(grid, label);
-  if (!frozenGrids.has(grid as object)) readPaperGrid(grid, label);
+  if (!frozenGrids.has(grid as object)) {
+    const array = readArray(grid, CELL_COUNT, label);
+    for (let i = 0; i < array.length; i++) readInteger(array[i], -1, 1, label);
+    frozenGrids.set(grid as object, grid as readonly number[]);
+  }
   return grid as readonly number[];
 }
 
 export function parsePaperState(raw: unknown): PaperState {
-  return readPaperState(raw, readPaperGrid);
+  if (!isJsonSnapshot(raw)) return readPaperState(raw, readPaperGrid);
+  const state = viewPaperState(raw);
+  return {
+    ...state,
+    territory: readPaperGrid(state.territory, "territory"),
+    trails: readPaperGrid(state.trails, "trails"),
+    players: state.players.map((player) => ({
+      ...player,
+      position: player.position ? { ...player.position } : null,
+    })) as [PaperPlayer, PaperPlayer],
+    spawns: [{ ...state.spawns[0]! }, { ...state.spawns[1]! }],
+  };
 }
 
 /** parsePaperState for read-only use: engine snapshot grids are shared, not copied. */
+const validatedStates = new WeakMap<object, DeepReadonly<PaperState>>();
+
 export function viewPaperState(raw: unknown): DeepReadonly<PaperState> {
-  return readPaperState(raw, viewPaperGrid);
+  const known = raw !== null && typeof raw === "object" && isJsonSnapshot(raw);
+  if (known) {
+    const cached = validatedStates.get(raw as object);
+    if (cached) return cached;
+  }
+
+  const result = readPaperState(raw, viewPaperGrid);
+
+  if (known) {
+    const frozen = raw as DeepReadonly<PaperState>;
+    validatedStates.set(raw as object, frozen);
+    return frozen;
+  }
+  return result;
 }
 
 type GridState<Grid> = Omit<PaperState, "territory" | "trails"> & { territory: Grid; trails: Grid };

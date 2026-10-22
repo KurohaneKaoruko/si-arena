@@ -200,3 +200,29 @@ test("snapshots are deep-frozen, shared without re-walking, and thaw into detach
   expect(Object.hasOwn(copied, "__proto__")).toBe(true);
   expect(Object.getPrototypeOf(copied)).toBe(Object.prototype);
 });
+
+test("cached snapshot encoding preserves canonical order, hooks policy and exact byte ceilings", () => {
+  const value = snapshotJson({
+    z: [-1, 0, 1, 1e30],
+    a: { text: "你好🌟\ud800\n", toJSON: "data" },
+  });
+  const ordinary = stringifyJson(value);
+  expect(stringifyJson(value)).toBe(ordinary);
+  expect(() => stringifyJson(value, { maxBytes: utf8Bytes(ordinary) - 1 })).toThrow(RangeError);
+  expect(stringifyJson(value, { canonical: true })).toMatch(/^\{"a":/);
+  const original = Object.getOwnPropertyDescriptor(Object.prototype, "toJSON");
+  let polluted: string;
+  try {
+    // oxlint-disable-next-line no-extend-native -- Regression test for inherited serialization hooks.
+    Object.defineProperty(Object.prototype, "toJSON", {
+      configurable: true,
+      value: () => ({ forged: true }),
+    });
+    polluted = stringifyJson(snapshotJson({ numbers: [1, 2], nested: { ok: true } }));
+  } finally {
+    // oxlint-disable-next-line no-extend-native -- Restore the original prototype after the test.
+    if (original) Object.defineProperty(Object.prototype, "toJSON", original);
+    else Reflect.deleteProperty(Object.prototype, "toJSON");
+  }
+  expect(polluted).toBe('{"numbers":[1,2],"nested":{"ok":true}}');
+});

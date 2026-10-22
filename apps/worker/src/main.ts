@@ -1,4 +1,4 @@
-import { SANDBOX_RUNTIME } from "@si-arena/sandbox";
+import { SANDBOX_RUNTIME } from "@si-arena/runner";
 import { createDatabase } from "@si-arena/db";
 import { readWorkerConfig } from "./config";
 import { claimNextMatch, failExpiredLeases } from "./claim";
@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   };
   const claimable = claimableReleases();
   const shutdown = new AbortController();
-  const active = new Set<string>();
+  const active = new Map<string, number>();
   const jobs = new Set<Promise<void>>();
   let stopped = false;
   let polling: Promise<void> | undefined;
@@ -55,14 +55,19 @@ async function main(): Promise<void> {
     }
     while (active.size < config.concurrency) {
       if (stopped) break;
-      const claim = await claimNextMatch(ctx.db, claimable).catch((error: unknown) => {
-        log("claim-error", { message: String(error) });
-        return null;
-      });
+      const reservedBytes = [...active.values()].reduce((sum, bytes) => sum + bytes, 0);
+      const capacityBytes = Math.floor(process.availableMemory() - reservedBytes);
+      if (capacityBytes <= 0) break;
+      const claim = await claimNextMatch(ctx.db, claimable, capacityBytes).catch(
+        (error: unknown) => {
+          log("claim-error", { message: String(error) });
+          return null;
+        },
+      );
       // A claim finishing during shutdown stays running for the lease sweep;
       // never start a new job after shutdown has begun.
       if (claim === null || stopped) break;
-      active.add(claim.id);
+      active.set(claim.id, claim.resolvedLimits.runnerMemoryBytes);
       log("match-claimed", { matchId: claim.id, gameId: claim.gameId, release: claim.release });
       const job = runClaimedMatch(ctx, claim, shutdown.signal)
         .then(() => log("match-finished", { matchId: claim.id }))

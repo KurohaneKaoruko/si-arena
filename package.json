@@ -24,8 +24,9 @@
     "test:watch": "vitest --watch --configLoader runner",
     "test:coverage": "vitest run --configLoader runner --coverage",
     "test:artifacts": "pnpm build && node --import tsx scripts/verify-artifacts.ts && node --import tsx scripts/verify-devkits.ts",
-    "example:paper": "pnpm build:packages && pnpm --filter @si-arena/engine example:paper",
-    "publish:packages": "node --import tsx scripts/publish.ts"
+    "example:paper": "pnpm build:packages && node scripts/example-paper.mjs",
+    "publish:packages": "node --import tsx scripts/publish.ts",
+    "bench:runner": "pnpm build:packages && node scripts/benchmark-runner.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "catalog:",
@@ -35,6 +36,7 @@
     "@si-arena/game-paper": "workspace:*",
     "@si-arena/game-royale": "workspace:*",
     "@si-arena/protocol": "workspace:*",
+    "@si-arena/runner": "workspace:*",
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "@vitest/coverage-v8": "catalog:",

@@ -7,22 +7,13 @@ import {
   truncateUtf8,
   type ExecutionError,
   type ExecutionErrorType,
-  type ExecutionIdentity,
   type JsonObject,
   type JsonValue,
   type PlayerLog,
-  type ResourceLimits,
 } from "@si-arena/protocol";
 import { isRecord } from "./json";
-import { ExecutorProcess, ExecutorStopped, type ExecutorBinding } from "./process";
-import {
-  MatchLogBudget,
-  SandboxSystemError,
-  type SandboxOptions,
-  type SourceValidationOptions,
-  type SourceValidationResult,
-  type TickOutcome,
-} from "./types";
+import { GuestSession } from "./runtime";
+import { MatchLogBudget, SandboxSystemError, type SandboxOptions, type TickOutcome } from "./types";
 
 const ERROR_TYPES = new Set<ExecutionErrorType>([
   "RUNTIME_ERROR",
@@ -36,62 +27,53 @@ const ERROR_TYPES = new Set<ExecutionErrorType>([
   "EXECUTION_TIMEOUT",
   "EXECUTOR_ERROR",
 ]);
-const LEVELS = new Set(["log", "info", "warn", "error", "debug"]);
 
+/** One independent isolate. Its caller must be the disposable match runner, never the API. */
 export class SandboxPlayer<Action extends JsonValue> {
-  private executor: ExecutorProcess | undefined;
-  private rebuilding: Promise<void> | undefined;
-  private committed: JsonObject = {};
+  private readonly guest = new GuestSession();
+  private readonly limits;
+  private readonly logBudget;
+  private readonly fallback: Action;
+  private committed = snapshotJson({}) as JsonObject;
   private busy = false;
   private closed = false;
   private lastTick = -1;
-  private resetEnvironment = false;
-  private readonly limits: ResourceLimits;
-  private readonly source: string;
-  private readonly sdkSource: string;
-  private readonly logBudget: MatchLogBudget;
-  private readonly fallback: Action;
+  private readonly executionId = randomUUID();
 
   private constructor(private readonly options: SandboxOptions<Action>) {
-    this.limits = checkedLimits(options.limits);
-    assertSource(options.source, this.limits);
+    this.limits = snapshotJson(resolveResourceLimits(options.limits));
     if (!options.matchId || !options.playerId)
       throw new TypeError("Match and player identities are required");
-    if (typeof options.sdkSource !== "string" || options.sdkSource.length === 0)
-      throw new TypeError("Trusted SDK source is required");
-    this.source = options.source;
-    this.sdkSource = options.sdkSource;
-    if (Buffer.byteLength(this.sdkSource) > this.limits.codeBytes)
-      throw new SandboxSystemError("Trusted SDK exceeds input budget");
+    if (
+      typeof options.source !== "string" ||
+      Buffer.byteLength(options.source) > this.limits.codeBytes
+    )
+      throw new RangeError("Player source exceeds code byte limit");
+    if (
+      typeof options.sdkSource !== "string" ||
+      !options.sdkSource.length ||
+      Buffer.byteLength(options.sdkSource) > this.limits.codeBytes
+    )
+      throw new TypeError("Trusted SDK is missing or exceeds input budget");
+    this.fallback = snapshotJson(options.defaultAction, this.limits.actionBytes) as Action;
     this.logBudget = options.logBudget ?? new MatchLogBudget(this.limits.logs.matchBytes);
     if (this.logBudget.maxBytes > this.limits.logs.matchBytes)
       throw new SandboxSystemError("Match log budget exceeds release limit");
-    this.fallback = cloneJson(options.defaultAction, this.limits.actionBytes);
+    this.guest.prepareSource(options.source);
   }
 
   static async create<Action extends JsonValue>(
     options: SandboxOptions<Action>,
   ): Promise<SandboxPlayer<Action>> {
-    const player = new SandboxPlayer(options);
-    player.executor = await ExecutorProcess.start(player.limits, options.isolation, player.binding);
-    return player;
+    return new SandboxPlayer(options);
   }
 
-  private get binding(): ExecutorBinding {
-    return {
-      matchId: this.options.matchId,
-      playerId: this.options.playerId,
-      source: this.source,
-      sdkSource: this.sdkSource,
-      limits: this.limits,
-      captureLogs: this.options.captureLogs ?? false,
-    };
+  get memorySnapshot() {
+    return this.committed;
   }
+
   get memory(): JsonObject {
-    return cloneJson(this.committed, this.limits.memoryBytes);
-  }
-  get processId(): number | undefined {
-    return this.executor?.pid;
+    return cloneJson(this.committed);
   }
 
   async execute(
@@ -101,292 +83,158 @@ export class SandboxPlayer<Action extends JsonValue> {
   ): Promise<TickOutcome<Action>> {
     if (this.closed) throw new SandboxSystemError("Player executor is closed");
     if (this.busy) throw new SandboxSystemError("Concurrent ticks for one player are forbidden");
-    if (!Number.isSafeInteger(tick) || tick <= this.lastTick)
+    if (!Number.isSafeInteger(tick) || tick < 0 || tick <= this.lastTick)
       throw new SandboxSystemError("Ticks must be non-negative and strictly increasing");
-    // Trusted world data exceeding its budget is a system failure, never player misconduct.
     let observed: JsonValue;
     let fallback: Action;
     try {
       observed = snapshotJson(observation, this.limits.observationBytes) as JsonValue;
-      fallback = cloneJson(defaultAction, this.limits.actionBytes);
+      fallback = snapshotJson(defaultAction, this.limits.actionBytes) as Action;
     } catch {
       throw new SandboxSystemError("Observation is invalid or exceeds release budget");
     }
-    const dispatchedAt = performance.now();
     this.busy = true;
     this.lastTick = tick;
-    const logs: PlayerLog[] = [];
-    let logsTruncated = false,
-      logBytes = 0;
-    let identity: ExecutionIdentity = {
+    const identity = {
       matchId: this.options.matchId,
       playerId: this.options.playerId,
       tick,
-      executionId: this.executor?.id ?? randomUUID(),
+      executionId: this.executionId,
     };
-    const failed = (error: ExecutionError): TickOutcome<Action> => {
-      this.resetEnvironment = true;
+    const logs: PlayerLog[] = [];
+    let logsTruncated = false;
+    let logBytes = 0;
+    const finish = (result: Omit<TickOutcome<Action>, "memory">): TickOutcome<Action> => {
+      // Diagnostics are detached on demand, never cloned along the ordinary engine path.
+      const committed = this.committed;
       return {
+        ...result,
+        get memory() {
+          return cloneJson(committed);
+        },
+      };
+    };
+    const fail = (error: ExecutionError, cpuUsedUs?: number): TickOutcome<Action> => {
+      this.guest.close();
+      return finish({
         ...identity,
         ok: false,
-        action: cloneJson(fallback, this.limits.actionBytes),
-        memory: this.memory,
+        action: cloneJson(fallback),
         error,
+        ...(cpuUsedUs === undefined ? {} : { resources: { cpuUsedUs } }),
         ...(this.options.captureLogs
           ? { logs, ...(logsTruncated ? { logsTruncated: true as const } : {}) }
           : {}),
-      };
+      });
     };
     try {
-      if (this.rebuilding) {
-        await Promise.race([
-          this.rebuilding,
-          new Promise<void>((resolve) => {
-            const timer = setTimeout(resolve, this.limits.wallMs);
-            timer.unref();
-          }),
-        ]);
-      }
-      // A failed rebuild leaves the executor unusable, so the next tick takes
-      // the restart path again: transient spawn failures cost one tick each and
-      // never wedge the player for the rest of the match.
-      const executor = this.executor;
-      if (!executor?.usable) {
-        this.rebuild();
-        return failed({ type: "EXECUTOR_ERROR", message: "Player executor is restarting" });
-      }
-      identity = { ...identity, executionId: executor.id };
-      // Source, SDK and limits were bound when the process started.
-      const request = {
-        kind: "tick",
-        resetEnvironment: this.resetEnvironment,
-        input: { ...identity, observation: observed, memory: this.committed },
-        logBytes: Math.min(this.limits.logs.tickBytes, this.logBudget.remainingBytes),
-      };
-      if (Buffer.byteLength(JSON.stringify(request)) > this.limits.ipcBytes)
-        throw new SandboxSystemError("Trusted tick envelope exceeds IPC budget");
-      let message: Record<string, unknown>;
-      try {
-        message = await executor.request(
-          request,
-          Math.max(1, this.limits.wallMs - (performance.now() - dispatchedAt)),
-          (value) => {
-            if (!matches(value, identity)) return false;
-            if (value.kind === "system-error")
-              throw new SandboxSystemError("Trusted sandbox runtime failed");
-            if (value.kind === "logs-truncated") {
-              if (!this.options.captureLogs)
-                throw new SandboxSystemError("Unexpected log metadata");
-              logsTruncated = true;
-              return false;
-            }
-            if (value.kind === "log") {
-              const log = value.log;
-              if (
-                !isRecord(log) ||
-                typeof log.level !== "string" ||
-                !LEVELS.has(log.level) ||
-                typeof log.message !== "string"
-              )
-                throw new SandboxSystemError("Malformed log frame");
-              const bytes = Buffer.byteLength(log.message);
-              if (!this.options.captureLogs || bytes > this.limits.logs.lineBytes)
-                throw new SandboxSystemError("Unexpected or oversized log frame");
-              if (
-                logs.length >= this.limits.logs.tickLines ||
-                logBytes + bytes > this.limits.logs.tickBytes ||
-                !this.logBudget.consume(bytes)
-              )
-                logsTruncated = true;
-              else {
-                logs.push({ level: log.level as PlayerLog["level"], message: log.message });
-                logBytes += bytes;
-              }
-              return false;
-            }
-            if (value.kind !== "result")
-              throw new SandboxSystemError("Unexpected executor message");
-            return true;
-          },
-        );
-      } catch (error) {
-        this.rebuild();
-        if (!(error instanceof ExecutorStopped)) throw error;
-        return failed({
-          type: error.reason,
-          message:
-            error.reason === "EXECUTION_TIMEOUT"
-              ? "Tick wall time exceeded"
-              : "Player executor stopped",
-        });
-      }
+      const result = await this.guest.execute(
+        {
+          ...identity,
+          source: this.options.source,
+          observation: observed,
+          memory: this.committed,
+          limits: this.limits,
+          captureLogs: this.options.captureLogs ?? false,
+        },
+        this.options.sdkSource,
+        Math.min(this.limits.logs.tickBytes, this.logBudget.remainingBytes),
+        (log) => {
+          const bytes = Buffer.byteLength(log.message);
+          if (!this.options.captureLogs || bytes > this.limits.logs.lineBytes)
+            throw new SandboxSystemError("Unexpected trusted logger output");
+          if (
+            logs.length >= this.limits.logs.tickLines ||
+            logBytes + bytes > this.limits.logs.tickBytes ||
+            !this.logBudget.consume(bytes)
+          )
+            logsTruncated = true;
+          else {
+            logs.push(log);
+            logBytes += bytes;
+          }
+        },
+        () => {
+          logsTruncated = true;
+        },
+      );
       if (
-        typeof message.payload !== "string" ||
-        Buffer.byteLength(message.payload) > this.limits.resultBytes ||
-        !Number.isSafeInteger(message.cpuUsedUs) ||
-        Number(message.cpuUsedUs) < 0
+        Buffer.byteLength(result.payload) > this.limits.resultBytes ||
+        !Number.isSafeInteger(result.cpuUsedUs) ||
+        result.cpuUsedUs < 0
       )
-        throw new SandboxSystemError("Malformed executor result");
-      this.resetEnvironment = false;
-      const output: unknown = JSON.parse(message.payload);
+        throw new SandboxSystemError("Malformed isolate result");
+      const output: unknown = JSON.parse(result.payload);
       if (!isRecord(output) || typeof output.ok !== "boolean")
         throw new SandboxSystemError("Invalid execution output");
       logsTruncated ||= output.logsTruncated === true;
-      const resources = { cpuUsedUs: Number(message.cpuUsedUs) };
-      if (!output.ok) return { ...failed(parseError(output.error, this.limits)), resources };
-      if (resources.cpuUsedUs > this.limits.cpuMs * 1000)
-        return { ...failed({ type: "CPU_LIMIT", message: "Tick CPU budget exceeded" }), resources };
-      if (!isRecord(output.memory)) throw new SandboxSystemError("Malformed candidate Memory");
+      if (!output.ok) {
+        const error = output.error;
+        if (
+          !isRecord(error) ||
+          !ERROR_TYPES.has(error.type as ExecutionErrorType) ||
+          typeof error.message !== "string" ||
+          Buffer.byteLength(JSON.stringify(error)) > this.limits.errorBytes ||
+          (error.name !== undefined && typeof error.name !== "string") ||
+          (error.stack !== undefined && typeof error.stack !== "string")
+        )
+          throw new SandboxSystemError("Invalid bounded error diagnostic");
+        return fail(error as unknown as ExecutionError, result.cpuUsedUs);
+      }
+      if (result.cpuUsedUs > this.limits.cpuMs * 1000)
+        return fail({ type: "CPU_LIMIT", message: "Tick CPU budget exceeded" }, result.cpuUsedUs);
       let memory: JsonObject;
       let action: JsonValue;
       try {
-        // Frozen, so the memory getter copies it without another strict walk.
+        if (!isRecord(output.memory)) throw new Error("Invalid root");
         memory = snapshotJson(output.memory, this.limits.memoryBytes) as JsonObject;
       } catch {
-        return {
-          ...failed({ type: "MEMORY_INVALID", message: "Candidate Memory failed validation" }),
-          resources,
-        };
+        return fail(
+          { type: "MEMORY_INVALID", message: "Candidate Memory failed validation" },
+          result.cpuUsedUs,
+        );
       }
       try {
         action = toJsonValue(output.action, this.limits.actionBytes);
       } catch {
-        return {
-          ...failed({ type: "INVALID_ACTION", message: "Action failed JSON validation" }),
-          resources,
-        };
+        return fail(
+          { type: "INVALID_ACTION", message: "Action failed JSON validation" },
+          result.cpuUsedUs,
+        );
       }
-      // A throwing trusted game parser is a system failure. Do not hide it as player error.
       const parsed = this.options.parseAction(action);
       if (!parsed.ok)
-        return {
-          ...failed({
+        return fail(
+          {
             type: "INVALID_ACTION",
-            message: truncateUtf8(parsed.message, (this.limits.errorBytes / 8) | 0),
-          }),
-          resources,
-        };
+            message: truncateUtf8(parsed.message, this.limits.errorBytes >> 3),
+          },
+          result.cpuUsedUs,
+        );
       const normalized = cloneJson(parsed.action, this.limits.actionBytes);
       this.committed = memory;
-      return {
+      return finish({
         ...identity,
         ok: true,
         action: normalized,
-        memory: this.memory,
-        resources,
+        resources: { cpuUsedUs: result.cpuUsedUs },
         ...(this.options.captureLogs
           ? { logs, ...(logsTruncated ? { logsTruncated: true as const } : {}) }
           : {}),
-      };
+      });
+    } catch (error) {
+      this.guest.close();
+      if (error instanceof SandboxSystemError) throw error;
+      throw new SandboxSystemError(
+        error instanceof Error ? error.message : "Trusted sandbox runtime failed",
+      );
     } finally {
       this.busy = false;
     }
   }
 
-  private rebuild(): void {
-    if (this.closed || this.rebuilding) return;
-    const old = this.executor;
-    this.executor = undefined;
-    this.rebuilding = (async () => {
-      await old?.close();
-      if (this.closed) return;
-      this.executor = await ExecutorProcess.start(
-        this.limits,
-        this.options.isolation,
-        this.binding,
-      );
-      if (this.closed) {
-        await this.executor.close();
-        this.executor = undefined;
-      }
-    })()
-      .catch(() => {
-        // Spawn failures are per-tick by design; the next execute retries via
-        // the unusable-executor path. Swallowing keeps close() rejection-free.
-      })
-      .finally(() => {
-        this.rebuilding = undefined;
-      });
-  }
-
   async close(): Promise<void> {
     this.closed = true;
-    await this.executor?.close();
-    await this.rebuilding;
-    this.executor = undefined;
+    this.guest.close();
   }
-}
-
-export async function validateSource(
-  options: SourceValidationOptions,
-): Promise<SourceValidationResult> {
-  const limits = checkedLimits(options.limits);
-  assertSource(options.source, limits);
-  const executor = await ExecutorProcess.start(limits, options.isolation);
-  const validationId = randomUUID();
-  try {
-    const message = await executor.request(
-      { kind: "validate", validationId, executionId: executor.id, source: options.source, limits },
-      limits.wallMs,
-      (value) => {
-        if (value.validationId !== validationId || value.executionId !== executor.id) return false;
-        if (value.kind !== "validation-result")
-          throw new SandboxSystemError("Source validation executor failed");
-        return true;
-      },
-    );
-    if (
-      typeof message.payload !== "string" ||
-      Buffer.byteLength(message.payload) > limits.resultBytes
-    )
-      throw new SandboxSystemError("Invalid validation output");
-    const output: unknown = JSON.parse(message.payload);
-    if (!isRecord(output)) throw new SandboxSystemError("Invalid validation result");
-    return output.ok === true
-      ? { ok: true }
-      : { ok: false, error: parseError(output.error, limits) };
-  } catch (error) {
-    if (!(error instanceof ExecutorStopped)) throw error;
-    return {
-      ok: false,
-      error: { type: error.reason, message: "Source validation executor stopped" },
-    };
-  } finally {
-    await executor.close();
-  }
-}
-
-function checkedLimits(limits: ResourceLimits): ResourceLimits {
-  const resolved = resolveResourceLimits(limits);
-  Object.freeze(resolved.logs);
-  return Object.freeze(resolved);
-}
-function assertSource(source: string, limits: ResourceLimits): void {
-  if (typeof source !== "string" || Buffer.byteLength(source) > limits.codeBytes)
-    throw new RangeError("Player source exceeds code byte limit");
-}
-function matches(message: Record<string, unknown>, identity: ExecutionIdentity): boolean {
-  return (
-    message.matchId === identity.matchId &&
-    message.playerId === identity.playerId &&
-    message.tick === identity.tick &&
-    message.executionId === identity.executionId
-  );
-}
-function parseError(value: unknown, limits: ResourceLimits): ExecutionError {
-  if (
-    !isRecord(value) ||
-    !ERROR_TYPES.has(value.type as ExecutionErrorType) ||
-    typeof value.message !== "string" ||
-    Buffer.byteLength(JSON.stringify(value)) > limits.errorBytes ||
-    (value.name !== undefined && typeof value.name !== "string") ||
-    (value.stack !== undefined && typeof value.stack !== "string")
-  )
-    throw new SandboxSystemError("Invalid bounded error diagnostic");
-  return {
-    type: value.type as ExecutionErrorType,
-    message: value.message,
-    ...(typeof value.name === "string" ? { name: value.name } : {}),
-    ...(typeof value.stack === "string" ? { stack: value.stack } : {}),
-  };
 }

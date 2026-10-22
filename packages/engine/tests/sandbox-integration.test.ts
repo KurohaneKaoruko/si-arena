@@ -33,7 +33,7 @@ test("real isolated-vm matches recover from player errors, preserve Memory and g
         playerId: player.id,
         source,
         sdkSource: "export default (o,{submit})=>{submit({add:0});return {...o,submit}}",
-        isolation: { kind: "local" },
+
         parseAction: game.rules.parseAction,
         defaultAction: { add: 0 },
         logBudget: budget,
@@ -76,7 +76,7 @@ test("the published official Paper bot plays under the normal release limits and
         playerId: player.id,
         source: player.official ? source : "export default ()=>{}",
         sdkSource: PAPER_SDK_SOURCE,
-        isolation: { kind: "local" },
+
         parseAction: paperGame.rules.parseAction,
         defaultAction: { type: "idle" },
       });
@@ -112,7 +112,7 @@ async function cpuSpeedFactor(): Promise<number> {
       "export default ({game,Memory})=>{let s=0;for(let i=0;i<200000;i++)s+=i;return game.submit({type:'idle'})}",
     sdkSource: "export default (o,{submit})=>{submit({type:'idle'});return {...o,submit}}",
     limits: resolveResourceLimits({ cpuMs: 1000, wallMs: 10000 }),
-    isolation: { kind: "local" },
+
     parseAction: paperGame.rules.parseAction,
     defaultAction: { type: "idle" },
   });
@@ -203,7 +203,7 @@ test("the official Paper bot keeps to the safe directions when the opponent head
     source,
     sdkSource: PAPER_SDK_SOURCE,
     limits,
-    isolation: { kind: "local" },
+
     parseAction: paperGame.rules.parseAction,
     defaultAction: { type: "idle" },
   });
@@ -258,7 +258,7 @@ test("Paper exposes only basic commands and immutable facts; commands do not imm
     matchId: "basic-api",
     playerId: "a",
     limits: resolveResourceLimits({ cpuMs: 100 }),
-    isolation: { kind: "local" },
+
     sdkSource: PAPER_SDK_SOURCE,
     defaultAction: { type: "idle" },
     parseAction: paperGame.rules.parseAction,

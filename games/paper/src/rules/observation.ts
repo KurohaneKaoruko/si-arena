@@ -1,4 +1,4 @@
-import type { DeepReadonly } from "@si-arena/protocol";
+import { isJsonSnapshot, snapshotJson, type DeepReadonly } from "@si-arena/protocol";
 import { PAPER_CONFIG, PAPER_MAX_TICKS } from "../constants";
 import type {
   PaperEvent,
@@ -92,6 +92,31 @@ function events(raw: unknown, ids: string[]): PaperEvent[] {
   });
 }
 
+type CommonObservation = Omit<PaperObservation, "selfId" | "selfSlot">;
+const EMPTY_EVENTS = snapshotJson<PaperEvent[]>([]);
+const views = new WeakMap<object, { events: object; common: DeepReadonly<CommonObservation> }>();
+const parsedViews = new WeakMap<
+  object,
+  {
+    tick: unknown;
+    maxTicks: unknown;
+    players: unknown;
+    events: unknown;
+    common: DeepReadonly<CommonObservation>;
+  }
+>();
+
+function withIdentity(
+  value: Record<string, unknown>,
+  common: DeepReadonly<CommonObservation>,
+): DeepReadonly<PaperObservation> {
+  const selfSlot = readInteger(value.selfSlot, 0, 1, "selfSlot") as 0 | 1;
+  const selfId = readId(value.selfId);
+  if (common.players[selfSlot]?.id !== selfId)
+    throw new TypeError("Paper observation identity mismatch");
+  return { ...common, selfId, selfSlot };
+}
+
 /** Board grids that arrive as engine snapshots stay shared; callers must not mutate them. */
 export function parsePaperObservation(raw: unknown): DeepReadonly<PaperObservation> {
   const value = readRecord(
@@ -99,6 +124,16 @@ export function parsePaperObservation(raw: unknown): DeepReadonly<PaperObservati
     ["tick", "maxTicks", "selfId", "selfSlot", "board", "players", "events"],
     "Paper observation",
   );
+  const cached =
+    value.board && typeof value.board === "object" ? parsedViews.get(value.board) : undefined;
+  if (
+    cached &&
+    cached.tick === value.tick &&
+    cached.maxTicks === value.maxTicks &&
+    cached.players === value.players &&
+    cached.events === value.events
+  )
+    return withIdentity(value, cached.common);
   const b = readRecord(value.board, ["width", "height", "territory", "trails"], "board");
   if (
     b.width !== PAPER_CONFIG.width ||
@@ -140,9 +175,6 @@ export function parsePaperObservation(raw: unknown): DeepReadonly<PaperObservati
     )
       throw new TypeError("Inconsistent visible head and trail");
   }
-  const selfSlot = readInteger(value.selfSlot, 0, 1, "selfSlot") as 0 | 1;
-  const selfId = readId(value.selfId);
-  if (players[selfSlot].id !== selfId) throw new TypeError("Paper observation identity mismatch");
   const tick = readInteger(value.tick, 0, PAPER_MAX_TICKS, "tick");
   const previousEvents = events(
     value.events,
@@ -150,15 +182,29 @@ export function parsePaperObservation(raw: unknown): DeepReadonly<PaperObservati
   );
   if (tick === 0 && previousEvents.length)
     throw new TypeError("Initial observation cannot have previous events");
-  return {
+  const common: DeepReadonly<CommonObservation> = {
     tick,
     maxTicks: PAPER_MAX_TICKS,
-    selfId,
-    selfSlot,
     board,
     players,
     events: previousEvents,
   };
+  if (
+    isJsonSnapshot(value.board) &&
+    isJsonSnapshot(value.players) &&
+    isJsonSnapshot(value.events)
+  ) {
+    const immutable = snapshotJson(common);
+    parsedViews.set(value.board as object, {
+      tick: value.tick,
+      maxTicks: value.maxTicks,
+      players: value.players,
+      events: value.events,
+      common: immutable,
+    });
+    return withIdentity(value, immutable);
+  }
+  return withIdentity(value, common);
 }
 
 export function observePaper(
@@ -170,27 +216,32 @@ export function observePaper(
   const player = snapshot.players.find((p) => p.id === playerId);
   if (!player) throw new TypeError("Unknown Paper player");
   if (snapshot.tick >= PAPER_MAX_TICKS) return null;
+  const previousEvents = context?.events ?? EMPTY_EVENTS;
+  const cached = isJsonSnapshot(state) ? views.get(state) : undefined;
+  if (cached?.events === previousEvents)
+    return { ...cached.common, selfId: player.id, selfSlot: player.slot } as PaperObservation;
   const players = snapshot.players.map((p): PaperVisiblePlayer => {
     const spawn = snapshot.spawns[p.slot];
     if (!p.position || !spawn) throw new TypeError("Missing Paper head");
     return { id: p.id, slot: p.slot, position: { ...p.position }, spawn: { ...spawn } };
   }) as [PaperVisiblePlayer, PaperVisiblePlayer];
-  return {
+  const common: DeepReadonly<CommonObservation> = {
     tick: snapshot.tick,
     maxTicks: snapshot.maxTicks,
-    selfId: player.id,
-    selfSlot: player.slot,
     board: {
       width: snapshot.width,
       height: snapshot.height,
-      // Engine snapshot grids are immutable and shared; any other state was copied above.
-      territory: snapshot.territory as number[],
-      trails: snapshot.trails as number[],
+      territory: snapshot.territory,
+      trails: snapshot.trails,
     },
     players,
     events: events(
-      context?.events ?? [],
+      previousEvents,
       players.map((p) => p.id),
     ),
   };
+  const shared = isJsonSnapshot(state) ? snapshotJson(common) : common;
+  if (isJsonSnapshot(state) && isJsonSnapshot(previousEvents))
+    views.set(state, { events: previousEvents, common: shared });
+  return { ...shared, selfId: player.id, selfSlot: player.slot } as PaperObservation;
 }
