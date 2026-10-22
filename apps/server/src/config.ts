@@ -11,6 +11,8 @@ export function readServerConfig(env: NodeJS.ProcessEnv = process.env) {
   return {
     host: env.API_HOST ?? "127.0.0.1",
     port,
+    /** Proxy addresses/CIDRs (proxy-addr syntax) whose X-Forwarded-For is believed; unset trusts none. */
+    trustProxy: env.TRUST_PROXY || undefined,
     logLevel: env.LOG_LEVEL ?? "info",
     databaseUrl,
     replaysDir: resolve(

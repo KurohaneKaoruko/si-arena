@@ -281,20 +281,61 @@ dbTest("a stale rate-limit window does not block the current one", async () => {
   expect(second.statusCode).toBe(401);
 });
 
-dbTest("register is limited to three per hour per IP", async () => {
+dbTest("register counts only successful sign-ups per IP", async () => {
   const ip = uniqueIp();
-  for (const name of ["frank-1", "frank-2", "frank-3"]) {
+  const { limit } = AUTH_RATE_LIMITS.register;
+  // Failed attempts (taken names, bad input) must not burn the quota.
+  for (let i = 0; i < limit + 2; i++) {
+    const bad = await call("POST", "/api/auth/register", {
+      body: { username: "x", password: "rank-pass" },
+      ip,
+    });
+    expect(bad.statusCode).toBe(400);
+  }
+  for (let i = 1; i <= limit; i++) {
     const res = await call("POST", "/api/auth/register", {
-      body: { username: name, password: "rank-pass" },
+      body: { username: `frank-${i}`, password: "rank-pass" },
       ip,
     });
     expect(res.statusCode).toBe(201);
+    if (i === limit) break;
+    const taken = await call("POST", "/api/auth/register", {
+      body: { username: `frank-${i}`, password: "rank-pass" },
+      ip,
+    });
+    expect(taken.statusCode).toBe(409);
   }
-  const fourth = await call("POST", "/api/auth/register", {
-    body: { username: "frank-4", password: "rank-pass" },
+  const over = await call("POST", "/api/auth/register", {
+    body: { username: "frank-over", password: "rank-pass" },
     ip,
   });
-  expect(fourth.statusCode).toBe(429);
+  expect(over.statusCode).toBe(429);
+  const otherIp = await call("POST", "/api/auth/register", {
+    body: { username: "frank-other", password: "rank-pass" },
+  });
+  expect(otherIp.statusCode).toBe(201);
+});
+
+dbTest("behind one trusted proxy, clients are limited by their forwarded IP", async () => {
+  const proxied = buildApp({ db: database.db, trustProxy: "uniquelocal" });
+  try {
+    const register = (username: string, client: string) =>
+      proxied.inject({
+        method: "POST",
+        url: "/api/auth/register",
+        remoteAddress: "172.18.0.5",
+        headers: { "content-type": "application/json", "x-forwarded-for": client },
+        payload: JSON.stringify({ username, password: "rank-pass" }),
+      });
+    const first = uniqueIp();
+    for (let i = 1; i <= AUTH_RATE_LIMITS.register.limit; i++) {
+      expect((await register(`proxied-${i}`, first)).statusCode).toBe(201);
+    }
+    expect((await register("proxied-over", first)).statusCode).toBe(429);
+    expect((await register("proxied-other", uniqueIp())).statusCode).toBe(201);
+  } finally {
+    await proxied.close();
+  }
 });
 
 dbTest("oversized auth bodies are rejected with 413", async () => {
