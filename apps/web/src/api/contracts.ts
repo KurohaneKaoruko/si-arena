@@ -42,10 +42,6 @@ function user(raw: unknown) {
 function boolean(raw: unknown) {
   check(typeof raw === "boolean");
 }
-function integers(raw: unknown) {
-  check(Array.isArray(raw));
-  (raw as unknown[]).forEach(integer);
-}
 function stats(raw: unknown) {
   const v = record(raw);
   number(v.rating);
@@ -77,7 +73,6 @@ export function parseGame(raw: unknown): GameCatalogEntry {
     const arena = record(v.arena);
     integer(arena.seats);
     integer(arena.keepMatches);
-    integers(arena.points);
     if (arena.tieBreakGameId !== undefined) string(arena.tieBreakGameId);
   }
   const resolvedLimits = resolveResourceLimits(record(v.resolvedLimits));
@@ -100,7 +95,6 @@ export function parseGameMe(raw: unknown): GameMeResponse {
   stats(v.entry);
   const entry = record(v.entry);
   check(entry.rank === null || (Number.isSafeInteger(entry.rank) && (entry.rank as number) > 0));
-  integer(entry.points);
   integer(entry.placementTotal);
   const boss = record(v.boss);
   boolean(boss.available);
@@ -180,7 +174,7 @@ export function parseLeaderboard(raw: unknown): LeaderboardResponse {
   for (const p of v.players) {
     user({ ...record(p), id: record(p).userId });
     stats(p);
-    for (const k of ["rank", "points", "placementTotal"]) integer(record(p)[k]);
+    for (const k of ["rank", "placementTotal"]) integer(record(p)[k]);
   }
   return raw as LeaderboardResponse;
 }
@@ -191,7 +185,8 @@ export function parseArenaStatus(raw: unknown): ArenaStatusResponse {
   for (const entry of v.lineup) {
     const p = record(entry);
     user({ ...p, id: p.userId });
-    for (const k of ["points", "wins", "matchesPlayed"]) integer(p[k]);
+    number(p.rating);
+    for (const k of ["wins", "matchesPlayed"]) integer(p[k]);
     date(p.codeUpdatedAt);
   }
   v.recent.forEach(parseMatch);

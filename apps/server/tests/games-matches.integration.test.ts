@@ -596,9 +596,9 @@ dbTest("leaderboard ranks entries with ties and pagination", async () => {
   // The official bot plays practice games only and never appears on the board.
   expect(body.players.some((player: { official: boolean }) => player.official)).toBe(false);
   const mine = body.players.find((player: { userId: string }) => player.userId === user.id);
-  expect(mine).toMatchObject({ rating: 1000, matchesPlayed: 0, points: 0, placementTotal: 0 });
+  expect(mine).toMatchObject({ rating: 1000, matchesPlayed: 0, placementTotal: 0 });
   const me = await call("GET", "/api/games/paper/me", { token: user.token });
-  expect(me.json().entry).toMatchObject({ rank: mine.rank, points: 0, placementTotal: 0 });
+  expect(me.json().entry).toMatchObject({ rank: mine.rank, placementTotal: 0 });
   // Equal internal ratings must share one rank; user id only breaks display order.
   const sameRated = body.players.filter((player: { rating: number }) => player.rating === 1000);
   expect(sameRated.length).toBeGreaterThan(1);
@@ -764,14 +764,14 @@ async function uploadRoyaleBot(token: string): Promise<void> {
   expect(res.statusCode).toBe(200);
 }
 
-dbTest("the royale arena seats the starter plus the top points", async () => {
+dbTest("the royale arena seats the starter plus the top ratings", async () => {
   const starter = await registerUser();
   const first = await registerUser();
   const second = await registerUser();
   for (const user of [starter, first, second]) await uploadRoyaleBot(user.token);
   await database.db
     .update(gameEntries)
-    .set({ points: 30 })
+    .set({ rating: "1030.000000" })
     .where(and(eq(gameEntries.gameId, "royale"), eq(gameEntries.userId, second.id)));
 
   const duel = await call("POST", "/api/games/royale/matches", {
@@ -784,7 +784,7 @@ dbTest("the royale arena seats the starter plus the top points", async () => {
   const status = await call("GET", "/api/games/royale/arena");
   expect(status.statusCode).toBe(200);
   const lineup = status.json().lineup as Array<{ userId: string; official: boolean }>;
-  // Anonymous viewers see the points-only board; the official bot takes one
+  // Anonymous viewers see the top-rated board; the official bot takes one
   // free seat when fewer than five players qualify.
   expect(lineup[0]!.userId).toBe(second.id);
   expect(lineup.filter((seat) => seat.official)).toHaveLength(1);
@@ -831,7 +831,7 @@ dbTest("the royale arena seats the starter plus the top points", async () => {
   const run = started.json();
   expect(run.kind).toBe("arena");
   // The starter always plays the first seat, exactly once; the rest follow the
-  // points board without the starter.
+  // rating board without the starter.
   expect(run.participants.map((seat: { userId: string }) => seat.userId)).toEqual([
     starter.id,
     ...lineup
@@ -858,7 +858,7 @@ dbTest("the royale arena seats the starter plus the top points", async () => {
   await database.db.update(matches).set({ status: "completed" }).where(eq(matches.id, run.id));
 });
 
-dbTest("a zero-points starter displaces only the fifth points seat", async () => {
+dbTest("a bottom-rated starter displaces only the fifth rating seat", async () => {
   await database.db
     .update(matches)
     .set({ status: "completed" })
@@ -873,12 +873,12 @@ dbTest("a zero-points starter displaces only the fifth points seat", async () =>
   const ranked: TestUser[] = [];
   for (let index = 0; index < 5; index++) ranked.push(await registerUser());
   for (const user of [starter, ...ranked]) await uploadRoyaleBot(user.token);
-  // Players left runnable by earlier tests must not claim points seats here.
+  // Players left runnable by earlier tests must not claim rating seats here.
   await onlyRunnable([starter.id, ...ranked.map((user) => user.id)], "royale");
   for (const [index, user] of ranked.entries())
     await database.db
       .update(gameEntries)
-      .set({ points: 50 - index * 10 })
+      .set({ rating: (1050 - index * 10).toFixed(6) })
       .where(and(eq(gameEntries.gameId, "royale"), eq(gameEntries.userId, user.id)));
 
   const started = await call("POST", "/api/games/royale/arena", {
@@ -903,4 +903,38 @@ dbTest("a zero-points starter displaces only the fifth points seat", async () =>
     .update(matches)
     .set({ status: "completed" })
     .where(eq(matches.id, started.json().id));
+});
+
+dbTest("arena boards break rating ties with the tie-break game's rating", async () => {
+  await database.db
+    .update(matches)
+    .set({ status: "completed" })
+    .where(
+      and(
+        eq(matches.gameId, "royale"),
+        eq(matches.kind, "arena"),
+        inArray(matches.status, ["pending", "running"]),
+      ),
+    );
+  const low = await registerUser();
+  const high = await registerUser();
+  for (const user of [low, high]) await uploadRoyaleBot(user.token);
+  await onlyRunnable([low.id, high.id], "royale");
+  // Same royale rating; only `high` holds a paper record, and a higher one.
+  await uploadOfficialBot(high.token);
+  await database.db
+    .update(gameEntries)
+    .set({ rating: "1100.000000" })
+    .where(and(eq(gameEntries.gameId, "paper"), eq(gameEntries.userId, high.id)));
+
+  const status = await call("GET", "/api/games/royale/arena");
+  const lineup = status.json().lineup as Array<{ userId: string; official: boolean }>;
+  expect(lineup[0]!.userId).toBe(high.id);
+  expect(lineup[1]!.userId).toBe(low.id);
+  // The leaderboard shares the ordering: same arena rating, paper rating decides.
+  const board = await call("GET", "/api/games/royale/leaderboard");
+  const players = board.json().players as Array<{ userId: string }>;
+  expect(players.findIndex((p) => p.userId === high.id)).toBeLessThan(
+    players.findIndex((p) => p.userId === low.id),
+  );
 });

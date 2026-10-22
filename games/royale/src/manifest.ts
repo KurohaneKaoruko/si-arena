@@ -20,7 +20,7 @@ export const royaleManifest = {
   maxPlayers: ROYALE_MAX_PLAYERS,
   maxTicks: ROYALE_MAX_TICKS,
   config: ROYALE_CONFIG,
-  arena: { seats: 5, keepMatches: 3, points: [10, 6, 3, 1, 0], tieBreakGameId: "paper" },
+  arena: { seats: 5, keepMatches: 3, tieBreakGameId: "paper" },
 } satisfies GameManifest;
 
 export const royaleCatalogEntry: GameCatalogEntry = {

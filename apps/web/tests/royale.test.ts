@@ -8,7 +8,7 @@ import { clearSession, signIn } from "../src/auth/session";
 
 enableAutoUnmount(afterEach);
 const user = { id: "me", username: "Me", official: false };
-const arena = { seats: 5, keepMatches: 3, points: [10, 6, 3, 1, 0] };
+const arena = { seats: 5, keepMatches: 3 };
 const royale = {
   ...paperGame.manifest,
   id: "royale",
@@ -55,7 +55,7 @@ const lineup = ["a", "b"].map((name) => ({
   userId: name,
   username: name.toUpperCase(),
   official: false,
-  points: 10,
+  rating: 1016,
   wins: 1,
   matchesPlayed: 2,
   codeUpdatedAt: date,
@@ -106,6 +106,9 @@ test("a busy arena shows the running run and disables starting another", async (
   const { wrapper, fetch, reads } = await setup();
   expect(wrapper.text()).toContain("竞技场空闲");
   expect(wrapper.text()).toContain("下一局阵容");
+  // Lineup seats show the arena Elo rating, not legacy points.
+  expect(wrapper.text()).toContain("排位分");
+  expect(wrapper.text()).toContain("1016.00");
   // Idle arenas refresh every 15 s.
   expect(reads()).toBe(1);
   await vi.advanceTimersByTimeAsync(15000);

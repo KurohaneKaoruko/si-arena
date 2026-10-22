@@ -7,7 +7,7 @@
 | `users` | 用户 ID、唯一规范用户名（即展示名）、密码摘要与参数、官方标记、Boss 标记；两个标记都不可由普通用户修改 |
 | `sessions` | 会话 token 的 SHA-256 摘要、用户 ID、创建时间与到期时间 |
 | `auth_rate_limits` | 认证限流作用域、主体摘要、窗口开始时间与计数，窗口内原子递增 |
-| `game_entries` | `(game_id, user_id)` 唯一；最新源码、源码字节数、代码协议版本、更新时间、排位分、比赛数、胜平负计数；竞技场游戏另有积分与名次总和 |
+| `game_entries` | `(game_id, user_id)` 唯一；最新源码、源码字节数、代码协议版本、更新时间、排位分、比赛数、胜平负计数；竞技场游戏另有名次总和 |
 | `matches` | 比赛 ID、游戏及冻结发行、发起者、幂等标识、类型（`ranked`、`practice`、`boss`、`arena`）、状态、resolvedLimits、实际配置、种子、租约、执行标识、结果、回放引用、时间戳、失败原因 |
 | `match_participants` | `(match_id, user_id)` 唯一；固定席位、创建时用户名与官方、Boss 标记快照、局内成绩、结算前后排位 |
 
@@ -90,7 +90,7 @@ Boss 账号同样在启动时初始化：upsert `boss` 用户（无密码、带 
 
 ### 游戏参赛与匹配 API 契约
 
-`GET /games/:gameId/me`（认证）返回 `{ "entry": { rating, matchesPlayed, wins, draws, losses }, "boss": { available, attempts, wins }, "code": { source, sourceBytes, botProtocolVersion, updatedAt } | null, canMatch, cannotMatchReason, activeMatch: { id, status } | null }`；`cannotMatchReason` 取 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`，可为 null。`activeMatch` 仅查询本人在此游戏发起且状态为 `pending` 或 `running` 的比赛，被动参赛和终态比赛不包含在内。此字段用于恢复「查看当前比赛」入口，不代替匹配接口的幂等检查和数据库唯一约束。
+`GET /games/:gameId/me`（认证）返回 `{ "entry": { rank, rating, matchesPlayed, wins, draws, losses, placementTotal }, "boss": { available, attempts, wins }, "code": { source, sourceBytes, botProtocolVersion, updatedAt } | null, canMatch, cannotMatchReason, activeMatch: { id, status } | null }`；`rank` 为排行榜名次、无参赛记录或系统账号时为 null，`placementTotal` 是竞技场名次总和（普通游戏为 0）；`cannotMatchReason` 取 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`，可为 null。`activeMatch` 仅查询本人在此游戏发起且状态为 `pending` 或 `running` 的比赛，被动参赛和终态比赛不包含在内。此字段用于恢复「查看当前比赛」入口，不代替匹配接口的幂等检查和数据库唯一约束。
 
 `PUT /games/:gameId/me/code`（认证）请求体为 `text/plain` 的源码文本，请求字节上限为当前发行 `resolvedLimits.codeBytes`。请求体必须是合法 UTF-8 文本，解码失败或空请求体返回 400 `VALIDATION_ERROR`。服务端运行沙箱静态校验（受限 AST 检查 + 同版 V8 模块编译），同时校验数每进程最多 2，饱和返回 429。成功覆盖最新源码并返回 `{ sourceBytes, botProtocolVersion, updatedAt }`，排位分与比赛统计保持不变；校验失败返回 400 `CODE_INVALID`，原代码不变；超限返回 413。
 
@@ -101,16 +101,16 @@ Boss 账号同样在启动时初始化：upsert `boss` 用户（无密码、带 
 - 挑战 Boss 的类型为 `boss`；未安装 Boss 时返回 404 `BOSS_UNAVAILABLE`。
 - 声明了竞技场的游戏不接受此接口，返回 409 `ARENA_GAME`。
 
-已有未完成主动比赛时返回 409 `MATCH_ALREADY_PENDING` 并携带 `matchId`；未上传代码、协议不兼容或超体积分别返回 409 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`。成功创建返回 201，响应为比赛详情。只有 `ranked` 比赛结算时改变双方排位分与战绩；`practice` 与 `boss` 只记录名次。
+已有未完成主动比赛时返回 409 `MATCH_ALREADY_PENDING` 并携带 `matchId`；未上传代码、协议不兼容或超体积分别返回 409 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`。成功创建返回 201，响应为比赛详情。`ranked` 比赛结算时改变双方排位分与战绩；`practice` 与 `boss` 只记录名次。
 
-`GET /games/:gameId/leaderboard`（公开）分页参数 `page`（默认 1，钳制到 1–1,000,000）与 `limit`（默认 50，钳制到 1–100）；缺省或空参数取默认值，非法数值视为默认，越界数值被钳制，不会因极端参数报错。返回 `{ total, page, limit, players: [{ rank, userId, username, official, rating, matchesPlayed, wins, draws, losses, points, placementTotal }] }`，不含官方账号与 Boss。普通游戏名次用窗口函数按内部精确分计算，精确分相同并列，展示顺序按稳定用户 ID；竞技场游戏按积分排名，同分并列，展示顺序依次按积分、`tieBreakGameId` 游戏的排位分（无记录按 1000）和用户 ID。
+`GET /games/:gameId/leaderboard`（公开）分页参数 `page`（默认 1，钳制到 1–1,000,000）与 `limit`（默认 50，钳制到 1–100）；缺省或空参数取默认值，非法数值视为默认，越界数值被钳制，不会因极端参数报错。返回 `{ total, page, limit, players: [{ rank, userId, username, official, rating, matchesPlayed, wins, draws, losses, placementTotal }] }`，不含官方账号与 Boss。名次用窗口函数按内部精确分计算，精确分相同并列；普通游戏的展示顺序按稳定用户 ID，竞技场游戏的展示顺序依次按 `tieBreakGameId` 游戏的排位分（无记录按 1000）和用户 ID。
 
 声明了竞技场（manifest `arena`）的游戏另有：
 
-- `GET /games/:gameId/arena`（公开）返回 `{ active, lineup, recent }`：唯一未完成的竞技场比赛（无则为 null）、此刻开局的入场名单（开局者占第一席，其余席位按积分、平分规则从其他代码可运行的普通用户中取，不足时官方账号补一个席位；已登录且代码可运行的请求者看到自己开局后的名单，其余请求者看到纯积分榜前 `seats` 名）、保留中的已结束比赛（最多 `keepMatches` 场，新的在前）。
+- `GET /games/:gameId/arena`（公开）返回 `{ active, lineup, recent }`：唯一未完成的竞技场比赛（无则为 null）、此刻开局的入场名单（开局者占第一席，其余席位按排位分、平分规则从其他代码可运行的普通用户中取，不足时官方账号补一个席位；已登录且代码可运行的请求者看到自己开局后的名单，其余请求者看到排行榜前 `seats` 名）、保留中的已结束比赛（最多 `keepMatches` 场，新的在前）。
 - `POST /games/:gameId/arena`（认证，`Idempotency-Key`）在单事务中锁定入场名单并创建 `arena` 比赛，开局者必定入场；开局者未上传代码、协议不兼容或超体积分别返回 409 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`；已有未完成的竞技场比赛返回 409 `ARENA_BUSY` 并携带 `matchId`，可入场人数少于 `minPlayers` 返回 409 `ARENA_TOO_FEW_PLAYERS`。数据库对每个游戏未完成的竞技场比赛建立部分唯一索引。
 
-竞技场比赛结算时，普通参赛者按名次累加 `points[rank-1]` 积分、名次总和、比赛数与冠军次数，官方账号只记录名次；随后删除最近 `keepMatches` 场以外的已结束竞技场比赛及其回放文件。
+竞技场比赛结算时，普通参赛者按名次逐对计算 Elo 变化并更新排位分，同时累加名次总和、比赛数与冠军次数，官方账号只记录名次；随后删除最近 `keepMatches` 场以外的已结束竞技场比赛及其回放文件。
 
 `GET /games/:gameId/me/matches`（认证）按创建时间倒序分页返回 `{ total, page, limit, matches }`（分页参数与钳制规则同排行榜），包含用户作为发起者或对手的比赛。`GET /matches/:matchId`（公开）返回 `{ id, gameId, kind, status, createdAt, updatedAt, release, seed, initiatorId, participants, result?, failureReason? }`；`participants` 为创建时快照，`completed` 比赛附带 `result` 与结算后的 `rank`/`ratingBefore`/`ratingAfter`，`failed` 附带受控 `failureReason`；未知 ID 返回 404 `MATCH_NOT_FOUND`。
 

@@ -22,7 +22,7 @@
 | `@si-arena/game-royale/renderer` | `drawRoyaleBoard`、`royalePlayerSummaries`、`ROYALE_PALETTE`、`royalePresentation`                 |
 | `@si-arena/game-royale/game`     | `royaleGame`、`ROYALE_SDK_SOURCE`、`officialBotUrl`、`developmentFiles`                            |
 
-manifest 声明 `arena: { seats: 5, keepMatches: 3, points: [10, 6, 3, 1, 0], tieBreakGameId: "paper" }`，平台据此运行全服唯一的大逃杀竞技场；规则本身只负责一局比赛。
+manifest 声明 `arena: { seats: 5, keepMatches: 3, tieBreakGameId: "paper" }`，平台据此运行全服唯一的大逃杀竞技场；规则本身只负责一局比赛。
 
 `drawRoyaleBoard` 接收已验证的世界与 Canvas 上下文，在深色底上绘制安全区外的暗区与安全区边框、领地、尾迹和带编号的头部；可选的动画输入与圈地游戏相同（`previousState`、`events`、`progress`、`reducedMotion`、`erroredPlayers`），补完头部插值、圈地闪烁、切断与出局标记、缩圈闪烁以及出错玩家的警示徽标。`royalePlayerSummaries` 按席位生成面积、颜色与存活标记。绘制不修改世界，也不调用规则 step。
 

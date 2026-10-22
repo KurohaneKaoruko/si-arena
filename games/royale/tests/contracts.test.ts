@@ -41,7 +41,7 @@ test("the manifest publishes the arena and default limits", () => {
     minPlayers: 2,
     maxPlayers: 5,
     maxTicks: 800,
-    arena: { seats: 5, keepMatches: 3, points: [10, 6, 3, 1, 0], tieBreakGameId: "paper" },
+    arena: { seats: 5, keepMatches: 3, tieBreakGameId: "paper" },
   });
   expect(royaleGame.manifest.resolvedLimits.cpuMs).toBe(20);
   expect(royaleGame.parseConfig(cloneJson(royaleManifest.config))).toStrictEqual(

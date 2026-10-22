@@ -63,22 +63,23 @@ async function bossRecord(
   };
 }
 
-/** Same ordering key as the leaderboard: rating, or points for arena games; ties share a rank. */
+/** Same ordering key as the leaderboard: rating, with ties sharing a rank. */
 async function leaderboardRank(
   db: NodePgDatabase,
   game: GameCatalogEntry,
-  entry: { rating: string; points: number },
+  entry: { rating: string },
 ): Promise<number> {
-  const ahead =
-    game.arena === undefined
-      ? sql`${gameEntries.rating} > ${entry.rating}`
-      : sql`${gameEntries.points} > ${entry.points}`;
   const [row] = await db
     .select({ count: sql<string>`count(*)` })
     .from(gameEntries)
     .innerJoin(users, eq(gameEntries.userId, users.id))
     .where(
-      and(eq(gameEntries.gameId, game.id), eq(users.official, false), eq(users.boss, false), ahead),
+      and(
+        eq(gameEntries.gameId, game.id),
+        eq(users.official, false),
+        eq(users.boss, false),
+        sql`${gameEntries.rating} > ${entry.rating}`,
+      ),
     );
   return Number(row?.count ?? 0) + 1;
 }
@@ -139,7 +140,6 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
         entry: {
           rank:
             entry === undefined || session.official ? null : await leaderboardRank(db, game, entry),
-          points: entry?.points ?? 0,
           placementTotal: entry?.placementTotal ?? 0,
           rating: entry === undefined ? 1000 : Number(entry.rating),
           matchesPlayed: entry?.matchesPlayed ?? 0,
@@ -248,11 +248,13 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
           eq(users.boss, false),
         );
         const arena = game.arena;
+        // Arena games additionally break display order by the tie-break game's
+        // rating; ranks themselves share on equal internal ratings.
         const order =
           arena === undefined
             ? [desc(gameEntries.rating), asc(gameEntries.userId)]
             : [
-                desc(gameEntries.points),
+                desc(gameEntries.rating),
                 sql`coalesce(${tieBreakEntry.rating}, 1000) desc`,
                 asc(gameEntries.userId),
               ];
@@ -263,7 +265,7 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
           .where(ranked);
         const rows = await db
           .select({
-            rank: sql<string>`rank() over (order by ${arena === undefined ? gameEntries.rating : gameEntries.points} desc)`,
+            rank: sql<string>`rank() over (order by ${gameEntries.rating} desc)`,
             userId: gameEntries.userId,
             username: users.normalizedUsername,
             official: users.official,
@@ -272,7 +274,6 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
             wins: gameEntries.wins,
             draws: gameEntries.draws,
             losses: gameEntries.losses,
-            points: gameEntries.points,
             placementTotal: gameEntries.placementTotal,
           })
           .from(gameEntries)
@@ -302,7 +303,6 @@ export function gamesRoutes(db: NodePgDatabase): FastifyPluginAsync {
             wins: row.wins,
             draws: row.draws,
             losses: row.losses,
-            points: row.points,
             placementTotal: row.placementTotal,
           })),
         };

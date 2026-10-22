@@ -27,8 +27,7 @@ export const gameEntries = pgTable(
     wins: integer("wins").notNull().default(0),
     draws: integer("draws").notNull().default(0),
     losses: integer("losses").notNull().default(0),
-    /** Arena games only: accumulated points and the sum of finishing ranks. */
-    points: integer("points").notNull().default(0),
+    /** Arena games only: the sum of finishing ranks, for the average placement. */
     placementTotal: integer("placement_total").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

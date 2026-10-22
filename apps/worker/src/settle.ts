@@ -2,7 +2,7 @@ import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { gameEntries, matchParticipants, matches } from "@si-arena/db";
 import type { Executor } from "@si-arena/db";
 import type { ArenaSettings, GameResult } from "@si-arena/protocol";
-import { formatRating, scoreFromRanks, twoPlayerElo } from "./elo";
+import { formatRating, pairwiseElo, scoreFromRanks, twoPlayerElo } from "./elo";
 import type { ReplayStore } from "./replay-store";
 
 export type SettleOutcome = "completed" | "refused";
@@ -39,10 +39,10 @@ function rankByUserId(result: GameResult): Map<string, number> {
 
 /**
  * Publishes a finished match: one transaction verifies execution rights, settles
- * by match kind (Elo for ranked games, arena points, ranks only for practice and
- * boss games), links the replay candidate to its public name, commits the
- * terminal state and prunes old arena runs. Refusal leaves every row and file
- * untouched — a stale worker can never overwrite a valid settlement.
+ * by match kind (Elo for ranked games, pairwise Elo for arena games, ranks only
+ * for practice and boss games), links the replay candidate to its public name,
+ * commits the terminal state and prunes old arena runs. Refusal leaves every
+ * row and file untouched — a stale worker can never overwrite a valid settlement.
  */
 export async function settleMatch(
   db: Executor,
@@ -80,7 +80,7 @@ export async function settleMatch(
     if (match.kind === "ranked") await settleRanked(tx, match.gameId, seats, ranks);
     else if (match.kind === "arena") {
       if (input.arena === undefined) throw new Error("Arena match settled without arena settings");
-      await settleArena(tx, match.gameId, seats, ranks, input.arena);
+      await settleArena(tx, match.gameId, seats, ranks);
     } else await recordRanks(tx, seats, ranks);
 
     await store.publish(input.candidatePath, input.matchId);
@@ -183,39 +183,55 @@ async function settleRanked(
   }
 }
 
-/** Arena points by rank for every ranked seat; the official bot only gets its rank. */
+/**
+ * Pairwise Elo by final rank for every ordinary seat; equal ranks draw, the
+ * official bot and the boss keep their ranks without touching any standing.
+ */
 async function settleArena(
   tx: Transaction,
   gameId: string,
   seats: Seat[],
   ranks: Map<string, number>,
-  arena: ArenaSettings,
 ) {
   const scored = seats.filter((seat) => !seat.officialSnapshot && !seat.bossSnapshot);
-  const entryByUser = await lockEntries(
-    tx,
-    gameId,
-    scored.map((seat) => seat.userId),
-  );
-  for (const seat of scored) {
-    const entry = entryByUser.get(seat.userId)!;
-    const rank = ranks.get(seat.userId)!;
-    await tx
-      .update(gameEntries)
-      .set({
-        points: entry.points + arenaPoints(arena, rank),
-        placementTotal: entry.placementTotal + rank,
-        matchesPlayed: entry.matchesPlayed + 1,
-        wins: entry.wins + (rank === 1 ? 1 : 0),
-        updatedAt: sql`now()`,
-      })
-      .where(eq(gameEntries.id, entry.id));
+  if (scored.length > 0) {
+    const entryByUser = await lockEntries(
+      tx,
+      gameId,
+      scored.map((seat) => seat.userId),
+    );
+    const ratings = scored.map((seat) => Number(entryByUser.get(seat.userId)!.rating));
+    const finalRanks = scored.map((seat) => ranks.get(seat.userId)!);
+    const deltas = pairwiseElo(ratings, finalRanks);
+    for (const [index, seat] of scored.entries()) {
+      const entry = entryByUser.get(seat.userId)!;
+      const rank = finalRanks[index]!;
+      const ratingAfter = ratings[index]! + deltas[index]!;
+      await tx
+        .update(gameEntries)
+        .set({
+          rating: formatRating(ratingAfter),
+          placementTotal: entry.placementTotal + rank,
+          matchesPlayed: entry.matchesPlayed + 1,
+          wins: entry.wins + (rank === 1 ? 1 : 0),
+          updatedAt: sql`now()`,
+        })
+        .where(eq(gameEntries.id, entry.id));
+      await tx
+        .update(matchParticipants)
+        .set({
+          rank,
+          ratingBefore: formatRating(ratings[index]!),
+          ratingAfter: formatRating(ratingAfter),
+        })
+        .where(eq(matchParticipants.id, seat.id));
+    }
   }
-  await recordRanks(tx, seats, ranks);
-}
-
-export function arenaPoints(arena: ArenaSettings, rank: number): number {
-  return arena.points[rank - 1] ?? 0;
+  await recordRanks(
+    tx,
+    seats.filter((seat) => seat.officialSnapshot || seat.bossSnapshot),
+    ranks,
+  );
 }
 
 /**

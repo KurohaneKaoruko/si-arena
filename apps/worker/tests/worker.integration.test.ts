@@ -4,7 +4,7 @@ import { readFile, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, test, vi } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Client } from "pg";
 import {
@@ -220,21 +220,35 @@ dbTest("practice settlement records ranks without touching anyone's standing", a
     expect(await entryOf(player.id)).toMatchObject({ rating: "1000.000000", matchesPlayed: 0 });
 });
 
-dbTest("arena settlement scores points by rank and prunes old runs", async () => {
-  const arena = { seats: 5, keepMatches: 1, points: [10, 6, 3, 1, 0] };
+dbTest("arena settlement moves ratings pairwise by rank and prunes old runs", async () => {
+  const arena = { seats: 5, keepMatches: 1 };
   const first = await stagedRun("arena", [{}, {}, { official: true }], [2, 1, 3]);
   const settled = await settleMatch(database.db, store, { ...first, arena });
   expect(settled).toEqual({ outcome: "completed", prunedMatchIds: [] });
   const [a, b, official] = first.result.players;
+  // Two scored players duel with full K: rank 1 takes +16, rank 2 takes -16.
   expect(await entryOf(a!.id)).toMatchObject({
-    points: 6,
+    rating: "984.000000",
     placementTotal: 2,
     matchesPlayed: 1,
     wins: 0,
-    rating: "1000.000000",
   });
-  expect(await entryOf(b!.id)).toMatchObject({ points: 10, placementTotal: 1, wins: 1 });
-  expect(await entryOf(official!.id)).toMatchObject({ points: 0, matchesPlayed: 0 });
+  expect(await entryOf(b!.id)).toMatchObject({
+    rating: "1016.000000",
+    placementTotal: 1,
+    wins: 1,
+  });
+  expect(await entryOf(official!.id)).toMatchObject({ rating: "1000.000000", matchesPlayed: 0 });
+  const seats = await database.db
+    .select()
+    .from(matchParticipants)
+    .where(eq(matchParticipants.matchId, first.matchId))
+    .orderBy(asc(matchParticipants.slot));
+  expect(seats.map((seat) => [seat.rank, seat.ratingBefore, seat.ratingAfter])).toEqual([
+    [2, "1000.000000", "984.000000"],
+    [1, "1000.000000", "1016.000000"],
+    [3, null, null],
+  ]);
 
   const second = await stagedRun("arena", [{}, {}], [1, 1]);
   const next = await settleMatch(database.db, store, { ...second, arena });
@@ -242,8 +256,43 @@ dbTest("arena settlement scores points by rank and prunes old runs", async () =>
   expect(
     await database.db.select().from(matches).where(eq(matches.id, first.matchId)),
   ).toHaveLength(0);
+  // Equal ranks draw, so a tied championship leaves both ratings untouched.
   for (const player of second.result.players)
-    expect(await entryOf(player.id)).toMatchObject({ points: 10, wins: 1 });
+    expect(await entryOf(player.id)).toMatchObject({
+      rating: "1000.000000",
+      wins: 1,
+      matchesPlayed: 1,
+    });
+});
+
+dbTest("a solo arena run against the official bot counts play but no rating change", async () => {
+  const solo = await stagedRun("arena", [{}, { official: true }], [1, 2]);
+  const settled = await settleMatch(database.db, store, {
+    ...solo,
+    arena: { seats: 5, keepMatches: 3 },
+  });
+  expect(settled.outcome).toBe("completed");
+  const [player, official] = solo.result.players;
+  // No rated pair exists, so beating the bot moves nobody's rating.
+  expect(await entryOf(player!.id)).toMatchObject({
+    rating: "1000.000000",
+    matchesPlayed: 1,
+    wins: 1,
+    placementTotal: 1,
+  });
+  expect(await entryOf(official!.id)).toMatchObject({
+    rating: "1000.000000",
+    matchesPlayed: 0,
+  });
+  const seats = await database.db
+    .select()
+    .from(matchParticipants)
+    .where(eq(matchParticipants.matchId, solo.matchId))
+    .orderBy(asc(matchParticipants.slot));
+  expect(seats.map((seat) => [seat.rank, seat.ratingBefore, seat.ratingAfter])).toEqual([
+    [1, "1000.000000", "1000.000000"],
+    [2, null, null],
+  ]);
 });
 
 beforeAll(async () => {

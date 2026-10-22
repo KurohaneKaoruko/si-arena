@@ -7,7 +7,7 @@ import App from "../src/App.vue";
 import NotFoundPage from "../src/pages/NotFoundPage.vue";
 
 enableAutoUnmount(afterEach);
-const arena = { seats: 5, keepMatches: 3, points: [10, 6, 3, 1, 0] };
+const arena = { seats: 5, keepMatches: 3 };
 const royale = { ...paperGame.manifest, id: "royale", name: "圈地大逃杀", arena };
 beforeEach(() => {
   vi.stubGlobal(

@@ -36,7 +36,7 @@ const lineupColumns = {
   username: users.normalizedUsername,
   official: users.official,
   boss: users.boss,
-  points: gameEntries.points,
+  rating: gameEntries.rating,
   wins: gameEntries.wins,
   matchesPlayed: gameEntries.matchesPlayed,
   updatedAt: gameEntries.updatedAt,
@@ -47,14 +47,14 @@ type LineupRow = {
   username: string;
   official: boolean;
   boss: boolean;
-  points: number;
+  rating: string;
   wins: number;
   matchesPlayed: number;
   updatedAt: Date;
 };
 
-function toLineupSeat({ updatedAt, ...seat }: LineupRow): LineupSeat {
-  return { ...seat, codeUpdatedAt: updatedAt.toISOString() };
+function toLineupSeat({ updatedAt, rating, ...seat }: LineupRow): LineupSeat {
+  return { ...seat, rating: Number(rating), codeUpdatedAt: updatedAt.toISOString() };
 }
 
 /** The user's lineup seat when their code runs under the game's current release. */
@@ -74,9 +74,9 @@ async function lineupSeat(
 
 /**
  * Who enters a run started now (royale.md "入场"): the initiator takes one seat,
- * the remaining seats go to ordinary players with runnable code by points, then
+ * the remaining seats go to ordinary players with runnable code by rating, then
  * the tie-break game's rating, then user id; the official bot takes one free
- * seat, unranked.
+ * seat, unrated.
  */
 async function arenaLineup(
   db: Database,
@@ -99,7 +99,7 @@ async function arenaLineup(
     )
     .where(and(...conditions))
     .orderBy(
-      desc(gameEntries.points),
+      desc(gameEntries.rating),
       sql`coalesce(${tieBreakEntry.rating}, 1000) desc`,
       asc(gameEntries.userId),
     )
@@ -123,7 +123,7 @@ function lineupEntry(seat: LineupSeat): ArenaLineupEntry {
     userId: seat.userId,
     username: seat.username,
     official: seat.official,
-    points: seat.points,
+    rating: seat.rating,
     wins: seat.wins,
     matchesPlayed: seat.matchesPlayed,
     codeUpdatedAt: seat.codeUpdatedAt,
@@ -152,7 +152,7 @@ export function arenaRoutes(db: NodePgDatabase): FastifyPluginAsync {
       const game = gameCatalog.get(request.params.gameId);
       if (!game?.arena) return sendError(reply, 404, "ARENA_NOT_FOUND", "该游戏没有竞技场");
       // Logged-in viewers see the lineup of a run they would start; everyone
-      // else the points-only board.
+      // else the top-rated board.
       const session = await loadSession(db, request);
       const initiator = session === null ? undefined : await lineupSeat(db, game, session.userId);
       const active = await activeRun(db, game);

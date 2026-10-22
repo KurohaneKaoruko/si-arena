@@ -41,7 +41,7 @@ async function start() {
       >
     </div>
     <p class="text-[15px] leading-7 text-soft">
-      {{ game.description }} 开局者必入场，积分榜前
+      {{ game.description }} 开局者必入场，排行榜前
       {{ (game.arena?.seats ?? 5) - 1 }} 名自动入选，全服同一时间只跑一局。
     </p>
     <div class="tile flex items-center gap-3.5 px-4 py-3.5" aria-live="polite">

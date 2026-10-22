@@ -9,7 +9,7 @@ export type MatchStatus = "pending" | "running" | "completed" | "failed";
  * - ranked: matchmaking against another player; both ratings change.
  * - practice: a chosen opponent or the official fallback; no rating change.
  * - boss: a challenge against the platform boss; no rating change.
- * - arena: a run of a game's single shared arena; scored with arena points.
+ * - arena: a run of a game's single shared arena; scored with pairwise Elo.
  */
 export const MATCH_KINDS = ["ranked", "practice", "boss", "arena"] as const;
 export type MatchKind = (typeof MATCH_KINDS)[number];
@@ -77,7 +77,7 @@ export interface GameEntryStats {
   wins: number;
   draws: number;
   losses: number;
-  points: number;
+  /** Arena games: the sum of finishing ranks, for the average placement. */
   placementTotal: number;
 }
 
@@ -108,8 +108,7 @@ export interface LeaderboardPlayer {
   wins: number;
   draws: number;
   losses: number;
-  /** Arena games: accumulated arena points and the sum of finishing ranks. */
-  points: number;
+  /** Arena games: the sum of finishing ranks, for the average placement. */
   placementTotal: number;
 }
 
@@ -132,7 +131,7 @@ export interface ArenaLineupEntry {
   userId: string;
   username: string;
   official: boolean;
-  points: number;
+  rating: number;
   wins: number;
   matchesPlayed: number;
   codeUpdatedAt: string;

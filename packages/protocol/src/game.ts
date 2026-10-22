@@ -7,9 +7,7 @@ export interface ArenaSettings {
   seats: number;
   /** Finished runs kept with their replays; older runs are deleted. */
   keepMatches: number;
-  /** Points by finishing rank, index 0 for rank 1; later ranks score 0. */
-  points: number[];
-  /** Game whose rating breaks ties between equal points. */
+  /** Game whose rating breaks ties between equal arena ratings. */
   tieBreakGameId?: string;
 }
 

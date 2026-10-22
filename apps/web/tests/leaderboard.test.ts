@@ -18,7 +18,6 @@ const row = (rank: number, userId: string, username: string) => ({
   wins: 2,
   draws: 1,
   losses: 1,
-  points: 0,
   placementTotal: 0,
 });
 const board = {
@@ -110,11 +109,11 @@ test("other players can be challenged to a practice game, never yourself", async
   expect(router.currentRoute.value.fullPath).toBe("/games/paper?match=practice");
 });
 
-test("arena boards rank by points and show championships and the average place", async () => {
+test("arena boards rank by rating and show championships and the average place", async () => {
   const arenaBoard = {
     ...board,
     players: [
-      { ...row(1, "rival", "Rival"), points: 16, wins: 1, matchesPlayed: 2, placementTotal: 3 },
+      { ...row(1, "rival", "Rival"), rating: 1016, wins: 1, matchesPlayed: 2, placementTotal: 3 },
     ],
   };
   vi.stubGlobal(
@@ -126,14 +125,14 @@ test("arena boards rank by points and show championships and the average place",
     routes: [{ path: "/:pathMatch(.*)*", component: { template: "<p />" } }],
   });
   await router.push("/leaderboard");
-  const arena = { seats: 5, keepMatches: 3, points: [10, 6, 3, 1, 0] };
+  const arena = { seats: 5, keepMatches: 3 };
   const wrapper = mount(LeaderboardPage, {
     props: { game: { ...game, id: "royale", arena } },
     global: { plugins: [router] },
   });
   await flushPromises();
-  expect(wrapper.get("thead").text()).toContain("积分");
+  expect(wrapper.get("thead").text()).toContain("排位分");
   expect(wrapper.get("tbody").text()).toContain("2 场 · 1 冠 · 平均第 1.5 名");
-  expect(wrapper.get("tbody").text()).toContain("16");
+  expect(wrapper.get("tbody").text()).toContain("1016.00");
   expect(wrapper.text()).not.toContain("挑战");
 });

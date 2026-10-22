@@ -26,7 +26,6 @@ const initial: GameMeResponse = {
     wins: 0,
     draws: 0,
     losses: 0,
-    points: 0,
     placementTotal: 0,
   },
   boss: { available: false, attempts: 0, wins: 0 },

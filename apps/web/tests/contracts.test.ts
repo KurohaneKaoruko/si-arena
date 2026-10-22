@@ -52,7 +52,6 @@ test("entry responses validate active initiated matches independently from code 
       wins: 0,
       draws: 0,
       losses: 0,
-      points: 0,
       placementTotal: 0,
     },
     boss: { available: true, attempts: 2, wins: 1 },
@@ -71,7 +70,7 @@ test("entry responses validate active initiated matches independently from code 
   expect(() => parseGameMe({ ...me, activeMatch: { status: "pending" } })).toThrow();
 });
 
-test("match kinds, boss flags, arena points and arena status are validated strictly", () => {
+test("match kinds, boss flags, arena ratings and arena status are validated strictly", () => {
   const now = new Date().toISOString();
   const player = { userId: "p", username: "P", official: false, boss: false, slot: 0 };
   const match = {
@@ -99,14 +98,13 @@ test("match kinds, boss flags, arena points and arena status are validated stric
     wins: 1,
     draws: 0,
     losses: 1,
-    points: 16,
     placementTotal: 3,
   };
   expect(
-    parseLeaderboard({ page: 1, limit: 20, total: 1, players: [row] }).players[0]!.points,
-  ).toBe(16);
+    parseLeaderboard({ page: 1, limit: 20, total: 1, players: [row] }).players[0]!.placementTotal,
+  ).toBe(3);
   expect(() =>
-    parseLeaderboard({ page: 1, limit: 20, total: 1, players: [{ ...row, points: undefined }] }),
+    parseLeaderboard({ page: 1, limit: 20, total: 1, players: [{ ...row, rank: undefined }] }),
   ).toThrow();
   const lineup = { ...row, codeUpdatedAt: now };
   expect(parseArenaStatus({ active: null, lineup: [lineup], recent: [match] }).recent).toHaveLength(
@@ -114,11 +112,17 @@ test("match kinds, boss flags, arena points and arena status are validated stric
   );
   expect(() => parseArenaStatus({ active: null, lineup: [lineup] })).toThrow();
   expect(() =>
+    parseArenaStatus({
+      active: null,
+      lineup: [{ ...lineup, rating: undefined }],
+      recent: [],
+    }),
+  ).toThrow();
+  expect(() =>
     parseArenaStatus({ active: { ...match, kind: 1 }, lineup: [], recent: [] }),
   ).toThrow();
-  const arena = { seats: 5, keepMatches: 3, points: [10, 6, 3, 1, 0] };
+  const arena = { seats: 5, keepMatches: 3 };
   expect(parseGame({ ...paperGame.manifest, arena }).arena?.seats).toBe(5);
-  expect(() => parseGame({ ...paperGame.manifest, arena: { ...arena, points: ["10"] } })).toThrow();
   expect(() =>
     parseGameMe({
       entry: { rating: 1000, matchesPlayed: 0, wins: 0, draws: 0, losses: 0 },

@@ -62,7 +62,7 @@ function runSummary(run: MatchDetail) {
             >开发资料</AppButton
           >
           <AppButton variant="ghost" :to="{ path: '/leaderboard', query: { game: game.id } }"
-            >积分榜</AppButton
+            >排行榜</AppButton
           >
         </div>
       </div>
@@ -73,7 +73,7 @@ function runSummary(run: MatchDetail) {
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="lineup-title" class="text-xl font-bold">下一局阵容</h2>
         <span class="text-sm text-soft"
-          >开局者 + 积分榜前 {{ (game.arena?.seats ?? 5) - 1 }} · 开局瞬间锁定</span
+          >开局者 + 排行榜前 {{ (game.arena?.seats ?? 5) - 1 }} · 开局瞬间锁定</span
         >
       </div>
       <StateBlock v-if="!status && arena.status.status.value === 'loading'" status="loading" />
@@ -106,7 +106,7 @@ function runSummary(run: MatchDetail) {
           </div>
           <div class="flex justify-between text-[13px] text-soft">
             <span
-              >积分 <b class="figure text-[15px] text-ink">{{ entry.points }}</b></span
+              >排位分 <b class="figure text-[15px] text-ink">{{ entry.rating.toFixed(2) }}</b></span
             >
             <span>{{ entry.wins }} 冠</span>
           </div>

@@ -43,7 +43,7 @@ function record(p: LeaderboardPlayer) {
   return `${p.matchesPlayed} 场 · ${p.wins} 冠 · 平均第 ${average} 名`;
 }
 function score(p: LeaderboardPlayer) {
-  return arena.value ? String(p.points) : p.rating.toFixed(2);
+  return p.rating.toFixed(2);
 }
 function rankClass(rank: number) {
   return rank <= 3 ? "text-accent" : rank <= 5 ? "text-ink" : "text-soft";
@@ -88,18 +88,14 @@ defineExpose({ refresh: reload });
           <caption class="sr-only">
             {{
               game.name
-            }}排行榜，按{{
-              arena ? "积分" : "排位分"
-            }}排序
+            }}排行榜，按排位分排序
           </caption>
           <thead class="text-[13px] text-faint">
             <tr>
               <th scope="col" class="w-12 py-3.5 pr-2 pl-4 font-medium @lg:w-16 @lg:pl-5">#</th>
               <th scope="col" class="px-2 py-3.5 font-medium">选手</th>
               <th scope="col" class="hidden px-2 py-3.5 font-medium @lg:table-cell">战绩</th>
-              <th scope="col" class="py-3.5 pr-4 pl-2 text-right font-medium @lg:pr-5">
-                {{ arena ? "积分" : "排位分" }}
-              </th>
+              <th scope="col" class="py-3.5 pr-4 pl-2 text-right font-medium @lg:pr-5">排位分</th>
               <th v-if="challengeable" scope="col" class="w-0 py-3.5 pr-4 @lg:pr-5">
                 <span class="sr-only">挑战</span>
               </th>
