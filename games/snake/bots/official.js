@@ -21,7 +21,9 @@
  *   and is heavily penalised.
  * - Off-map, occupied and threatened targets are penalised in that order, so
  *   when nothing is safe the bot still picks the least fatal direction.
- * - Equal scores resolve by direction order (up, right, down, left).
+ * - Equal scores resolve by direction order (up, right, down, left), mirrored
+ *   left/right and up/down when the head is in the right or lower half, so two
+ *   bots in mirrored positions make mirrored choices and no seat is favoured.
  *
  * The bot uses the same observation, SDK, Memory and limits as every player.
  * Four flood fills over a 19×19 board cost well under a millisecond.
@@ -86,7 +88,11 @@ export default function tick({ game }) {
   const seen = new Uint8Array(size);
   let best = DIRECTIONS.indexOf(me.heading);
   let bestScore = -Infinity;
-  for (let d = 0; d < 4; d++) {
+  // Ties resolve in an order mirrored by the head's half of the board, so two bots in
+  // mirrored positions make mirrored choices and neither seat is favoured.
+  const flipX = me.head.x * 2 > width - 1;
+  const flipY = me.head.y * 2 > height - 1;
+  for (const d of [flipY ? 2 : 0, flipX ? 3 : 1, flipY ? 0 : 2, flipX ? 1 : 3]) {
     const x = me.head.x + DX[d];
     const y = me.head.y + DY[d];
     if (x < 0 || y < 0 || x >= width || y >= height) continue;
