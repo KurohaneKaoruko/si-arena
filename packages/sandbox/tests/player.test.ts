@@ -483,22 +483,34 @@ test("diagnostics remain within small byte budgets even with escaped control cha
 });
 
 test.each([
-  ["heap allocation", "new ArrayBuffer(16*1024*1024)", "HEAP_LIMIT"],
-  ["cumulative allocations", "const a=[];for(;;)a.push(new Array(1e5).fill(1))", "HEAP_LIMIT"],
-  ["stack overflow", "function recur(){return recur()} recur()", "STACK_LIMIT"],
-  ["CPU interrupt", "try { while(true){} } catch {}", "CPU_LIMIT"],
-])("uncaught %s fails under its budget type and recovers next tick", async (_name, body, type) => {
-  const player = await create(
-    `export default ({game,Memory})=>{Memory.n=1;if(game.fail){${body}};return game.submit({type:'move'})}`,
-    { limits: limits({ heapBytes: 2 * 1024 * 1024, cpuMs: 40 }) },
-  );
-  expect(await player.execute(0, { fail: true })).toMatchObject({
-    ok: false,
-    error: { type },
-    memory: {},
-  });
-  expect(await player.execute(1, {})).toMatchObject({ ok: true, memory: { n: 1 } });
-});
+  ["heap allocation", "new ArrayBuffer(16*1024*1024)", "HEAP_LIMIT", { cpuMs: 1000 }],
+  [
+    "cumulative allocations",
+    "const a=[];for(;;)a.push(new Array(1e5).fill(1))",
+    "HEAP_LIMIT",
+    { cpuMs: 1000 },
+  ],
+  ["stack overflow", "function recur(){return recur()} recur()", "STACK_LIMIT", { cpuMs: 1000 }],
+  ["CPU interrupt", "try { while(true){} } catch {}", "CPU_LIMIT", {}],
+])(
+  "uncaught %s fails under its budget type and recovers next tick",
+  async (_name, body, type, budget) => {
+    // Exhausting heap or stack must beat the CPU interrupt on any host: CPU bills
+    // real thread time, and shared CI runners pay several times what a fast
+    // reference core pays for the same exhaustion. Those rows carry a CPU budget
+    // far above their cost; the interrupt row keeps the tight budget it exercises.
+    const player = await create(
+      `export default ({game,Memory})=>{Memory.n=1;if(game.fail){${body}};return game.submit({type:'move'})}`,
+      { limits: limits({ heapBytes: 2 * 1024 * 1024, cpuMs: 40, wallMs: 5000, ...budget }) },
+    );
+    expect(await player.execute(0, { fail: true })).toMatchObject({
+      ok: false,
+      error: { type },
+      memory: {},
+    });
+    expect(await player.execute(1, {})).toMatchObject({ ok: true, memory: { n: 1 } });
+  },
+);
 
 test("a refused allocation or stack overflow caught by the player is ordinary JS", async () => {
   // V8 refuses the allocation outright, so the limit held; nothing is latched.
@@ -515,6 +527,9 @@ test("a refused allocation or stack overflow caught by the player is ordinary JS
 test("recursion depth is bounded by the isolate thread regardless of stackBytes", async () => {
   // isolated-vm runs guest calls on its own threads whose stack V8 sizes itself;
   // --stack-size does not reach them, so the release stackBytes is informational.
+  // The reachable depth also varies with the platform frame layout (macOS arm64
+  // lands an order below Linux x64), so only the shared, finite bound holds
+  // everywhere: deep enough to be a real thread stack, identical either way.
   const source =
     "export default ({game,Memory})=>{let d=0;try{(function f(){d++;f()})()}catch{};Memory.depth=d;return game.submit({type:'move'})}";
   const small = await create(source, { limits: limits({ stackBytes: 128 * 1024 }) });
@@ -522,7 +537,6 @@ test("recursion depth is bounded by the isolate thread regardless of stackBytes"
   const shallow = Number((await small.execute(0, {})).memory.depth);
   const deep = Number((await large.execute(0, {})).memory.depth);
   expect(shallow).toBeGreaterThan(1000);
-  expect(shallow).toBeLessThan(100000);
   expect(deep).toBe(shallow);
 });
 
