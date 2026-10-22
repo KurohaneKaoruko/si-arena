@@ -283,6 +283,9 @@ importers:
       '@si-arena/game-royale':
         specifier: workspace:*
         version: link:games/royale
+      '@si-arena/game-snake':
+        specifier: workspace:*
+        version: link:games/snake
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:packages/protocol
@@ -346,6 +349,9 @@ importers:
       '@si-arena/game-royale':
         specifier: workspace:*
         version: link:../../games/royale
+      '@si-arena/game-snake':
+        specifier: workspace:*
+        version: link:../../games/snake
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -380,6 +386,9 @@ importers:
       '@si-arena/game-royale':
         specifier: workspace:*
         version: link:../../games/royale
+      '@si-arena/game-snake':
+        specifier: workspace:*
+        version: link:../../games/snake
       '@si-arena/player':
         specifier: workspace:*
         version: link:../../packages/player
@@ -426,6 +435,9 @@ importers:
       '@si-arena/game-royale':
         specifier: workspace:*
         version: link:../../games/royale
+      '@si-arena/game-snake':
+        specifier: workspace:*
+        version: link:../../games/snake
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -450,6 +462,19 @@ importers:
         version: link:../../packages/protocol
 
   games/royale:
+    dependencies:
+      '@si-arena/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+    devDependencies:
+      '@si-arena/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@si-arena/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
+
+  games/snake:
     dependencies:
       '@si-arena/protocol':
         specifier: workspace:*

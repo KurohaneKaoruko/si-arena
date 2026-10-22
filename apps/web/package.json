@@ -16,6 +16,7 @@
     "@fontsource/jetbrains-mono": "catalog:",
     "@si-arena/game-paper": "workspace:*",
     "@si-arena/game-royale": "workspace:*",
+    "@si-arena/game-snake": "workspace:*",
     "@si-arena/player": "workspace:*",
     "@si-arena/protocol": "workspace:*",
     "vue": "catalog:",

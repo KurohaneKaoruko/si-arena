@@ -26,6 +26,7 @@
     "../../apps/web/tests/**",
     "../../packages/player/tests/**",
     "../../games/paper/tests/**",
-    "../../games/royale/tests/**"
+    "../../games/royale/tests/**",
+    "../../games/snake/tests/**"
   ]
 }

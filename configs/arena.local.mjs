@@ -1,6 +1,7 @@
 import { defineLocalGame } from "@si-arena/cli";
 import { paperGame, officialBotUrl } from "@si-arena/game-paper/game";
 import * as royale from "@si-arena/game-royale/game";
+import * as snake from "@si-arena/game-snake/game";
 
 // Trusted repository registration. Player sources are read as text and only run in the isolated V8 sandbox.
 export default [
@@ -21,5 +22,14 @@ export default [
       sdkSourceExport: "ROYALE_SDK_SOURCE",
     },
     officialBotUrl: royale.officialBotUrl,
+  }),
+  defineLocalGame({
+    game: snake.snakeGame,
+    module: {
+      url: import.meta.resolve("@si-arena/game-snake/game"),
+      gameExport: "snakeGame",
+      sdkSourceExport: "SNAKE_SDK_SOURCE",
+    },
+    officialBotUrl: snake.officialBotUrl,
   }),
 ];

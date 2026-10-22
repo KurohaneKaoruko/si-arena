@@ -3,6 +3,8 @@ import { paperGame } from "@si-arena/game-paper/game";
 import { drawPaperBoard } from "@si-arena/game-paper/renderer";
 import { royaleGame } from "@si-arena/game-royale/game";
 import { drawRoyaleBoard } from "@si-arena/game-royale/renderer";
+import { snakeGame } from "@si-arena/game-snake/game";
+import { drawSnakeBoard } from "@si-arena/game-snake/renderer";
 
 export interface GamePreviewScene {
   aspectRatio: number;
@@ -56,6 +58,32 @@ export const gamePreviews: ReadonlyMap<string, (game: GameCatalogEntry) => GameP
           aspectRatio: state.width / state.height,
           draw: (context, width, height) =>
             drawRoyaleBoard(context, state, width, height, {
+              previousState: state,
+              events: [],
+              progress: 1,
+              reducedMotion: true,
+              erroredPlayers: new Set(),
+            }),
+        };
+      },
+    ],
+    [
+      snakeGame.manifest.id,
+      (game) => {
+        if (game.release !== snakeGame.manifest.release)
+          throw new Error("未注册此游戏发行的初始画面。");
+        const state = snakeGame.rules.init({
+          seed: 42,
+          config: snakeGame.parseConfig(game.config),
+          players: Array.from({ length: game.maxPlayers }, (_, slot) => ({
+            id: `preview-${slot + 1}`,
+            slot,
+          })),
+        });
+        return {
+          aspectRatio: state.width / state.height,
+          draw: (context, width, height) =>
+            drawSnakeBoard(context, state, width, height, {
               previousState: state,
               events: [],
               progress: 1,

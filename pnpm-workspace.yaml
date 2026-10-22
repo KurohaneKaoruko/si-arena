@@ -15,6 +15,7 @@ versioning:
         "@si-arena/player",
         "@si-arena/game-paper",
         "@si-arena/game-royale",
+        "@si-arena/game-snake",
         "@si-arena/cli",
       ]
   ignore:

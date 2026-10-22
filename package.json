@@ -35,6 +35,7 @@
     "@si-arena/engine": "workspace:*",
     "@si-arena/game-paper": "workspace:*",
     "@si-arena/game-royale": "workspace:*",
+    "@si-arena/game-snake": "workspace:*",
     "@si-arena/protocol": "workspace:*",
     "@si-arena/runner": "workspace:*",
     "@types/node": "catalog:",

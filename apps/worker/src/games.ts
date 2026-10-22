@@ -1,5 +1,6 @@
 import { paperGame } from "@si-arena/game-paper/game";
 import { royaleGame } from "@si-arena/game-royale/game";
+import { snakeGame } from "@si-arena/game-snake/game";
 import { defineSandboxGame, type SandboxGameRegistration } from "./sandbox-match";
 
 // New games join by registering their trusted definition here; the rest of the
@@ -19,6 +20,14 @@ const registrations: readonly SandboxGameRegistration[] = [
       url: import.meta.resolve("@si-arena/game-royale/game"),
       gameExport: "royaleGame",
       sdkSourceExport: "ROYALE_SDK_SOURCE",
+    },
+  }),
+  defineSandboxGame({
+    game: snakeGame,
+    module: {
+      url: import.meta.resolve("@si-arena/game-snake/game"),
+      gameExport: "snakeGame",
+      sdkSourceExport: "SNAKE_SDK_SOURCE",
     },
   }),
 ];

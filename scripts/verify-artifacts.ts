@@ -160,6 +160,22 @@ for (let tick = 0; tick < 800 && !royaleResult; tick++) {
 if (royaleResult?.reason !== "tick-limit" || royaleResult.players.some(p => p.rank !== 1 || p.score !== 9)) {
   throw new Error("Standalone royale match returned an unexpected result");
 }
+import { snakeGame, SNAKE_SDK_SOURCE, officialBotUrl as snakeBotUrl } from "@si-arena/game-snake/game";
+const snakeRegistration = defineLocalGame({game:snakeGame,officialBotUrl:snakeBotUrl,module:{url:import.meta.resolve("@si-arena/game-snake/game"),gameExport:"snakeGame",sdkSourceExport:"SNAKE_SDK_SOURCE"}});
+if(snakeRegistration.manifest.id!=="snake"||snakeRegistration.manifest.maxPlayers!==4||typeof SNAKE_SDK_SOURCE!=="string")throw new Error("Packed snake registration failed");
+let snakeState = snakeGame.rules.init({
+  seed: 2, config: snakeGame.manifest.config,
+  players: [0, 1, 2, 3].map((slot) => ({ id: "s" + slot, slot })),
+});
+let snakeResult = undefined as ReturnType<typeof snakeGame.rules.step>["result"];
+for (let tick = 0; tick < 500 && !snakeResult; tick++) {
+  const output = snakeGame.rules.step(snakeState, Object.fromEntries(snakeState.snakes.flatMap((s) => s.death ? [] : [[s.id, snakeGame.rules.defaultAction(snakeState, s.id)]])));
+  snakeState = output.nextState; snakeResult = output.result;
+}
+// Heading straight ahead, the two snakes on each row meet head-on after seven ticks.
+if (snakeResult?.reason !== "elimination" || snakeResult.completedTicks !== 7 || snakeResult.players.some(p => p.rank !== 1 || p.score !== 0)) {
+  throw new Error("Standalone snake match returned an unexpected result");
+}
 const bot = await SandboxPlayer.create({
   matchId: "artifact", playerId: "alpha", source: "let calls=0;export default ({game,Memory})=>{calls++;Memory.n=(Memory.n??0)+1;Memory.calls=calls;game.act()}",
   sdkSource: "export default (o,{submit})=>{submit({type:'idle'});return {act(){submit({type:o.fail?'invalid':'idle'})}}}",

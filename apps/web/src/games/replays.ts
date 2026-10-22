@@ -8,6 +8,12 @@ import {
   royaleHighlights,
   royalePlayerSummaries,
 } from "@si-arena/game-royale/renderer";
+import { snakeGame } from "@si-arena/game-snake/game";
+import {
+  drawSnakeBoard,
+  snakeHighlights,
+  snakePlayerSummaries,
+} from "@si-arena/game-snake/renderer";
 
 type ReplayGameOptions<
   State extends { tick: number },
@@ -36,12 +42,13 @@ function boardReplay<State extends { tick: number }, Observation, Action extends
   ) => void,
   summarize: (state: DeepReadonly<State>) => readonly ReplayPlayerSummary[],
   narrate?: ReplayGameOptions<State, Observation, Action, Event>["narrate"],
+  options: { aspectRatio: number; scoreUnit: string } = { aspectRatio: 1, scoreUnit: "格" },
 ) {
   return defineReplayGame({
     game,
     ...(narrate ? { narrate } : {}),
-    aspectRatio: 1,
-    scoreUnit: "格",
+    aspectRatio: options.aspectRatio,
+    scoreUnit: options.scoreUnit,
     draw: (context, frame, width, height, motion) =>
       draw(context, frame.state, width, height, {
         previousState: frame.previousState,
@@ -58,6 +65,10 @@ function boardReplay<State extends { tick: number }, Observation, Action extends
 export const replayGames = [
   boardReplay(paperGame, drawPaperBoard, paperPlayerSummaries),
   boardReplay(royaleGame, drawRoyaleBoard, royalePlayerSummaries, royaleHighlights),
+  boardReplay(snakeGame, drawSnakeBoard, snakePlayerSummaries, snakeHighlights, {
+    aspectRatio: 1,
+    scoreUnit: "节",
+  }),
 ];
 
 /** Whether this web build can verify and draw replays of the given release. */
