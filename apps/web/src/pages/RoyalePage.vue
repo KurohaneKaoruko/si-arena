@@ -72,7 +72,9 @@ function runSummary(run: MatchDetail) {
     <section aria-labelledby="lineup-title" class="flex flex-col gap-3.5">
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="lineup-title" class="text-xl font-bold">下一局阵容</h2>
-        <span class="text-sm text-soft">按积分实时取前 {{ game.arena?.seats }} · 开局瞬间锁定</span>
+        <span class="text-sm text-soft"
+          >开局者 + 积分榜前 {{ (game.arena?.seats ?? 5) - 1 }} · 开局瞬间锁定</span
+        >
       </div>
       <StateBlock v-if="!status && arena.status.status.value === 'loading'" status="loading" />
       <StateBlock
@@ -98,7 +100,7 @@ function runSummary(run: MatchDetail) {
             <span class="flex min-w-0 flex-col">
               <span class="truncate font-bold">{{ entry.username }}</span>
               <span class="text-xs text-faint">{{
-                entry.official ? "官方补位" : `排名 #${seat + 1}`
+                entry.official ? "官方补位" : `席位 ${seat + 1}`
               }}</span>
             </span>
           </div>

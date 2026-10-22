@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -9,11 +9,19 @@ import type {
   GameCatalogEntry,
 } from "@si-arena/protocol";
 import { gameEntries, matches, users } from "@si-arena/db";
-import { requireSession } from "../auth/session";
+import { loadSession, requireSession } from "../auth/session";
 import { isUniqueViolation, uniqueConstraintName } from "../db/errors";
 import { gameCatalog } from "../games";
 import { sendError } from "../http/errors";
-import { insertMatch, MatchRequestError, runnableEntry, type Seat } from "../matches/create";
+import {
+  ENTRY_NOT_RUNNABLE_MESSAGES,
+  entryNotRunnableReason,
+  insertMatch,
+  loadGameEntry,
+  MatchRequestError,
+  runnableEntry,
+  type Seat,
+} from "../matches/create";
 import { buildMatchDetail } from "../matches/detail";
 import { idempotencyKeyOf, replyToDuplicate } from "../matches/requests";
 
@@ -23,28 +31,63 @@ const tieBreakEntry = alias(gameEntries, "tie_break_entry");
 
 interface LineupSeat extends Seat, ArenaLineupEntry {}
 
+const lineupColumns = {
+  userId: users.id,
+  username: users.normalizedUsername,
+  official: users.official,
+  boss: users.boss,
+  points: gameEntries.points,
+  wins: gameEntries.wins,
+  matchesPlayed: gameEntries.matchesPlayed,
+  updatedAt: gameEntries.updatedAt,
+};
+
+type LineupRow = {
+  userId: string;
+  username: string;
+  official: boolean;
+  boss: boolean;
+  points: number;
+  wins: number;
+  matchesPlayed: number;
+  updatedAt: Date;
+};
+
+function toLineupSeat({ updatedAt, ...seat }: LineupRow): LineupSeat {
+  return { ...seat, codeUpdatedAt: updatedAt.toISOString() };
+}
+
+/** The user's lineup seat when their code runs under the game's current release. */
+async function lineupSeat(
+  db: Database,
+  game: GameCatalogEntry,
+  userId: string,
+): Promise<LineupSeat | undefined> {
+  const rows = await db
+    .select(lineupColumns)
+    .from(gameEntries)
+    .innerJoin(users, eq(gameEntries.userId, users.id))
+    .where(and(runnableEntry(game), eq(users.id, userId)))
+    .limit(1);
+  return rows[0] === undefined ? undefined : toLineupSeat(rows[0]);
+}
+
 /**
- * Who enters a run started now (royale.md "入场"): ordinary players with
- * runnable code by points, then the tie-break game's rating, then user id; the
- * official bot takes one free seat, unranked.
+ * Who enters a run started now (royale.md "入场"): the initiator takes one seat,
+ * the remaining seats go to ordinary players with runnable code by points, then
+ * the tie-break game's rating, then user id; the official bot takes one free
+ * seat, unranked.
  */
 async function arenaLineup(
   db: Database,
   game: GameCatalogEntry,
   arena: ArenaSettings,
+  initiator?: LineupSeat,
 ): Promise<LineupSeat[]> {
-  const columns = {
-    userId: users.id,
-    username: users.normalizedUsername,
-    official: users.official,
-    boss: users.boss,
-    points: gameEntries.points,
-    wins: gameEntries.wins,
-    matchesPlayed: gameEntries.matchesPlayed,
-    updatedAt: gameEntries.updatedAt,
-  };
+  const conditions = [runnableEntry(game), eq(users.official, false), eq(users.boss, false)];
+  if (initiator !== undefined) conditions.push(ne(gameEntries.userId, initiator.userId));
   const players = await db
-    .select(columns)
+    .select(lineupColumns)
     .from(gameEntries)
     .innerJoin(users, eq(gameEntries.userId, users.id))
     .leftJoin(
@@ -54,27 +97,25 @@ async function arenaLineup(
         eq(tieBreakEntry.gameId, arena.tieBreakGameId ?? ""),
       ),
     )
-    .where(and(runnableEntry(game), eq(users.official, false), eq(users.boss, false)))
+    .where(and(...conditions))
     .orderBy(
       desc(gameEntries.points),
       sql`coalesce(${tieBreakEntry.rating}, 1000) desc`,
       asc(gameEntries.userId),
     )
-    .limit(arena.seats);
-  const seats = [...players];
+    .limit(arena.seats - (initiator !== undefined ? 1 : 0));
+  const seats =
+    initiator !== undefined ? [initiator, ...players.map(toLineupSeat)] : players.map(toLineupSeat);
   if (seats.length < arena.seats) {
     const [official] = await db
-      .select(columns)
+      .select(lineupColumns)
       .from(gameEntries)
       .innerJoin(users, eq(gameEntries.userId, users.id))
       .where(and(runnableEntry(game), eq(users.official, true)))
       .limit(1);
-    if (official !== undefined) seats.push(official);
+    if (official !== undefined) seats.push(toLineupSeat(official));
   }
-  return seats.map(({ updatedAt, ...seat }) => ({
-    ...seat,
-    codeUpdatedAt: updatedAt.toISOString(),
-  }));
+  return seats;
 }
 
 function lineupEntry(seat: LineupSeat): ArenaLineupEntry {
@@ -110,6 +151,10 @@ export function arenaRoutes(db: NodePgDatabase): FastifyPluginAsync {
       reply.header("Cache-Control", "no-store");
       const game = gameCatalog.get(request.params.gameId);
       if (!game?.arena) return sendError(reply, 404, "ARENA_NOT_FOUND", "该游戏没有竞技场");
+      // Logged-in viewers see the lineup of a run they would start; everyone
+      // else the points-only board.
+      const session = await loadSession(db, request);
+      const initiator = session === null ? undefined : await lineupSeat(db, game, session.userId);
       const active = await activeRun(db, game);
       const recent = await db
         .select()
@@ -125,7 +170,7 @@ export function arenaRoutes(db: NodePgDatabase): FastifyPluginAsync {
         .limit(game.arena.keepMatches);
       const response: ArenaStatusResponse = {
         active: active === undefined ? null : await buildMatchDetail(db, active),
-        lineup: (await arenaLineup(db, game, game.arena)).map(lineupEntry),
+        lineup: (await arenaLineup(db, game, game.arena, initiator)).map(lineupEntry),
         recent: await Promise.all(recent.map((row) => buildMatchDetail(db, row))),
       };
       return response;
@@ -143,7 +188,16 @@ export function arenaRoutes(db: NodePgDatabase): FastifyPluginAsync {
         return sendError(reply, 400, "VALIDATION_ERROR", "Idempotency-Key 请求头缺失或长度不合法");
       try {
         const row = await db.transaction(async (tx) => {
-          const lineup = await arenaLineup(tx, game, arena);
+          const problem = entryNotRunnableReason(
+            await loadGameEntry(tx, game.id, session.userId),
+            game,
+          );
+          if (problem !== null)
+            throw new MatchRequestError(409, problem, ENTRY_NOT_RUNNABLE_MESSAGES[problem]);
+          const initiator = await lineupSeat(tx, game, session.userId);
+          if (initiator === undefined)
+            throw new Error(`Initiator entry is not runnable for ${game.id}`);
+          const lineup = await arenaLineup(tx, game, arena, initiator);
           if (lineup.length < game.minPlayers)
             throw new MatchRequestError(
               409,

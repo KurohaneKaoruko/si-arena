@@ -52,8 +52,8 @@ const tooFew = computed(() => (status.data.value?.lineup.length ?? 0) < 2);
         竞技场空闲
       </p>
       <p class="text-sm leading-7 text-soft">
-        点下开始后，服务器按当前排行榜抽取前 {{ game.arena?.seats }}
-        名并锁定他们此刻的代码。开跑期间按钮对所有人置灰。
+        点下开始后，你与积分榜前 {{ (game.arena?.seats ?? 5) - 1 }}
+        名入场，并锁定此刻的代码。开跑期间按钮对所有人置灰。
       </p>
       <AppButton
         v-if="session.ready && !session.user"

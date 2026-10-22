@@ -69,8 +69,8 @@ async function registerUser(): Promise<TestUser> {
   return { id: body.user.id, username, token: body.token };
 }
 
-/** Makes every other ordinary player's paper code unrunnable, so only `keep` can be matched. */
-async function onlyRunnable(keep: string[]): Promise<void> {
+/** Makes every other ordinary player's code in `gameId` unrunnable, so only `keep` can be matched. */
+async function onlyRunnable(keep: string[], gameId = "paper"): Promise<void> {
   const others = await database.db
     .select({ id: users.id })
     .from(users)
@@ -81,7 +81,7 @@ async function onlyRunnable(keep: string[]): Promise<void> {
     .set({ botProtocolVersion: 99 })
     .where(
       and(
-        eq(gameEntries.gameId, "paper"),
+        eq(gameEntries.gameId, gameId),
         inArray(
           gameEntries.userId,
           others.map((row) => row.id),
@@ -764,11 +764,11 @@ async function uploadRoyaleBot(token: string): Promise<void> {
   expect(res.statusCode).toBe(200);
 }
 
-dbTest("the royale arena runs one locked lineup at a time", async () => {
+dbTest("the royale arena seats the starter plus the top points", async () => {
   const starter = await registerUser();
   const first = await registerUser();
   const second = await registerUser();
-  for (const user of [first, second]) await uploadRoyaleBot(user.token);
+  for (const user of [starter, first, second]) await uploadRoyaleBot(user.token);
   await database.db
     .update(gameEntries)
     .set({ points: 30 })
@@ -784,10 +784,44 @@ dbTest("the royale arena runs one locked lineup at a time", async () => {
   const status = await call("GET", "/api/games/royale/arena");
   expect(status.statusCode).toBe(200);
   const lineup = status.json().lineup as Array<{ userId: string; official: boolean }>;
-  // Points first; the official bot takes one free seat when fewer than five players qualify.
+  // Anonymous viewers see the points-only board; the official bot takes one
+  // free seat when fewer than five players qualify.
   expect(lineup[0]!.userId).toBe(second.id);
   expect(lineup.filter((seat) => seat.official)).toHaveLength(1);
   expect(status.json().active).toBeNull();
+
+  // A logged-in player with runnable code previews the lineup of their own run.
+  const mine = await call("GET", "/api/games/royale/arena", { token: first.token });
+  expect(mine.json().lineup[0].userId).toBe(first.id);
+
+  // Starting requires runnable royale code of one's own.
+  const codeless = await registerUser();
+  const noCode = await call("POST", "/api/games/royale/arena", {
+    token: codeless.token,
+    headers: { "idempotency-key": "royale-nocode" },
+  });
+  expect(noCode.statusCode).toBe(409);
+  expect(noCode.json().code).toBe("NO_CODE");
+  const codelessView = await call("GET", "/api/games/royale/arena", {
+    token: codeless.token,
+  });
+  expect(codelessView.json().lineup[0].userId).toBe(second.id);
+
+  const royale = registeredGames.find((game) => game.entry.id === "royale")!;
+  await database.db
+    .update(gameEntries)
+    .set({ botProtocolVersion: 99 })
+    .where(and(eq(gameEntries.gameId, "royale"), eq(gameEntries.userId, starter.id)));
+  const stale = await call("POST", "/api/games/royale/arena", {
+    token: starter.token,
+    headers: { "idempotency-key": "royale-stale" },
+  });
+  expect(stale.statusCode).toBe(409);
+  expect(stale.json().code).toBe("PROTOCOL_MISMATCH");
+  await database.db
+    .update(gameEntries)
+    .set({ botProtocolVersion: royale.entry.botProtocolVersion })
+    .where(and(eq(gameEntries.gameId, "royale"), eq(gameEntries.userId, starter.id)));
 
   const started = await call("POST", "/api/games/royale/arena", {
     token: starter.token,
@@ -796,13 +830,15 @@ dbTest("the royale arena runs one locked lineup at a time", async () => {
   expect(started.statusCode).toBe(201);
   const run = started.json();
   expect(run.kind).toBe("arena");
-  expect(run.participants.map((seat: { userId: string }) => seat.userId)).toEqual(
-    lineup.map((seat) => seat.userId),
-  );
-  // The starter needs no royale code and need not be seated.
-  expect(run.participants.some((seat: { userId: string }) => seat.userId === starter.id)).toBe(
-    false,
-  );
+  // The starter always plays the first seat, exactly once; the rest follow the
+  // points board without the starter.
+  expect(run.participants.map((seat: { userId: string }) => seat.userId)).toEqual([
+    starter.id,
+    ...lineup
+      .filter((seat) => !seat.official && seat.userId !== starter.id)
+      .map((seat) => seat.userId),
+    lineup.find((seat) => seat.official)!.userId,
+  ]);
 
   const busy = await call("POST", "/api/games/royale/arena", {
     token: first.token,
@@ -818,4 +854,53 @@ dbTest("the royale arena runs one locked lineup at a time", async () => {
   expect(retried.json().id).toBe(run.id);
   const during = await call("GET", "/api/games/royale/arena");
   expect(during.json().active.id).toBe(run.id);
+  // Free the arena for the tests that follow.
+  await database.db.update(matches).set({ status: "completed" }).where(eq(matches.id, run.id));
+});
+
+dbTest("a zero-points starter displaces only the fifth points seat", async () => {
+  await database.db
+    .update(matches)
+    .set({ status: "completed" })
+    .where(
+      and(
+        eq(matches.gameId, "royale"),
+        eq(matches.kind, "arena"),
+        inArray(matches.status, ["pending", "running"]),
+      ),
+    );
+  const starter = await registerUser();
+  const ranked: TestUser[] = [];
+  for (let index = 0; index < 5; index++) ranked.push(await registerUser());
+  for (const user of [starter, ...ranked]) await uploadRoyaleBot(user.token);
+  // Players left runnable by earlier tests must not claim points seats here.
+  await onlyRunnable([starter.id, ...ranked.map((user) => user.id)], "royale");
+  for (const [index, user] of ranked.entries())
+    await database.db
+      .update(gameEntries)
+      .set({ points: 50 - index * 10 })
+      .where(and(eq(gameEntries.gameId, "royale"), eq(gameEntries.userId, user.id)));
+
+  const started = await call("POST", "/api/games/royale/arena", {
+    token: starter.token,
+    headers: { "idempotency-key": "royale-underdog" },
+  });
+  expect(started.statusCode).toBe(201);
+  const participants = started.json().participants as Array<{
+    userId: string;
+    official: boolean;
+  }>;
+  expect(participants.map((seat) => seat.userId)).toEqual([
+    starter.id,
+    ranked[0]!.id,
+    ranked[1]!.id,
+    ranked[2]!.id,
+    ranked[3]!.id,
+  ]);
+  expect(participants.some((seat) => seat.userId === ranked[4]!.id)).toBe(false);
+  expect(participants.some((seat) => seat.official)).toBe(false);
+  await database.db
+    .update(matches)
+    .set({ status: "completed" })
+    .where(eq(matches.id, started.json().id));
 });

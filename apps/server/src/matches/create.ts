@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { GameCatalogEntry, MatchKind } from "@si-arena/protocol";
 import { gameEntries, matchParticipants, matches, users } from "@si-arena/db";
+import type { Executor } from "@si-arena/db";
 import { RECENT_OPPONENT_MATCHES, selectOpponent } from "./opponent";
 
 type Transaction = Parameters<Parameters<NodePgDatabase["transaction"]>[0]>[0];
@@ -45,6 +46,39 @@ export function runnableEntry(game: GameCatalogEntry): SQL {
     eq(gameEntries.botProtocolVersion, game.botProtocolVersion),
     lte(gameEntries.sourceBytes, game.resolvedLimits.codeBytes),
   )!;
+}
+
+/** The user's stored entry for a game, if any. */
+export async function loadGameEntry(
+  db: Executor,
+  gameId: string,
+  userId: string,
+): Promise<typeof gameEntries.$inferSelect | undefined> {
+  const rows = await db
+    .select()
+    .from(gameEntries)
+    .where(and(eq(gameEntries.gameId, gameId), eq(gameEntries.userId, userId)))
+    .limit(1);
+  return rows[0];
+}
+
+/** Why a stored entry cannot run under the game's current release; null when it can. */
+export type EntryNotRunnableCode = "NO_CODE" | "PROTOCOL_MISMATCH" | "CODE_TOO_LARGE";
+
+export const ENTRY_NOT_RUNNABLE_MESSAGES: Record<EntryNotRunnableCode, string> = {
+  NO_CODE: "尚未上传该游戏的选手代码",
+  PROTOCOL_MISMATCH: "代码协议版本与当前发行不兼容，请重新上传",
+  CODE_TOO_LARGE: "代码体积超过当前发行上限，请重新上传",
+};
+
+export function entryNotRunnableReason(
+  entry: Awaited<ReturnType<typeof loadGameEntry>>,
+  game: GameCatalogEntry,
+): EntryNotRunnableCode | null {
+  if (entry === undefined) return "NO_CODE";
+  if (entry.botProtocolVersion !== game.botProtocolVersion) return "PROTOCOL_MISMATCH";
+  if (entry.sourceBytes > game.resolvedLimits.codeBytes) return "CODE_TOO_LARGE";
+  return null;
 }
 
 const seatColumns = {

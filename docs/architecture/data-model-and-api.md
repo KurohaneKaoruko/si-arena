@@ -107,8 +107,8 @@ Boss 账号同样在启动时初始化：upsert `boss` 用户（无密码、带 
 
 声明了竞技场（manifest `arena`）的游戏另有：
 
-- `GET /games/:gameId/arena`（公开）返回 `{ active, lineup, recent }`：唯一未完成的竞技场比赛（无则为 null）、此刻开局的入场名单（按积分、平分规则取前 `seats` 名代码可运行的普通用户，不足时官方账号补一个席位）、保留中的已结束比赛（最多 `keepMatches` 场，新的在前）。
-- `POST /games/:gameId/arena`（认证，`Idempotency-Key`）在单事务中锁定入场名单并创建 `arena` 比赛，开局者不必入场；已有未完成的竞技场比赛返回 409 `ARENA_BUSY` 并携带 `matchId`，可入场人数少于 `minPlayers` 返回 409 `ARENA_TOO_FEW_PLAYERS`。数据库对每个游戏未完成的竞技场比赛建立部分唯一索引。
+- `GET /games/:gameId/arena`（公开）返回 `{ active, lineup, recent }`：唯一未完成的竞技场比赛（无则为 null）、此刻开局的入场名单（开局者占第一席，其余席位按积分、平分规则从其他代码可运行的普通用户中取，不足时官方账号补一个席位；已登录且代码可运行的请求者看到自己开局后的名单，其余请求者看到纯积分榜前 `seats` 名）、保留中的已结束比赛（最多 `keepMatches` 场，新的在前）。
+- `POST /games/:gameId/arena`（认证，`Idempotency-Key`）在单事务中锁定入场名单并创建 `arena` 比赛，开局者必定入场；开局者未上传代码、协议不兼容或超体积分别返回 409 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`；已有未完成的竞技场比赛返回 409 `ARENA_BUSY` 并携带 `matchId`，可入场人数少于 `minPlayers` 返回 409 `ARENA_TOO_FEW_PLAYERS`。数据库对每个游戏未完成的竞技场比赛建立部分唯一索引。
 
 竞技场比赛结算时，普通参赛者按名次累加 `points[rank-1]` 积分、名次总和、比赛数与冠军次数，官方账号只记录名次；随后删除最近 `keepMatches` 场以外的已结束竞技场比赛及其回放文件。
 

@@ -2,11 +2,18 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { requireSession } from "../auth/session";
-import { gameEntries, matchParticipants, matches } from "@si-arena/db";
+import { matchParticipants, matches } from "@si-arena/db";
 import { sendError } from "../http/errors";
 import { parsePagination } from "../http/pagination";
 import { gameCatalog } from "../games";
-import { createDuel, MatchRequestError, type MatchIntent } from "./create";
+import {
+  createDuel,
+  ENTRY_NOT_RUNNABLE_MESSAGES,
+  entryNotRunnableReason,
+  loadGameEntry,
+  MatchRequestError,
+  type MatchIntent,
+} from "./create";
 import { buildMatchDetail } from "./detail";
 import { idempotencyKeyOf, replyToDuplicate, UUID_PATTERN } from "./requests";
 import { sendReplay } from "./replay";
@@ -70,25 +77,12 @@ export function matchesRoutes(db: NodePgDatabase, replaysDir?: string): FastifyP
         if (intent === null)
           return sendError(reply, 400, "VALIDATION_ERROR", "请求体只能包含 opponentId 或 boss");
 
-        const entryRows = await db
-          .select()
-          .from(gameEntries)
-          .where(and(eq(gameEntries.gameId, game.id), eq(gameEntries.userId, session.userId)))
-          .limit(1);
-        const entry = entryRows[0];
+        const entry = await loadGameEntry(db, game.id, session.userId);
         if (entry === undefined)
-          return sendError(reply, 409, "NO_CODE", "尚未上传该游戏的选手代码");
-        if (entry.botProtocolVersion !== game.botProtocolVersion) {
-          return sendError(
-            reply,
-            409,
-            "PROTOCOL_MISMATCH",
-            "代码协议版本与当前发行不兼容，请重新上传",
-          );
-        }
-        if (entry.sourceBytes > game.resolvedLimits.codeBytes) {
-          return sendError(reply, 409, "CODE_TOO_LARGE", "代码体积超过当前发行上限，请重新上传");
-        }
+          return sendError(reply, 409, "NO_CODE", ENTRY_NOT_RUNNABLE_MESSAGES.NO_CODE);
+        const problem = entryNotRunnableReason(entry, game);
+        if (problem !== null)
+          return sendError(reply, 409, problem, ENTRY_NOT_RUNNABLE_MESSAGES[problem]);
 
         try {
           const row = await createDuel(db, game, {
