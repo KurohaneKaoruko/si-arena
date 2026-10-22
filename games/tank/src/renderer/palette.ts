@@ -1,0 +1,16 @@
+export const TANK_PALETTE = Object.freeze({
+  ground: "#0F131A",
+  grid: "#1A2029",
+  brick: "#8A4B2F",
+  mortar: "#5C3120",
+  steel: "#9AA3AD",
+  steelLight: "#C9D0D6",
+  steelDark: "#5F6A75",
+  barrel: "#1E2633",
+  bullet: "#FFF4C2",
+  hpPip: "#F4F7FB",
+  hpLost: "rgba(244,247,251,.25)",
+  warning: "#FF6B5B",
+  warningInk: "#F4F7FB",
+  players: Object.freeze(["#5B8CFF", "#FFB020", "#FF5FA2", "#2ED3B7", "#A880FF"] as const),
+});
