@@ -176,9 +176,6 @@ catalogs:
     '@fontsource/jetbrains-mono':
       specifier: 5.3.0
       version: 5.3.0
-    '@jitl/quickjs-wasmfile-release-sync':
-      specifier: 0.32.0
-      version: 0.32.0
     '@tailwindcss/vite':
       specifier: 4.3.3
       version: 4.3.3
@@ -212,6 +209,9 @@ catalogs:
     fflate:
       specifier: 0.8.3
       version: 0.8.3
+    isolated-vm:
+      specifier: 7.0.1
+      version: 7.0.1
     jsdom:
       specifier: 30.1.3
       version: 30.1.3
@@ -227,9 +227,6 @@ catalogs:
     pg:
       specifier: 8.23.1
       version: 8.23.1
-    quickjs-emscripten-core:
-      specifier: 0.32.0
-      version: 0.32.0
     simple-git-hooks:
       specifier: 2.14.0
       version: 2.14.0
@@ -526,18 +523,15 @@ importers:
 
   packages/sandbox:
     dependencies:
-      '@jitl/quickjs-wasmfile-release-sync':
-        specifier: 'catalog:'
-        version: 0.32.0
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../protocol
       acorn:
         specifier: 'catalog:'
         version: 8.19.0
-      quickjs-emscripten-core:
+      isolated-vm:
         specifier: 'catalog:'
-        version: 0.32.0
+        version: 7.0.1
     devDependencies:
       tsx:
         specifier: 'catalog:'
@@ -1214,12 +1208,6 @@ packages:
   '@isaacs/fs-minipass@4.0.1':
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
-
-  '@jitl/quickjs-ffi-types@0.32.0':
-    resolution: {integrity: sha512-v9T+GQpmk43VDJ7d72sf0Nexhk+ArvtUihW27dy7lqAl0zBObFKtSBBIm5RBjwIhE8VwsPPm9PNuvPvNqLWUEg==}
-
-  '@jitl/quickjs-wasmfile-release-sync@0.32.0':
-    resolution: {integrity: sha512-BKNDI/TPBfGlLNGYpLrhcDGXmIk4xHm4MRAisOBnOzpXVn9HZWsfmMAc9WMBrAHjvvds6HOikKeaOBKdPdpVrg==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -2342,6 +2330,10 @@ packages:
   is-potential-custom-element-name@1.0.1:
     resolution: {integrity: sha512-bCYeRA2rVibKZd+s2625gGnGF/t7DSqDs4dP7CrLA1m7jKWz6pps0LpYLJN8Q64HtmPKJ1hrN3nzPNKFEKOUiQ==}
 
+  isolated-vm@7.0.1:
+    resolution: {integrity: sha512-nBCQ1hXEaYKYJ79wwfhaF44ITOJC30Hw0wPEsFeNsdD3hdeKK7FW1SGMQYBUA+qasvkqdOazI+iBuq0lcbN/aw==}
+    engines: {node: '>=24.0.0'}
+
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
@@ -2588,6 +2580,10 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  node-gyp-build@4.8.4:
+    resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
+    hasBin: true
+
   nopt@10.0.1:
     resolution: {integrity: sha512-df3sBr/6ax9hSGuC3CspvLlbnX8cP5L5nZwXF8cGN8l0zSWR6BvzmQ6jPUKjvo6+/xdpkNvEcucBNUdBeeV13g==}
     engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
@@ -2752,9 +2748,6 @@ packages:
 
   quick-format-unescaped@4.0.4:
     resolution: {integrity: sha512-tYC1Q1hgyRuHgloV/YXs2w15unPVh8qfu/qCTfhTYamaw7fyhumKa2yGpdSo87vY32rIclj+4fWYQXUMs9EHvg==}
-
-  quickjs-emscripten-core@0.32.0:
-    resolution: {integrity: sha512-QFnPfjFey8EqknSrSxe1hZrf1/8z7/6s1QzGOmKo6++02r7QRRX7ZoyNaZh7JuVjWsVW87KnQrbZqnHkOAzUyg==}
 
   readdirp@5.1.1:
     resolution: {integrity: sha512-Kko+Y5XQ6fM+Ce3dq3m9YGxnacYZYl9cA1wZjaF3Vbry2L3i1qVg8+CAgNPsXRArPMUMCaOR7oa9Nqntc43JKA==}
@@ -3705,12 +3698,6 @@ snapshots:
     dependencies:
       minipass: 7.1.3
 
-  '@jitl/quickjs-ffi-types@0.32.0': {}
-
-  '@jitl/quickjs-wasmfile-release-sync@0.32.0':
-    dependencies:
-      '@jitl/quickjs-ffi-types': 0.32.0
-
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
@@ -4575,6 +4562,10 @@ snapshots:
 
   is-potential-custom-element-name@1.0.1: {}
 
+  isolated-vm@7.0.1:
+    dependencies:
+      node-gyp-build: 4.8.4
+
   jiti@2.7.0: {}
 
   js-beautify@2.0.3:
@@ -4792,6 +4783,8 @@ snapshots:
 
   nanoid@3.3.20: {}
 
+  node-gyp-build@4.8.4: {}
+
   nopt@10.0.1:
     dependencies:
       abbrev: 5.0.0
@@ -4972,10 +4965,6 @@ snapshots:
   quansync@1.0.0: {}
 
   quick-format-unescaped@4.0.4: {}
-
-  quickjs-emscripten-core@0.32.0:
-    dependencies:
-      '@jitl/quickjs-ffi-types': 0.32.0
 
   readdirp@5.1.1: {}
 

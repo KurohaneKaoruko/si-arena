@@ -24,8 +24,7 @@ versioning:
 
 catalog:
   "fflate": "0.8.3"
-  "quickjs-emscripten-core": "0.32.0"
-  "@jitl/quickjs-wasmfile-release-sync": "0.32.0"
+  "isolated-vm": "7.0.1"
   "acorn": "8.19.0"
   "typescript": "6.0.3"
   "tsdown": "0.23.1"
@@ -68,4 +67,7 @@ minimumReleaseAgeExclude:
 
 allowBuilds:
   esbuild: true
+  # isolated-vm ships prebuilt binaries that node-gyp-build loads at require time;
+  # its install script would only recompile them.
+  isolated-vm: false
   simple-git-hooks: true

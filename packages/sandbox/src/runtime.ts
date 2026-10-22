@@ -1,106 +1,29 @@
-import { createRequire } from "node:module";
-import variant from "@jitl/quickjs-wasmfile-release-sync";
+import ivm from "isolated-vm";
 import {
-  newQuickJSWASMModuleFromVariant,
-  type QuickJSHandle,
-  type QuickJSContext,
-  type QuickJSWASMModule,
-  type QuickJSSyncVariant,
-} from "quickjs-emscripten-core";
-import type {
-  ExecuteTickInput,
-  ExecutionError,
-  PlayerLog,
-  ResourceLimits,
+  truncateUtf8,
+  type ExecuteTickInput,
+  type ExecutionError,
+  type PlayerLog,
+  type ResourceLimits,
 } from "@si-arena/protocol";
 import { BOOTSTRAP } from "./bootstrap";
 import { checkSource } from "./source";
 
-type Loader = Awaited<ReturnType<QuickJSSyncVariant["importModuleLoader"]>>;
-interface FailureFlags {
-  _arena_get_failure(): number;
-  _arena_reset_failure(): void;
-}
-let quickjs: QuickJSWASMModule;
-let flags: FailureFlags;
+const MiB = 1024 * 1024;
+/** isolated-vm refuses smaller isolates; the release heapBytes still bounds objects above it. */
+const MIN_ISOLATE_MIB = 8;
+const NO_IMPORTS = () => {
+  throw new Error("Module imports are disabled");
+};
 
-export async function initializeRuntime(): Promise<void> {
-  const loader = createRequire(import.meta.url)("../runtime/quickjs.cjs") as Extract<
-    Loader,
-    (...args: never[]) => unknown
-  >;
-  if (typeof loader !== "function") throw new Error("Invalid native module loader");
-  quickjs = await newQuickJSWASMModuleFromVariant({
-    ...variant,
-    importModuleLoader: async () => async (options) => {
-      const module = await loader(options);
-      flags = module as typeof module & FailureFlags;
-      if (typeof flags["_arena_get_failure"] !== "function")
-        throw new Error("Missing native failure latch");
-      return module;
-    },
-  });
-  warmUp();
-}
-
-// A fresh process runs the QuickJS WASM on V8's baseline tier, so tick 0 used to
-// bill the player for engine compilation (about 3x the CPU of later ticks).
-// This trusted module exercises the parser, interpreter, JSON and collections
-// once before the executor reports ready; no player data is involved.
-const WARM_UP_SOURCE = `${Array.from(
-  { length: 5 },
-  (_, i) =>
-    `function w${i}(grid, n) { const seen = new Set(); const q = []; let acc = ${i}; ` +
-    `for (let j = 0; j < grid.length; j++) if (grid[j] === ${(i % 3) - 1}) { acc += j & 7; q.push({ x: j % 30, y: (j / 30) | 0 }); } ` +
-    `for (const p of q) { const k = p.x * 31 + p.y; if (!seen.has(k)) seen.add(k); acc += k % (n + 1); } ` +
-    `return acc + q.map((p) => p.x).filter((x) => x > 3).length; }`,
-).join("\n")}
-export default function run(n) {
-  const grid = [];
-  for (let i = 0; i < 900; i++) grid.push(((i * 7) % 3) - 1);
-  const o = JSON.parse(JSON.stringify({ grid, players: [{ id: "a", position: { x: 1, y: 2 } }] }));
-  let s = w0(o.grid, n) + w1(o.grid, n) + w2(o.grid, n) + w3(o.grid, n) + w4(o.grid, n);
-  const m = new Map();
-  for (let i = 0; i < 400; i++) m.set("k" + i, { v: i, t: [i, i + 1] });
-  for (const [k, v] of m) s += v.t[1] + k.length;
-  class C { constructor(v) { this.v = v; } get d() { return this.v * 2; } }
-  for (let i = 0; i < 300; i++) s += new C(i).d;
-  try { null.x; } catch (e) { s += String(e).length; }
-  return s;
-}`;
-
-function warmUp(): void {
-  const runtime = quickjs.newRuntime();
-  const context = runtime.newContext();
-  try {
-    const namespace = context.unwrapResult(
-      context.evalCode(WARM_UP_SOURCE, "arena-warm-up.js", { type: "module" }),
-    );
-    const run = context.getProp(namespace, "default");
-    for (let round = 0; round < 4; round++) {
-      const arg = context.newNumber(round);
-      context.unwrapResult(context.callFunction(run, context.undefined, arg)).dispose();
-      arg.dispose();
-    }
-    run.dispose();
-    namespace.dispose();
-  } finally {
-    context.dispose();
-    runtime.dispose();
-  }
-}
-
-class GuestFault {
-  constructor(readonly handle: QuickJSHandle) {}
-}
 export interface RuntimeOutput {
   payload: string;
   cpuUsedUs: number;
-  /** Internal benchmark data; not authoritative game/replay state. */
-  profile: Record<string, number>;
 }
 
 let validatedSource: string | null = null;
+type GuestFunction = ivm.Reference<(...args: any[]) => unknown>;
+type Bootstrap = ivm.Reference<Record<"begin" | "run" | "prepare", (...args: any[]) => unknown>>;
 
 /**
  * Run the trusted AST check while the executor binds, so tick 0 does not spend
@@ -115,15 +38,29 @@ export function prevalidateSource(source: string): void {
   }
 }
 
+const ENTRYPOINT_INVALID = JSON.stringify({
+  ok: false,
+  error: { type: "ENTRYPOINT_ERROR", message: "Invalid or unsupported player module" },
+});
+
+/** Engine resource failures surface as RangeErrors in V8; map the uncaught ones to budget types. */
+function resourceFailure(name: string, message: string): ExecutionError | undefined {
+  if (name !== "RangeError") return undefined;
+  if (message === "Maximum call stack size exceeded")
+    return { type: "STACK_LIMIT", message: "Call stack limit exceeded" };
+  if (/allocation failed|Invalid (?:array|string|typed array) length/.test(message))
+    return { type: "HEAP_LIMIT", message: "Heap allocation limit exceeded" };
+  return undefined;
+}
+
 /** One player's volatile VM. Only the parent owns committed JSON Memory. */
 export class GuestSession {
   private vm: MeteredRuntime | undefined;
-  private begin: QuickJSHandle | undefined;
-  private run: QuickJSHandle | undefined;
-  private prepare: QuickJSHandle | undefined;
-  private diagnose: QuickJSHandle | undefined;
-  private sdk: QuickJSHandle | undefined;
-  private entry: QuickJSHandle | undefined;
+  private begin: GuestFunction | undefined;
+  private run: GuestFunction | undefined;
+  private prepare: GuestFunction | undefined;
+  private sdk: GuestFunction | undefined;
+  private entry: GuestFunction | undefined;
   private binding:
     | (Pick<ExecuteTickInput, "matchId" | "playerId" | "executionId" | "source" | "captureLogs"> & {
         sdkSource: string;
@@ -133,13 +70,13 @@ export class GuestSession {
   private onLog: (log: PlayerLog) => void = () => {};
   private onTruncated: () => void = () => {};
 
-  execute(
+  async execute(
     input: ExecuteTickInput,
     sdkSource: string,
     logBytes: number,
     onLog: (log: PlayerLog) => void,
     onTruncated: () => void,
-  ): RuntimeOutput {
+  ): Promise<RuntimeOutput> {
     const limitsKey = JSON.stringify(input.limits);
     const bound = this.binding;
     if (
@@ -167,17 +104,7 @@ export class GuestSession {
         checkSource(input.source);
       } catch (error) {
         if (!(error instanceof SyntaxError || error instanceof RangeError)) throw error;
-        return {
-          payload: JSON.stringify({
-            ok: false,
-            error: {
-              type: "ENTRYPOINT_ERROR",
-              message: "Invalid or unsupported player module",
-            },
-          }),
-          cpuUsedUs: 0,
-          profile: {},
-        };
+        return { payload: ENTRYPOINT_INVALID, cpuUsedUs: 0 };
       }
       validatedSource = input.source;
     }
@@ -186,109 +113,87 @@ export class GuestSession {
     const warm = this.vm !== undefined;
     const vm = (this.vm ??= new MeteredRuntime(input.limits));
     if (warm) vm.startTick();
-    const { context } = vm;
-    const tickHandles: QuickJSHandle[] = [];
-    const keep = (handle: QuickJSHandle) => {
-      tickHandles.push(handle);
-      return handle;
-    };
-    const unwrap = (result: ReturnType<QuickJSContext["evalCode"]>) => {
-      if (result.error) throw new GuestFault(keep(result.error));
-      return keep(result.value);
-    };
+    const { isolate, context } = vm;
+    const wall = { timeout: input.limits.wallMs };
     let succeeded = false;
     try {
       if (!warm) {
-        const emit = vm.keep(
-          context.newFunction("emitLog", (level, message) => {
-            if (context.typeof(level) !== "string" || context.typeof(message) !== "string")
+        const emit = new ivm.Callback(
+          (level: unknown, message: unknown) => {
+            if (typeof level !== "string" || typeof message !== "string")
               throw new Error("Invalid trusted logger output");
-            const name = context.getString(level);
-            if (name === "__truncated") this.onTruncated();
-            else
-              this.onLog({
-                level: name as PlayerLog["level"],
-                message: context.getString(message),
-              });
-          }),
+            if (level === "__truncated") this.onTruncated();
+            else this.onLog({ level: level as PlayerLog["level"], message });
+          },
+          { sync: true },
         );
-        const factory = unwrap(
-          context.evalCode(BOOTSTRAP, "arena-bootstrap.js", { type: "global" }),
-        );
-        const boot = unwrap(context.callFunction(factory, context.undefined, emit));
-        this.begin = vm.keep(context.getProp(boot, "begin"));
-        this.run = vm.keep(context.getProp(boot, "run"));
-        this.prepare = vm.keep(context.getProp(boot, "prepare"));
-        this.diagnose = vm.keep(context.getProp(boot, "diagnose"));
+        const factory = context.evalSync(BOOTSTRAP, { reference: true, ...wall }) as GuestFunction;
+        const boot = factory.applySync(undefined, [emit], {
+          result: { reference: true },
+          ...wall,
+        }) as Bootstrap;
+        this.begin = boot.getSync("begin", { reference: true });
+        this.run = boot.getSync("run", { reference: true });
+        this.prepare = boot.getSync("prepare", { reference: true });
       }
-      const config = keep(
-        context.newString(
-          JSON.stringify({
-            observation: input.observation,
-            memory: input.memory,
-            limits: input.limits,
-            captureLogs: input.captureLogs,
-            logBytes,
-          }),
-        ),
-      );
+      const config = JSON.stringify({
+        observation: input.observation,
+        memory: input.memory,
+        limits: input.limits,
+        captureLogs: input.captureLogs,
+        logBytes,
+      });
       // The parser is captured inside the trusted closure before player code ever runs.
-      unwrap(context.callFunction(this.begin!, context.undefined, config));
-      vm.mark("bootstrapUs");
+      this.begin!.applySync(undefined, [config], wall);
       if (!warm) {
         try {
-          const module = unwrap(context.evalCode(sdkSource, "arena-sdk.js", { type: "module" }));
-          this.sdk = vm.keep(context.getProp(module, "default"));
-          if (context.typeof(this.sdk) !== "function")
+          const module = isolate.compileModuleSync(sdkSource, { filename: "arena-sdk.js" });
+          module.instantiateSync(context, NO_IMPORTS);
+          module.evaluateSync(wall);
+          this.sdk = module.namespace.getSync("default", { reference: true }) as GuestFunction;
+          if (this.sdk.typeof !== "function")
             throw new Error("Trusted SDK must export a game API factory");
         } catch {
           throw new Error("Trusted SDK failed to initialize");
         }
       }
       // Only the trusted factory receives the submission channel. All methods
-      // and command collection stay inside QuickJS; no per-command host callbacks.
-      unwrap(context.callFunction(this.prepare!, context.undefined, this.sdk!));
-      vm.mark("sdkUs");
-      vm.enterGuest();
+      // and command collection stay inside the isolate; no per-command host callbacks.
+      this.prepare!.applySync(undefined, [this.sdk!.derefInto()], wall);
       let payload: string;
       try {
-        if (!this.entry) {
-          const module = unwrap(context.evalCode(input.source, "player.js", { type: "module" }));
-          this.entry = vm.keep(context.getProp(module, "default"));
-        }
-        vm.mark("sourceUs");
-        const output = unwrap(context.callFunction(this.run!, context.undefined, this.entry));
-        vm.mark("entryAndSerializationUs");
-        const failure = vm.failure();
-        if (failure) payload = JSON.stringify({ ok: false, error: failure });
-        else {
-          if (context.typeof(output) !== "string")
+        payload = await vm.guest(async () => {
+          if (!this.entry) {
+            let module: ivm.Module;
+            try {
+              module = isolate.compileModuleSync(input.source, { filename: "player.js" });
+            } catch {
+              return ENTRYPOINT_INVALID;
+            }
+            module.instantiateSync(context, NO_IMPORTS);
+            await module.evaluate(wall);
+            this.entry = module.namespace.getSync("default", { reference: true }) as GuestFunction;
+          }
+          const output: unknown = await this.run!.apply(undefined, [this.entry.derefInto()], wall);
+          if (typeof output !== "string")
             throw new Error("Trusted serializer returned a non-string");
-          payload = context.getString(output);
-          if (Buffer.byteLength(payload) > input.limits.resultBytes)
-            payload = JSON.stringify({
-              ok: false,
-              error: {
-                type: "INVALID_ACTION",
-                message: "Execution result exceeds byte limit",
-              },
-            });
-        }
+          return output;
+        });
+        if (Buffer.byteLength(payload) > input.limits.resultBytes)
+          payload = JSON.stringify({
+            ok: false,
+            error: { type: "INVALID_ACTION", message: "Execution result exceeds byte limit" },
+          });
       } catch (error) {
-        const failure = vm.failure();
-        if (failure) payload = JSON.stringify({ ok: false, error: failure });
-        else if (error instanceof GuestFault) {
-          const output = unwrap(
-            context.callFunction(this.diagnose!, context.undefined, error.handle),
-          );
-          payload = context.getString(output);
-        } else throw error;
+        payload = JSON.stringify({
+          ok: false,
+          error: vm.failure() ?? diagnose(error, input.limits),
+        });
       }
       const failure = vm.failure();
       if (failure) payload = JSON.stringify({ ok: false, error: failure });
-      const result = { payload, cpuUsedUs: vm.billedCpu(), profile: vm.profile };
       succeeded = (JSON.parse(payload) as { ok: boolean }).ok;
-      return result;
+      return { payload, cpuUsedUs: vm.billedCpuUs() };
     } catch (error) {
       // A retained player heap can exhaust the next tick's input allocation.
       // Cold trusted initialization failures remain system errors.
@@ -296,188 +201,121 @@ export class GuestSession {
       if (!failure) throw error;
       return {
         payload: JSON.stringify({ ok: false, error: failure }),
-        cpuUsedUs: vm.billedCpu(),
-        profile: vm.profile,
+        cpuUsedUs: vm.billedCpuUs(),
       };
     } finally {
-      vm.mark("outputUs");
-      for (const handle of tickHandles.toReversed()) if (handle.alive) handle.dispose();
       this.onLog = () => {};
       this.onTruncated = () => {};
       if (!succeeded) this.close();
-      vm.mark("teardownUs");
     }
   }
 
   close(): void {
     const vm = this.vm;
     this.vm = undefined;
-    this.begin = this.prepare = this.run = this.diagnose = this.sdk = this.entry = undefined;
+    this.begin = this.prepare = this.run = this.sdk = this.entry = undefined;
     vm?.close();
   }
 }
 
-/** Cold-call probe for internal benchmarks; production owns a GuestSession per player. */
-export function runGuest(
-  input: ExecuteTickInput,
-  sdkSource: string,
-  logBytes: number,
-  onLog: (log: PlayerLog) => void,
-  onTruncated: () => void,
-): RuntimeOutput {
-  const session = new GuestSession();
-  try {
-    return session.execute(input, sdkSource, logBytes, onLog, onTruncated);
-  } finally {
-    session.close();
-  }
+/** Errors escaping the guest without a trusted wrapper: top-level module code and engine terminations. */
+function diagnose(error: unknown, limits: ResourceLimits): ExecutionError {
+  const name = error instanceof Error ? error.name : "Error";
+  const message = error instanceof Error ? error.message : "Player execution failed";
+  const budget = Math.max(16, limits.errorBytes >> 3);
+  if (message === "Script execution timed out.")
+    return { type: "EXECUTION_TIMEOUT", message: "Tick wall time exceeded" };
+  return (
+    resourceFailure(name, message) ?? {
+      type: "RUNTIME_ERROR",
+      message: truncateUtf8(message, budget),
+      name: truncateUtf8(name, 64),
+      ...(error instanceof Error && typeof error.stack === "string"
+        ? { stack: truncateUtf8(error.stack, budget) }
+        : {}),
+    }
+  );
 }
 
 export function compileSource(source: string, limits: ResourceLimits): RuntimeOutput {
-  // Same policy-check placement as runGuest: unbilled, so large valid sources are
-  // never rejected because parsing burned the validation CPU budget.
+  // Same policy-check placement as the tick path: unbilled, so large valid
+  // sources are never rejected because parsing burned the validation budget.
   try {
     checkSource(source);
   } catch (error) {
-    if (error instanceof SyntaxError || error instanceof RangeError) {
-      return {
-        payload: JSON.stringify({
-          ok: false,
-          error: { type: "ENTRYPOINT_ERROR", message: "Invalid or unsupported player module" },
-        }),
-        cpuUsedUs: 0,
-        profile: {},
-      };
-    }
+    if (error instanceof SyntaxError || error instanceof RangeError)
+      return { payload: ENTRYPOINT_INVALID, cpuUsedUs: 0 };
     throw error;
   }
-  return withRuntime(limits, (context, _keep, unwrap, _resourceFailure, _mark, enterGuest) => {
-    // Compiling untrusted player source is guest work: heap or CPU exhaustion
-    // here is attributable to the player's source.
-    enterGuest();
-    try {
-      unwrap(context.evalCode(source, "player.js", { type: "module", compileOnly: true }));
-      return '{"ok":true}';
-    } catch {
-      return JSON.stringify({
-        ok: false,
-        error: { type: "ENTRYPOINT_ERROR", message: "Invalid or unsupported player module" },
-      });
-    }
-  });
+  const vm = new MeteredRuntime(limits);
+  try {
+    // Compiling never runs top-level code; the AST check already rejected imports.
+    vm.isolate.compileModuleSync(source, { filename: "player.js" });
+    return { payload: '{"ok":true}', cpuUsedUs: 0 };
+  } catch {
+    return { payload: ENTRYPOINT_INVALID, cpuUsedUs: 0 };
+  } finally {
+    vm.close();
+  }
 }
 
 class MeteredRuntime {
-  private started = process.threadCpuUsage();
-  private guestStartedUs = 0;
+  readonly isolate: ivm.Isolate;
+  readonly context: ivm.Context;
+  private guestStartNs = 0n;
+  private lastCpuNs = 0n;
   private cpuFailed = false;
-  private previous = 0;
-  private readonly handles: QuickJSHandle[] = [];
-  readonly runtime: ReturnType<QuickJSWASMModule["newRuntime"]>;
-  readonly context: QuickJSContext;
-  profile: Record<string, number> = {};
   inGuest = false;
 
   constructor(private readonly limits: ResourceLimits) {
-    flags["_arena_reset_failure"]();
-    this.runtime = quickjs.newRuntime();
-    this.runtime.setMemoryLimit(limits.heapBytes);
-    this.runtime.setMaxStackSize(limits.stackBytes);
-    this.runtime.setInterruptHandler(() => {
-      if (this.inGuest && this.billedCpu() > limits.cpuMs * 1000) this.cpuFailed = true;
-      return this.cpuFailed || flags["_arena_get_failure"]() !== 0;
+    this.isolate = new ivm.Isolate({
+      memoryLimit: Math.max(MIN_ISOLATE_MIB, Math.ceil(limits.heapBytes / MiB)),
+      // V8 cannot continue after an unrecoverable fault; the parent rebuilds this process.
+      onCatastrophicError: () => process.exit(70),
     });
-    this.runtime.setModuleLoader(() => ({ error: new Error("Module imports are disabled") }));
-    try {
-      this.context = this.runtime.newContext();
-    } catch (error) {
-      this.runtime.dispose();
-      throw error;
-    }
-    this.mark("runtimeAndContextUs");
+    this.context = this.isolate.createContextSync();
   }
 
   startTick(): void {
-    flags["_arena_reset_failure"]();
-    this.started = process.threadCpuUsage();
-    this.guestStartedUs = this.previous = 0;
+    this.guestStartNs = 0n;
     this.inGuest = this.cpuFailed = false;
-    this.profile = { runtimeAndContextUs: 0 };
   }
-  private cpu(): number {
-    const usage = process.threadCpuUsage(this.started);
-    return usage.user + usage.system;
+  private cpuNs(): bigint {
+    if (!this.isolate.isDisposed) this.lastCpuNs = this.isolate.cpuTime;
+    return this.lastCpuNs;
   }
-  billedCpu(): number {
-    return this.inGuest ? this.cpu() - this.guestStartedUs : 0;
+  billedCpuUs(): number {
+    return this.inGuest ? Number((this.cpuNs() - this.guestStartNs) / 1000n) : 0;
   }
-  enterGuest(): void {
-    this.guestStartedUs = this.cpu();
+  /**
+   * Bill the isolate's own thread time from here on. isolated-vm only offers a
+   * wall-clock interrupt, so a 1ms poll terminates the isolate once the CPU budget
+   * is spent; the wall timeout and the parent watchdog remain as backstops.
+   */
+  async guest<T>(work: () => Promise<T>): Promise<T> {
+    this.guestStartNs = this.cpuNs();
     this.inGuest = true;
-  }
-  mark(phase: string): void {
-    const now = this.cpu();
-    this.profile[phase] = now - this.previous;
-    this.previous = now;
+    const budgetNs = BigInt(this.limits.cpuMs) * 1_000_000n;
+    const poll = setInterval(() => {
+      if (this.cpuNs() - this.guestStartNs > budgetNs && !this.isolate.isDisposed) {
+        this.cpuFailed = true;
+        this.isolate.dispose();
+      }
+    }, 1);
+    try {
+      return await work();
+    } finally {
+      clearInterval(poll);
+    }
   }
   failure(): ExecutionError | undefined {
-    if (this.billedCpu() > this.limits.cpuMs * 1000) this.cpuFailed = true;
-    const native = flags["_arena_get_failure"]();
-    if (native & 1) return { type: "HEAP_LIMIT", message: "QuickJS allocation limit exceeded" };
-    if (native & 2) return { type: "STACK_LIMIT", message: "QuickJS stack limit exceeded" };
+    if (this.inGuest && this.billedCpuUs() > this.limits.cpuMs * 1000) this.cpuFailed = true;
     if (this.cpuFailed) return { type: "CPU_LIMIT", message: "Tick CPU budget exceeded" };
+    if (this.isolate.isDisposed)
+      return { type: "HEAP_LIMIT", message: "Isolate heap limit exceeded" };
     return undefined;
   }
-  keep(handle: QuickJSHandle): QuickJSHandle {
-    this.handles.push(handle);
-    return handle;
-  }
   close(): void {
-    for (const handle of this.handles.toReversed()) if (handle.alive) handle.dispose();
-    this.context.dispose();
-    this.runtime.dispose();
-  }
-}
-
-function withRuntime(
-  limits: ResourceLimits,
-  execute: (
-    context: QuickJSContext,
-    keep: (handle: QuickJSHandle) => QuickJSHandle,
-    unwrap: (result: ReturnType<QuickJSContext["evalCode"]>) => QuickJSHandle,
-    resourceFailure: () => ExecutionError | undefined,
-    mark: (phase: string) => void,
-    enterGuest: () => void,
-  ) => string,
-): RuntimeOutput {
-  const vm = new MeteredRuntime(limits);
-  const keep = (handle: QuickJSHandle) => vm.keep(handle);
-  const unwrap = (result: ReturnType<QuickJSContext["evalCode"]>) => {
-    if (result.error) throw new GuestFault(keep(result.error));
-    return keep(result.value);
-  };
-  try {
-    let payload: string;
-    try {
-      payload = execute(
-        vm.context,
-        keep,
-        unwrap,
-        () => vm.failure(),
-        (phase) => vm.mark(phase),
-        () => vm.enterGuest(),
-      );
-    } catch (error) {
-      const failure = vm.inGuest ? vm.failure() : undefined;
-      if (!failure) throw error;
-      payload = JSON.stringify({ ok: false, error: failure });
-    }
-    const failure = vm.inGuest ? vm.failure() : undefined;
-    if (failure) payload = JSON.stringify({ ok: false, error: failure });
-    return { payload, cpuUsedUs: vm.billedCpu(), profile: vm.profile };
-  } finally {
-    vm.mark("outputUs");
-    vm.close();
-    vm.mark("teardownUs");
+    if (!this.isolate.isDisposed) this.isolate.dispose();
   }
 }

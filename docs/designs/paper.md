@@ -185,4 +185,4 @@ type PaperAction =
 
 ## 资源预算
 
-圈地的 manifest 不覆盖平台资源默认值：每人每 tick 20ms CPU、32MiB QuickJS 运行内存、64KiB Memory；源码上限 256KiB。其他游戏可独立覆盖，不与圈地共享固定限额。完整限制及失败行为见 [资源限额](../architecture/resource-limits.md)。
+圈地的 manifest 不覆盖平台资源默认值：每人每 tick 20ms CPU、32MiB isolate 堆、64KiB Memory；源码上限 256KiB。其他游戏可独立覆盖，不与圈地共享固定限额。完整限制及失败行为见 [资源限额](../architecture/resource-limits.md)。

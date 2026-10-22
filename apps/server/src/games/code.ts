@@ -8,7 +8,7 @@ const validationGate = createConcurrencyLimiter(2);
 
 /**
  * Runs the sandbox's static player-source check (Acorn AST restrictions plus a
- * compile-only pass in the same QuickJS build used for execution). At most two
+ * compile-only pass in the same V8 sandbox used for execution). At most two
  * validations run per process; excess requests fail fast.
  */
 export async function validatePlayerSource(

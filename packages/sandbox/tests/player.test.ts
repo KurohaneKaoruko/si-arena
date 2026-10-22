@@ -48,7 +48,7 @@ async function create(
 }
 
 // The CPU thresholds in the performance tests below were calibrated on a fast
-// reference core; shared CI runners execute the same WASM work 2-3x slower.
+// reference core; shared CI runners execute the same guest work 2-3x slower.
 // Measure this machine's steady guest speed with a spin of the reference size
 // and scale budgets and thresholds by the same factor, keeping the regression
 // signal (roughly a 2x cost step) detectable on any hardware. The calibration
@@ -254,8 +254,8 @@ test.each([
   ["game action", "game.submit({type:'wrong'});return", "INVALID_ACTION"],
   ["Memory", "Memory.invalid=undefined", "MEMORY_INVALID"],
   ["CPU", "while(true){}", "CPU_LIMIT"],
-  ["heap", "try{new ArrayBuffer(8*1024*1024)}catch{}", "HEAP_LIMIT"],
-  ["stack", "try{function f(){return f()}f()}catch{}", "STACK_LIMIT"],
+  ["heap", "new ArrayBuffer(16*1024*1024)", "HEAP_LIMIT"],
+  ["stack", "function f(){return f()}f()", "STACK_LIMIT"],
 ])(
   "%s failure discards all volatile state and restores only the last Memory checkpoint",
   async (_label, body, type) => {
@@ -321,7 +321,8 @@ test("retained player heaps remain bounded across ticks and recover after exhaus
   );
   let committed = 0;
   let failed = false;
-  for (let tick = 0; tick < 16; tick++) {
+  // The isolate floor is 8MiB, so the retained buffers need about 32 ticks.
+  for (let tick = 0; tick < 64; tick++) {
     const result = await player.execute(tick, {});
     if (!result.ok) {
       expect(result.error?.type).toBe("HEAP_LIMIT");
@@ -341,13 +342,18 @@ test("retained player heaps remain bounded across ticks and recover after exhaus
 
 test("a retained cache exhausting the next input allocation is a player heap failure", async () => {
   const player = await create(
-    "const cache=new ArrayBuffer(1536*1024);\n    export default ({game,Memory})=>{Memory.n=(Memory.n??0)+1;return game.submit({type:'move',bytes:cache.byteLength})}",
+    "const cache=[];for(let i=0;i<40000;i++)cache.push({i,x:[i,i+1],t:'abc'});\n    export default ({game,Memory})=>{Memory.n=(Memory.n??0)+1;return game.submit({type:'move',cached:cache.length})}",
     {
-      limits: limits({ heapBytes: 2 * 1024 * 1024, observationBytes: 256 * 1024 }),
+      limits: limits({
+        heapBytes: 8 * 1024 * 1024,
+        observationBytes: 4 * 1024 * 1024,
+        ipcBytes: 8 * 1024 * 1024,
+      }),
     },
   );
   expect(await player.execute(0, {})).toMatchObject({ ok: true, memory: { n: 1 } });
-  expect(await player.execute(1, { text: "x".repeat(240 * 1024) })).toMatchObject({
+  const items = Array.from({ length: 60000 }, (_, i) => ({ i, x: [i, i + 1], t: "abc" }));
+  expect(await player.execute(1, { items })).toMatchObject({
     ok: false,
     error: { type: "HEAP_LIMIT" },
     memory: { n: 1 },
@@ -477,16 +483,11 @@ test("diagnostics remain within small byte budgets even with escaped control cha
 });
 
 test.each([
-  ["heap allocation", "try { new ArrayBuffer(8*1024*1024) } catch {}", "HEAP_LIMIT"],
-  ["giant string allocation", "try { 'x'.repeat(8*1024*1024) } catch {}", "HEAP_LIMIT"],
-  [
-    "cumulative allocations",
-    "try { const a=[];for(let i=0;i<64;i++)a.push(new ArrayBuffer(128*1024)); } catch {}",
-    "HEAP_LIMIT",
-  ],
-  ["stack overflow", "try { function recur(){return recur()} recur(); } catch {}", "STACK_LIMIT"],
+  ["heap allocation", "new ArrayBuffer(16*1024*1024)", "HEAP_LIMIT"],
+  ["cumulative allocations", "const a=[];for(;;)a.push(new Array(1e5).fill(1))", "HEAP_LIMIT"],
+  ["stack overflow", "function recur(){return recur()} recur()", "STACK_LIMIT"],
   ["CPU interrupt", "try { while(true){} } catch {}", "CPU_LIMIT"],
-])("%s cannot be hidden with catch and recovers next tick", async (_name, body, type) => {
+])("uncaught %s fails under its budget type and recovers next tick", async (_name, body, type) => {
   const player = await create(
     `export default ({game,Memory})=>{Memory.n=1;if(game.fail){${body}};return game.submit({type:'move'})}`,
     { limits: limits({ heapBytes: 2 * 1024 * 1024, cpuMs: 40 }) },
@@ -499,9 +500,35 @@ test.each([
   expect(await player.execute(1, {})).toMatchObject({ ok: true, memory: { n: 1 } });
 });
 
+test("a refused allocation or stack overflow caught by the player is ordinary JS", async () => {
+  // V8 refuses the allocation outright, so the limit held; nothing is latched.
+  const player = await create(
+    "export default ({game,Memory})=>{try{new ArrayBuffer(16*1024*1024)}catch(e){Memory.heap=e.name};\n    try{(function f(){f()})()}catch(e){Memory.stack=e.name};return game.submit({type:'move'})}",
+    { limits: limits({ heapBytes: 2 * 1024 * 1024 }) },
+  );
+  expect(await player.execute(0, {})).toMatchObject({
+    ok: true,
+    memory: { heap: "RangeError", stack: "RangeError" },
+  });
+});
+
+test("recursion depth is bounded by the isolate thread regardless of stackBytes", async () => {
+  // isolated-vm runs guest calls on its own threads whose stack V8 sizes itself;
+  // --stack-size does not reach them, so the release stackBytes is informational.
+  const source =
+    "export default ({game,Memory})=>{let d=0;try{(function f(){d++;f()})()}catch{};Memory.depth=d;return game.submit({type:'move'})}";
+  const small = await create(source, { limits: limits({ stackBytes: 128 * 1024 }) });
+  const large = await create(source, { limits: limits({ stackBytes: 512 * 1024 }) });
+  const shallow = Number((await small.execute(0, {})).memory.depth);
+  const deep = Number((await large.execute(0, {})).memory.depth);
+  expect(shallow).toBeGreaterThan(1000);
+  expect(shallow).toBeLessThan(100000);
+  expect(deep).toBe(shallow);
+});
+
 test("Function-constructor and indirect-eval import escapes load no modules and keep the executor alive", async () => {
   const player = await create(
-    "let settled = 0;\n    const attempts = [];\n    const attempt = (label, run) => {\n      try {\n        const value = run();\n        attempts.push(label + ':' + typeof value);\n        if (value && typeof value.then === 'function')\n          value.then(() => { settled++; }, () => { settled++; });\n      } catch (error) {\n        attempts.push(label + ':threw:' + (error && error.message ? error.message : String(error)));\n      }\n    };\n    attempt('newFunction-node', () => new Function('return import(\"node:fs\")')());\n    attempt('newFunction-remote', () => new Function('return import(\"https://example.invalid/x.js\")')());\n    attempt('newFunction-argument', () => new Function('m', 'return import(m)')('node:fs'));\n    attempt('indirectEval-node', () => (0, eval)('import(\"node:fs\")'));\n    attempt('indirectEval-declaration', () => (0, eval)('import x from \"node:fs\"'));\n    const realm = new Function('return this')();\n    export default ({game,Memory}) => {\n      Memory.attempts = attempts;\n      Memory.settled = settled;\n      Memory.hostGlobals = [typeof process, typeof require, typeof global,\n        typeof realm.process, typeof realm.require, typeof realm.global, typeof realm.fetch];\n      return game.submit({type:'move'});\n    }",
+    "let settled = 0, rejected = 0;\n    const attempts = [];\n    const attempt = (label, run) => {\n      try {\n        const value = run();\n        attempts.push(label + ':' + typeof value);\n        if (value && typeof value.then === 'function')\n          value.then(() => { settled++; }, () => { rejected++; });\n      } catch (error) {\n        attempts.push(label + ':threw:' + (error && error.message ? error.message : String(error)));\n      }\n    };\n    attempt('newFunction-node', () => new Function('return import(\"node:fs\")')());\n    attempt('newFunction-remote', () => new Function('return import(\"https://example.invalid/x.js\")')());\n    attempt('newFunction-argument', () => new Function('m', 'return import(m)')('node:fs'));\n    attempt('indirectEval-node', () => (0, eval)('import(\"node:fs\")'));\n    attempt('indirectEval-declaration', () => (0, eval)('import x from \"node:fs\"'));\n    const realm = new Function('return this')();\n    export default ({game,Memory}) => {\n      Memory.attempts = attempts;\n      Memory.settled = settled;\n      Memory.rejected = rejected;\n      Memory.hostGlobals = [typeof process, typeof require, typeof global,\n        typeof realm.process, typeof realm.require, typeof realm.global, typeof realm.fetch];\n      return game.submit({type:'move'});\n    }",
   );
   const pid = player.processId;
   const result = await player.execute(0, {});
@@ -509,16 +536,20 @@ test("Function-constructor and indirect-eval import escapes load no modules and 
   expect(result.action).toEqual({ type: "move" });
   const hostGlobals = result.memory.hostGlobals as string[];
   expect(hostGlobals.every((value) => value === "undefined")).toBe(true);
-  // Every escape either throws a guest-catchable error or returns a promise that
-  // can never settle: the module loader is disabled and queued jobs never drain,
-  // so no continuation runs and no module is ever delivered.
+  // Every escape either throws a guest-catchable error or returns a promise
+  // that the disabled module loader rejects at the next microtask checkpoint:
+  // no fulfilment ever runs and no module is ever delivered.
   expect(result.memory.settled).toBe(0);
   const attempts = result.memory.attempts as string[];
   for (const entry of attempts)
     expect(entry).toMatch(/^(newFunction|indirectEval)-[^:]+:(object|threw:)/);
   expect(attempts.some((entry) => entry.includes("threw"))).toBe(true);
   expect(player.processId).toBe(pid);
-  expect(await player.execute(1, {})).toMatchObject({ ok: true, memory: { settled: 0 } });
+  const promised = attempts.filter((entry) => entry.endsWith(":object")).length;
+  expect(await player.execute(1, {})).toMatchObject({
+    ok: true,
+    memory: { settled: 0, rejected: promised },
+  });
 });
 
 test("one failing player cannot block another player's process", async () => {
@@ -568,15 +599,27 @@ test("trusted setup is not billed against the player CPU budget", { retry: 2 }, 
   );
 });
 
-test("promise results are rejected and queued jobs are never drained", async () => {
+test("promise results are rejected and queued jobs run after the commit inside the budget", async () => {
   const asyncPlayer = await create(
     "export default async ({game,Memory})=>{game.submit(({type:'move'}));}",
   );
   expect((await asyncPlayer.execute(0, {})).error?.type).toBe("ENTRYPOINT_ERROR");
-  const player = await create(
-    "export default ({game,Memory})=>{Promise.resolve().then(()=>{Memory.n=10;while(true){}});Memory.n=1;return game.submit({type:'move'})}",
+  // V8 drains the microtask queue when the entry call returns: the action and
+  // Memory were already serialized, so a job cannot change them, but its CPU
+  // is billed to the same tick and a runaway job fails it.
+  const quiet = await create(
+    "export default ({game,Memory})=>{Promise.resolve().then(()=>{Memory.n=10});Memory.n=1;return game.submit({type:'move'})}",
   );
-  expect(await player.execute(0, {})).toMatchObject({ ok: true, memory: { n: 1 } });
+  expect(await quiet.execute(0, {})).toMatchObject({ ok: true, memory: { n: 1 } });
+  const runaway = await create(
+    "export default ({game,Memory})=>{Promise.resolve().then(()=>{while(true){}});Memory.n=1;return game.submit({type:'move'})}",
+    { limits: limits({ cpuMs: 30 }) },
+  );
+  expect(await runaway.execute(0, {})).toMatchObject({
+    ok: false,
+    error: { type: "CPU_LIMIT" },
+    memory: {},
+  });
 });
 
 test("no Node, network, timers or host object references are exposed", async () => {
@@ -759,13 +802,13 @@ test("trusted SDK heap exhaustion is a system error while guest heap exhaustion 
   const brokenSdk = await create(
     "export default ({game,Memory})=>{game.submit(({type:'move'}));}",
     {
-      sdkSource: `const sink='x'.repeat(4*1024*1024);export default{}`,
+      sdkSource: `const sink=[];for(;;)sink.push({a:[1,2,3]});export default{}`,
       limits: budget,
     },
   );
   await expect(brokenSdk.execute(0, {})).rejects.toBeInstanceOf(SandboxSystemError);
   const player = await create(
-    "export default ({game,Memory})=>{Memory.n=1;if(game.fail){try{new ArrayBuffer(8*1024*1024)}catch{}};return game.submit({type:'move'})}",
+    "export default ({game,Memory})=>{Memory.n=1;if(game.fail){new ArrayBuffer(16*1024*1024)};return game.submit({type:'move'})}",
     { limits: budget },
   );
   expect(await player.execute(0, { fail: true })).toMatchObject({
@@ -871,7 +914,7 @@ test("large valid sources stay playable within the default CPU budget", { retry:
 test("steady-state ticks do not pay for static source checks", { retry: 2 }, async () => {
   const factor = await cpuSpeedFactor();
   // Re-parsing ~64KiB with Acorn on every tick roughly doubled steady-state
-  // cost; the QuickJS compile alone stays far below the same scaled threshold.
+  // cost; the V8 compile alone stays far below the same scaled threshold.
   // The retry absorbs CPU-time inflation from a busy parallel test run.
   const filler = Array.from({ length: 3000 }, (_, i) => `const filler${i}=${i};`).join("");
   const player = await create(
@@ -906,13 +949,12 @@ test(
 );
 
 test("trusted setup is never CPU-interrupted and the player budget covers guest work", async () => {
-  // A ~64KiB source guarantees guest compilation alone exceeds a 1ms budget on
-  // any hardware. With whole-tick billing, slow hosts tripped the interrupt
-  // during trusted bootstrap evaluation and the match died as a system failure;
-  // guest-scoped billing degrades the tick to a player CPU error instead.
-  const filler = Array.from({ length: 3000 }, (_, i) => `const filler${i}=${i};`).join("");
+  // Top-level player work far beyond a 1ms budget. With whole-tick billing,
+  // slow hosts tripped the interrupt during trusted bootstrap evaluation and
+  // the match died as a system failure; guest-scoped billing degrades the tick
+  // to a player CPU error instead, on every rebuild.
   const player = await create(
-    `${filler}export default ({game,Memory})=>{game.submit(({type:'move'}));}`,
+    "let s=0;for(let i=0;i<1e8;i++)s+=i;export default ({game,Memory})=>{game.submit(({type:'move'}));}",
     {
       limits: limits({ cpuMs: 1, wallMs: 5000 }),
     },

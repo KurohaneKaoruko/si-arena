@@ -90,7 +90,7 @@ export default function tick({ game, Memory }) {
 
 - 当前发行 royale@0.1.0、玩家接口 v1：源码和 SDK 在环境创建时加载一次，成功 tick 间复用 JavaScript 环境。全局变量、闭包、Map 与 TypedArray 可跨 tick 缓存，均占用 32MiB 堆预算。
 - 任一 tick 执行失败后重建环境，全局缓存和 API 模块状态清空，顶层代码重新运行；下一 tick 从上次成功的 JSON `Memory` 恢复。把恢复所需的计划与状态写进 Memory；不要把上一 tick 的观察缓存当作当前世界，每 tick 以新传入的 game 为准。
-- 默认预算：源码 256KiB、每 tick CPU 20ms（首次与重建后的 tick 包含玩家模块初始化）、QuickJS 常驻堆 32MiB、栈 256KiB、Memory 64KiB、动作输出 1KiB；以开发包 release.json 的 `resolvedLimits` 为准。
+- 默认预算：源码 256KiB、每 tick CPU 20ms（首次与重建后的 tick 包含玩家模块初始化）、isolate 常驻堆 32MiB、栈 256KiB、Memory 64KiB、动作输出 1KiB；以开发包 release.json 的 `resolvedLimits` 为准。
 - 抛错、超时、非法动作或超限时：该 tick 按 idle 处理，本次对 Memory 的修改丢弃（上次成功的 Memory 保留），下一 tick 继续调用你。停留不会自动避险：站在别人能走到的格子或即将消失的外圈上，停留同样可能出局。
 
 ## 语言限制

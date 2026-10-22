@@ -23,7 +23,7 @@ Options:
   --release <id>     Download a fixed historical release
   --registry <file>  Explicitly trust and load a local game registration module
   --game <id>        Select a registered game (optional with one game)
-  --bot <file>       Player JavaScript source, executed only in QuickJS
+  --bot <file>       Player JavaScript source, executed only in an isolated V8 process
   --opponent <file>  Local opponent (repeatable); default: official bot(s)
   --matches <n>      Sequential matches, 1–1000 (default: 1)
   --seed <uint32>    First seed; increment with uint32 wrap (default: 42)

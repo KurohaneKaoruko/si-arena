@@ -2,7 +2,7 @@ import { defineLocalGame } from "@si-arena/cli";
 import { paperGame, PAPER_SDK_SOURCE, officialBotUrl } from "@si-arena/game-paper/game";
 import * as royale from "@si-arena/game-royale/game";
 
-// Trusted repository registration. Player sources are read as text and only run in QuickJS.
+// Trusted repository registration. Player sources are read as text and only run in the isolated V8 sandbox.
 export default [
   defineLocalGame({
     game: paperGame,

@@ -68,7 +68,7 @@ paper-devkit/
   LICENSES/
 ```
 
-开发包必须包含完整编译产物、可定位的 WASM、可独立解析的依赖声明和可读示例代码。无需用户安装 C/C++ 编译器或 Emscripten，下载包包含已构建的 WASM。
+开发包必须包含完整编译产物、可独立解析的依赖声明和可读示例代码。isolated-vm 的预编译二进制随依赖安装，macOS arm64、Linux x64/arm64 与 Windows x64 无需用户安装 C/C++ 编译器。
 
 `pnpm install` 从包源安装第三方依赖，首次安装需要网络；安装完成后的比赛与回放不访问平台服务。开发包不分发 `node_modules` 或第三方包源缓存。
 
@@ -78,7 +78,7 @@ paper-devkit/
 
 pnpm 打包会转换 workspace 依赖声明，但不会自动把所有依赖实体都包含进 ZIP；产物脚本必须保证每个声明都可解析到已发布包、随包本地归档或已经打入的产物。[pnpm 文档](https://pnpm.io/workspaces)
 
-内部包通过 pnpm pack 形成随包本地归档，开发包的依赖与 pnpm-workspace.yaml overrides 将整条内部依赖链指向 vendor/，不要求内部包已经发布到 npm。归档保留公开 exports、类型、沙箱子进程、原生加载器与 WASM，安装后按原包布局解析；viewer 额外构建成共享 Vue 控件和 renderer 的静态产物。SDK 类型、运行源码、官方 JS 与许可证同时放入开发目录。不得因树摇或资源路径改写遗漏动态加载文件。
+内部包通过 pnpm pack 形成随包本地归档，开发包的依赖与 pnpm-workspace.yaml overrides 将整条内部依赖链指向 vendor/，不要求内部包已经发布到 npm。归档保留公开 exports、类型与沙箱子进程，安装后按原包布局解析；viewer 额外构建成共享 Vue 控件和 renderer 的静态产物。SDK 类型、运行源码、官方 JS 与许可证同时放入开发目录。不得因树摇或资源路径改写遗漏动态加载文件。
 
 仓库命令为 `pnpm build:devkits`，在完整构建后读取 `configs/devkits.ts` 的可信注册。构建入口拒绝不同步的根锁文件，用同一 catalog、供应链策略和已有解析生成独立锁文件，记录根锁文件 SHA-256；初始化不执行 pnpm，用户安装时使用开发包固定的锁文件。server 从 `DEVKITS_DIR`（默认根目录 `data/releases`）提供 `<gameId>/<release>/metadata.json` 和 `devkit.zip`。发布目录通过相邻候选目录原子移入，已有发行内容不同则失败，不覆盖历史产物。
 
@@ -110,7 +110,7 @@ viewer 使用与网站相同的通用播放器和游戏 renderer。调试 API �
 ## 实现顺序
 
 1. 按圈地规则建立 protocol、纯规则引擎与官方 bot。
-2. 实现 QuickJS-WASM 隔离、失败恢复与规定限额，通过验收并记录测量结果。
+2. 实现 V8 isolate 隔离、失败恢复与规定限额，通过验收并记录测量结果。
 3. 打通本地 CLI 的完整比赛、日志与动作回放；验证引擎重演与原运行一致。
 4. 实现 PostgreSQL 模型、上传、用户主动匹配、任务与幂等排位结算。
 5. 实现 Vue 网站的游戏页面、上传、匹配、排名与回放。
@@ -137,7 +137,7 @@ viewer 使用与网站相同的通用播放器和游戏 renderer。调试 API �
 
 ### 独立分发
 
-在非 monorepo 目录解压安装，完成官方对战、日志回放、批量运行和不匹配发行的拒绝。验证目标 macOS/Linux/Windows 环境的 WASM 加载、Node API 和进程终止行为，不能只以开发机成功作为跨平台结论。
+在非 monorepo 目录解压安装，完成官方对战、日志回放、批量运行和不匹配发行的拒绝。验证目标 macOS/Linux/Windows 环境的 isolated-vm 二进制加载、Node API 和进程终止行为，不能只以开发机成功作为跨平台结论。
 
 初始化期间切换平台当前发行时，仍按已解析发行下载和校验同一产物。压缩包摘要、大小或内部发行不一致时失败，不生成完整项目标记。
 

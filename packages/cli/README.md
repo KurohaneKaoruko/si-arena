@@ -1,6 +1,6 @@
 # SI Arena CLI
 
-统一的 `arena` 命令使用引擎、QuickJS 沙箱与可信游戏包执行比赛、保存回放和校验重演，要求 Node.js 26 及以上。
+统一的 `arena` 命令使用引擎、V8 isolate 沙箱（isolated-vm）与可信游戏包执行比赛、保存回放和校验重演，要求 Node.js 26 及以上。
 
 ## 在仓库运行
 
@@ -75,7 +75,7 @@ dev 会话不保存回放文件；需要文件时用 `arena run` 以相同种子
 
 玩家 tick 出错不影响成功退出。参数、文件、系统或规则失败时向 stderr 输出 JSON 错误。正常退出码为 0，取消为 130，其他失败为 1；日志与错误字符串经过 JSON 转义。
 
-使用注册发行的完整默认限额。`isolation.processMemoryEnforced: false` 表示本地未启用 Linux cgroup 的进程 RSS 上限，QuickJS 的 CPU、堆、栈、Memory 和其他协议预算仍执行。正式排位要求见 [沙箱设计](../../docs/architecture/sandbox.md)。
+使用注册发行的完整默认限额。`isolation.processMemoryEnforced: false` 表示本地未启用 Linux cgroup 的进程 RSS 上限，isolate 的 CPU、堆、栈、Memory 和其他协议预算仍执行。正式排位要求见 [沙箱设计](../../docs/architecture/sandbox.md)。
 
 ## 校验回放与查看日志
 

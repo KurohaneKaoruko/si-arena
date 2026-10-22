@@ -26,7 +26,9 @@ export async function isolateProcess(
     await writeFile(join(path, "memory.max"), String(bytes));
     await writeFile(join(path, "memory.swap.max"), "0");
     await writeFile(join(path, "memory.oom.group"), "1");
-    await writeFile(join(path, "pids.max"), "16");
+    // Node 26 idles at ~7 threads; isolated-vm adds its own pool (12 seen with
+    // isolate churn). The pids controller counts threads, so leave headroom.
+    await writeFile(join(path, "pids.max"), "64");
     await writeFile(join(path, "cgroup.procs"), String(pid));
   } catch {
     await rmdir(path).catch(() => {});
