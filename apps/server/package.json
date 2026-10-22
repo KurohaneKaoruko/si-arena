@@ -15,7 +15,7 @@
     "@si-arena/game-paper": "workspace:*",
     "@si-arena/game-royale": "workspace:*",
     "@si-arena/protocol": "workspace:*",
-    "@si-arena/sandbox": "workspace:*",
+    "@si-arena/runner": "workspace:*",
     "drizzle-orm": "catalog:",
     "fastify": "catalog:",
     "pg": "catalog:"

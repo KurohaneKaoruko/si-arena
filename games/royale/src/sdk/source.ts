@@ -1,8 +1,10 @@
 /** Trusted guest ESM. This game alone defines its methods and canonical intent. */
 export const ROYALE_SDK_SOURCE = String.raw`
 const freeze = Object.freeze;
+const find = Function.prototype.call.bind(Array.prototype.find);
+const filter = Function.prototype.call.bind(Array.prototype.filter);
 export default function createGame(observation, {submit, reject}) {
-  const player = observation.players.find((p) => p.id === observation.selfId);
+  const player = find(observation.players, (p) => p.id === observation.selfId);
   submit({type:'idle'});
   const self = freeze({
     id: player.id, slot: player.slot, position: player.position, spawn: player.spawn, area: player.area,
@@ -17,7 +19,7 @@ export default function createGame(observation, {submit, reject}) {
   return freeze({
     tick: observation.tick, maxTicks: observation.maxTicks,
     board: observation.board, zone: observation.zone, self,
-    opponents: freeze(observation.players.filter((p) => p.id !== observation.selfId)),
+    opponents: freeze(filter(observation.players, (p) => p.id !== observation.selfId)),
     eliminated: observation.eliminated, events: observation.events
   });
 }

@@ -15,6 +15,14 @@ export function stringifyJson(
     parts.push(text);
   };
   const visit = (item: unknown): void => {
+    if (!options.canonical && item !== null && typeof item === "object" && snapshots.has(item)) {
+      const encoded = encodeSnapshot(item);
+      bytes += snapshots.get(item)!;
+      if (bytes > (options.maxBytes ?? Number.MAX_SAFE_INTEGER))
+        throw new RangeError("JSON byte limit exceeded");
+      parts.push(encoded);
+      return;
+    }
     if (item === null || typeof item === "string" || typeof item === "boolean") {
       emit(JSON.stringify(item));
       return;
@@ -71,6 +79,45 @@ export function stringifyJson(
 
 /** Encoded byte size of every deep-frozen node that passed the strict walk below. */
 const snapshots = new WeakMap<object, number>();
+const encodedSnapshots = new WeakMap<object, string>();
+const joinNumbers = Function.prototype.call.bind(Array.prototype.join) as (
+  values: readonly number[],
+  separator: string,
+) => string;
+
+/** Only protocol-owned data reaches this path; no getters or toJSON hooks run. */
+function encodeSnapshot(value: object): string {
+  const cached = encodedSnapshots.get(value);
+  if (cached !== undefined) return cached;
+  const encode = (item: JsonValue): string =>
+    item !== null && typeof item === "object" ? encodeSnapshot(item) : JSON.stringify(item);
+  let text: string;
+  if (Array.isArray(value)) {
+    let numeric = true;
+    for (let i = 0; i < value.length; i++)
+      if (typeof value[i] !== "number") {
+        numeric = false;
+        break;
+      }
+    // Validated finite numbers stringify exactly like join, without JSON hooks.
+    if (numeric) {
+      text = `[${joinNumbers(value as number[], ",")}]`;
+      encodedSnapshots.set(value, text);
+      return text;
+    }
+    const parts: string[] = [];
+    parts.length = value.length;
+    for (let i = 0; i < value.length; i++) parts[i] = encode(value[i] as JsonValue);
+    text = `[${parts.join(",")}]`;
+  } else {
+    const parts: string[] = [];
+    for (const key of Object.keys(value))
+      parts.push(`${JSON.stringify(key)}:${encode((value as Record<string, JsonValue>)[key]!)}`);
+    text = `{${parts.join(",")}}`;
+  }
+  encodedSnapshots.set(value, text);
+  return text;
+}
 
 /** True for data returned by snapshotJson: strict, deep-frozen and safe to share. */
 export function isJsonSnapshot(value: unknown): boolean {

@@ -10,6 +10,7 @@ versioning:
     - [
         "@si-arena/protocol",
         "@si-arena/sandbox",
+        "@si-arena/runner",
         "@si-arena/engine",
         "@si-arena/player",
         "@si-arena/game-paper",

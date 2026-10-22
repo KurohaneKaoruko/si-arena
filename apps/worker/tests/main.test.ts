@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-type Job = { id: string; gameId: string; release: string };
+type Job = {
+  id: string;
+  gameId: string;
+  release: string;
+  resolvedLimits: { runnerMemoryBytes: number };
+};
 
 const mocks = vi.hoisted(() => ({
-  claim: vi.fn<() => Promise<Job | null>>(),
+  concurrency: 1,
+  claim: vi.fn<(...args: unknown[]) => Promise<Job | null>>(),
   run: vi.fn<() => Promise<void>>(),
   close: vi.fn<() => Promise<void>>(),
   sweep: vi.fn<() => Promise<number>>(),
@@ -11,12 +17,12 @@ const mocks = vi.hoisted(() => ({
   cleanup: vi.fn<() => Promise<{ candidates: number; finals: number }>>(),
 }));
 
-vi.mock("@si-arena/sandbox", () => ({ SANDBOX_RUNTIME: "test" }));
+vi.mock("@si-arena/runner", () => ({ SANDBOX_RUNTIME: "test" }));
 vi.mock("@si-arena/db", () => ({ createDatabase: () => ({ db: {}, close: mocks.close }) }));
 vi.mock("../src/config", () => ({
   readWorkerConfig: () => ({
     databaseUrl: "test",
-    concurrency: 1,
+    concurrency: mocks.concurrency,
     replaysDir: "test",
     isolation: { kind: "local" },
   }),
@@ -46,12 +52,18 @@ function pending<T>(cleanupValue: T) {
 }
 
 function job(id: string): Job {
-  return { id, gameId: "paper", release: "paper@0.0.0" };
+  return {
+    id,
+    gameId: "paper",
+    release: "paper@0.0.0",
+    resolvedLimits: { runnerMemoryBytes: 512 * 1024 * 1024 },
+  };
 }
 
 beforeEach(() => {
   vi.resetModules();
   vi.resetAllMocks();
+  mocks.concurrency = 1;
   vi.useFakeTimers();
   finishPending = [];
   stop = undefined;
@@ -136,4 +148,71 @@ test("a failed claim does not prevent a later poll from filling capacity", async
   await vi.advanceTimersByTimeAsync(2_000);
   expect(mocks.claim).toHaveBeenCalledTimes(2);
   expect(mocks.run).toHaveBeenCalledTimes(1);
+});
+
+test("claims reserve full runner budgets and release capacity when a job finishes", async () => {
+  mocks.concurrency = 2;
+  const MiB = 1024 * 1024;
+  vi.spyOn(process, "availableMemory").mockReturnValue(768 * MiB);
+  const first = pending<void>(undefined);
+  const second = pending<void>(undefined);
+  let count = 0;
+  mocks.claim.mockImplementation(async (_db, _releases, capacity) =>
+    Number(capacity) < 512 * MiB ? null : job(`memory-${count++}`),
+  );
+  mocks.run.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+  await import("../src/main");
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.run).toHaveBeenCalledTimes(1);
+  expect(mocks.claim.mock.calls[1]?.[2]).toBe(256 * MiB);
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(mocks.run).toHaveBeenCalledTimes(1);
+  first.resolve();
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(mocks.run).toHaveBeenCalledTimes(2);
+  expect(mocks.claim.mock.calls.at(-2)?.[2]).toBe(768 * MiB);
+});
+
+test("a worker resumes claims when memory recovers after a low-memory startup", async () => {
+  const MiB = 1024 * 1024;
+  const available = vi.spyOn(process, "availableMemory").mockReturnValue(384 * MiB);
+  const run = pending<void>(undefined);
+  mocks.claim.mockImplementation(async (_db, _releases, capacity) =>
+    Number(capacity) < 512 * MiB ? null : job("recovered"),
+  );
+  mocks.run.mockReturnValue(run.promise);
+  await import("../src/main");
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.run).not.toHaveBeenCalled();
+
+  available.mockReturnValue(2048 * MiB);
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(mocks.claim.mock.calls.at(-1)?.[2]).toBe(2048 * MiB);
+  expect(mocks.run).toHaveBeenCalledTimes(1);
+});
+
+test("memory changes adjust spare capacity while running jobs retain their reservations", async () => {
+  mocks.concurrency = 2;
+  const MiB = 1024 * 1024;
+  const available = vi.spyOn(process, "availableMemory").mockReturnValue(768 * MiB);
+  const first = pending<void>(undefined);
+  const second = pending<void>(undefined);
+  let count = 0;
+  mocks.claim.mockImplementation(async (_db, _releases, capacity) =>
+    Number(capacity) < 512 * MiB ? null : job(`capacity-${count++}`),
+  );
+  mocks.run.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+  await import("../src/main");
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.run).toHaveBeenCalledTimes(1);
+
+  available.mockReturnValue(640 * MiB);
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(mocks.claim.mock.calls.at(-1)?.[2]).toBe(128 * MiB);
+  expect(mocks.run).toHaveBeenCalledTimes(1);
+
+  available.mockReturnValue(1536 * MiB);
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(mocks.claim.mock.calls.at(-1)?.[2]).toBe(1024 * MiB);
+  expect(mocks.run).toHaveBeenCalledTimes(2);
 });

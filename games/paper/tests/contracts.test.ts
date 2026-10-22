@@ -413,3 +413,47 @@ for (const [direction, x, y] of [
     expect(parsePaperState(output.nextState)).toStrictEqual(output.nextState);
   });
 }
+
+test("shared immutable observations keep identity and world validation at each boundary", () => {
+  const state = snapshotJson(init());
+  const first = snapshotJson(required(paperRules.observe(state, "alpha")));
+  const second = snapshotJson(required(paperRules.observe(state, "beta")));
+  expect(first.board).toBe(second.board);
+  expect(first.players).toBe(second.players);
+  const context = {
+    config: paperManifest.config,
+    players: state.players,
+    tick: 0,
+    playerId: "alpha",
+  };
+  paperGame.parseObservation(first, context);
+  expect(paperGame.parseObservation(second, { ...context, playerId: "beta" }).selfSlot).toBe(1);
+  expect(() =>
+    paperGame.parseObservation(snapshotJson({ ...second, selfId: "alpha" }), {
+      ...context,
+      playerId: "alpha",
+    }),
+  ).toThrow(/identity/);
+  expect(() =>
+    paperGame.parseObservation(
+      snapshotJson({
+        ...first,
+        players: first.players.map((p) => ({ ...p, position: { x: -1, y: 0 } })),
+      }),
+      context,
+    ),
+  ).toThrow();
+  expect(() =>
+    paperGame.parseObservation(snapshotJson({ ...first, events: [{ type: "unknown" }] }), context),
+  ).toThrow();
+  const copy = parsePaperState(state);
+  required(copy.players[0].position).x++;
+  copy.spawns[0].x++;
+  copy.territory[0] = 0;
+  expect(parsePaperState(state)).toEqual(state);
+  expect(() =>
+    parsePaperState(
+      snapshotJson({ ...state, players: [{ ...state.players[0], id: "beta" }, state.players[1]] }),
+    ),
+  ).toThrow();
+});

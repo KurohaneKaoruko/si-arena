@@ -14,7 +14,7 @@ export const royaleManifest = {
   id: "royale",
   name: "圈地大逃杀",
   description: "最多五人同场圈地，尾迹被切断即出局，安全区随淘汰收缩，活到最后的人获胜。",
-  release: "royale@0.1.0",
+  release: "royale@0.2.0",
   botProtocolVersion: 1,
   minPlayers: ROYALE_MIN_PLAYERS,
   maxPlayers: ROYALE_MAX_PLAYERS,

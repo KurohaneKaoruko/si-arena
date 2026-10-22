@@ -31,18 +31,19 @@ SI Arena（`si-arena`，SI = Super Intelligence）是 AI 编程自由竞技游�
 
 ## 仓库职责与依赖方向
 
-| 目录                | 职责与边界                                                        |
-| ------------------- | ----------------------------------------------------------------- |
-| `apps/web`          | Vue 网站，组装页面、播放器与游戏 renderer                         |
-| `apps/server`       | Fastify API、账号、上传和主动匹配                                 |
-| `apps/worker`       | 领取已有比赛，组装执行器与游戏，保存回放并结算                    |
-| `packages/protocol` | 共享 JSON、游戏、资源、执行和回放契约；不依赖业务包               |
-| `packages/engine`   | 通用 tick 编排；通过适配器执行玩家代码，不绑定具体游戏            |
-| `packages/sandbox`  | V8 isolate（isolated-vm）与隔离执行；不依赖账号、数据库或画面     |
-| `packages/player`   | 通用 Vue 回放播放器；不执行 bot，不引入服务端模块                 |
-| `packages/cli`      | `arena` 命令和本地调试，复用引擎、沙箱与游戏包                    |
-| `packages/db`       | 共享 Drizzle 表结构、连接与迁移；私有包，仅 server 与 worker 使用 |
-| `games/<gameId>`    | manifest、纯规则、SDK、说明、renderer 与官方 bot                  |
+| 目录                | 职责与边界                                                         |
+| ------------------- | ------------------------------------------------------------------ |
+| `apps/web`          | Vue 网站，组装页面、播放器与游戏 renderer                          |
+| `apps/server`       | Fastify API、账号、上传和主动匹配                                  |
+| `apps/worker`       | 领取已有比赛，组装执行器与游戏，保存回放并结算                     |
+| `packages/protocol` | 共享 JSON、游戏、资源、执行和回放契约；不依赖业务包                |
+| `packages/engine`   | 通用 tick 编排；通过适配器执行玩家代码，不绑定具体游戏             |
+| `packages/sandbox`  | V8 isolate（isolated-vm）与隔离执行；不依赖账号、数据库或画面      |
+| `packages/runner`   | 每场独立进程，组装引擎与沙箱，管理进程资源与有界诊断；不依赖数据库 |
+| `packages/player`   | 通用 Vue 回放播放器；不执行 bot，不引入服务端模块                  |
+| `packages/cli`      | `arena` 命令和本地调试，复用引擎、沙箱与游戏包                     |
+| `packages/db`       | 共享 Drizzle 表结构、连接与迁移；私有包，仅 server 与 worker 使用  |
+| `games/<gameId>`    | manifest、纯规则、SDK、说明、renderer 与官方 bot                   |
 
 - 通过 workspace 包的公开 exports 导入，内部依赖使用 `workspace:*`；不跨包引用 `src` 或 `dist` 私有路径。
 - 公共依赖版本集中在 `pnpm-workspace.yaml` 的 catalog，使用 `catalog:` 引用；修改依赖同步维护 lockfile。
@@ -58,8 +59,8 @@ SI Arena（`si-arena`，SI = Super Intelligence）是 AI 编程自由竞技游�
 - 不修改输入世界、动作或回放缓存中的嵌套数据；渲染插值不参与规则判定。
 - 玩家入口接收游戏自定义的 `game` 与 JSON `Memory`，通过基础动作方法登记意图，返回 undefined；平台不规定方向、地图或角色，不提供寻路或策略 API。
 - 玩家代码是不可信文本，只能进入隔离沙箱；禁止用宿主 `eval`、`Function`、动态 `import` 或 Node `vm` 执行选手源码。
-- 线上和本地采用相同的 V8 isolate（isolated-vm）执行方案；每位玩家独立执行进程，Isolate/Context 在本场成功 tick 间复用。全局变量与闭包可作易失缓存，任何执行失败后丢弃环境；只有显式 JSON `Memory` 作为恢复检查点。
-- 执行异常、超时、非法动作或玩家输出超限时，丢弃该 tick 的动作与候选 Memory，使用游戏默认动作并记录错误；保留上次成功的 Memory，下一 tick 重新调用，不影响其他玩家。
+- 线上和本地采用相同的 V8 isolate（isolated-vm）执行方案；每场比赛独立执行进程、每位玩家独立 isolate，Isolate/Context 在本场成功 tick 间复用。全局变量与闭包可作易失缓存，任何执行失败后丢弃环境；只有显式 JSON `Memory` 作为恢复检查点。
+- 执行异常、超时、非法动作或玩家输出超限时，丢弃该 tick 的动作与候选 Memory，使用游戏默认动作并记录错误；保留上次成功的 Memory，下一 tick 重新调用，不影响其他玩家。比赛进程崩溃、OOM 或失去响应属于整场系统失败、不计分，不实现进程级续跑。
 - 游戏规则、平台生成的观察或可信封装出错属于系统失败，不得伪装为玩家失误或据此计分。
 - 限额由可信游戏 manifest 按字段覆盖平台默认值，日志配置按子字段合并；解析后随发行固定。不得允许客户端扩大正式排位预算，不得把墙钟时间作为 CPU 用量。
 - 回放保存完整初始世界、连续 tick 的实际规范动作和发行信息，不依赖玩家源码、Memory 或每 tick 世界快照。执行错误可记录在本地与服务端回放，玩家 console 日志仅在本地捕获和展示。

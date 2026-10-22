@@ -26,6 +26,8 @@ export class ReplayFileSink<State, Action> implements ReplaySink<State, Action> 
   private finished = false;
   private ownsTemporary = false;
   private linked = false;
+  private pending: string[] = [];
+  private pendingBytes = 0;
   constructor(
     readonly path: string,
     private readonly maxBytes = 64 * 1024 * 1024,
@@ -59,6 +61,7 @@ export class ReplayFileSink<State, Action> implements ReplaySink<State, Action> 
     if (!this.gzip || this.finished || footer.result.completedTicks !== this.count)
       throw new EngineError("Invalid replay completion");
     await this.write(`],${stringifyJson(footer, { maxBytes: this.maxBytes }).slice(1)}`);
+    await this.flush();
     this.gzip.end();
     await this.completion;
     if (this.failure) throw this.failure;
@@ -85,15 +88,27 @@ export class ReplayFileSink<State, Action> implements ReplaySink<State, Action> 
   private async write(text: string): Promise<void> {
     if (!this.gzip || this.failure)
       throw this.failure ?? new EngineError("Replay stream not ready");
-    this.bytes += utf8Bytes(text);
+    const bytes = utf8Bytes(text);
+    this.bytes += bytes;
     if (this.bytes > this.maxBytes)
       throw new RangeError("Replay file exceeds uncompressed byte budget");
+    this.pending.push(text);
+    this.pendingBytes += bytes;
+    if (this.pendingBytes >= 64 * 1024) await this.flush();
+  }
+  private async flush(): Promise<void> {
+    if (!this.pending.length) return;
+    const text = this.pending.join("");
+    this.pending = [];
+    this.pendingBytes = 0;
     await new Promise<void>((resolve, reject) => {
       this.gzip!.write(text, (error) => (error ? reject(error) : resolve()));
     });
     if (this.failure) throw this.failure;
   }
   async abort(): Promise<void> {
+    this.pending = [];
+    this.pendingBytes = 0;
     this.gzip?.destroy();
     await this.completion;
     if (this.linked && !this.finished) await unlink(this.path).catch(() => {});

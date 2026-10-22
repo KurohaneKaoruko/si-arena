@@ -15,17 +15,13 @@ import {
 } from "@si-arena/protocol";
 import {
   ENGINE_COMPATIBILITY,
-  MemoryReplaySink,
   replayMatch,
-  runMatch,
   type GameDefinition,
   type ReplayFooter,
   type ReplayPlayer,
-  type ReplaySink,
   type ReplayTick,
 } from "@si-arena/engine";
-import { ReplayFileSink } from "@si-arena/engine/node";
-import { createSandboxExecutor, MatchLogBudget, validateSource } from "@si-arena/sandbox";
+import { runMatchProcess, validateSource, type GameModule } from "@si-arena/runner";
 
 export type LocalDiagnostic = { tick: number; playerId: string } & (
   | { kind: "log"; log: PlayerLog }
@@ -49,6 +45,7 @@ export interface PreparedLocalMatch {
     onMemory?(playerId: string, tick: number, memory: JsonObject): void;
     /** Notified with the number of completed ticks after each tick. */
     onTick?(completedTicks: number): void;
+    onMemoryTruncated?(): void;
   }): Promise<LocalSummary & { replayData?: Readonly<Replay<unknown, unknown>> }>;
 }
 /** Trusted registrations are executable host code, separate from player source and replay data. */
@@ -71,10 +68,10 @@ export function defineLocalGame<
   Event,
 >(options: {
   game: GameDefinition<State, Observation, Action, Event>;
-  sdkSource: string;
   officialBotUrl: URL;
+  module: GameModule;
 }): LocalGameRegistration {
-  const { game, sdkSource, officialBotUrl } = options;
+  const { game, officialBotUrl } = options;
   const manifest = freezeJson(cloneJson(game.manifest));
   return {
     manifest,
@@ -99,76 +96,47 @@ export function defineLocalGame<
           },
         };
       });
-      // Read once for the entire batch. Editing a file only affects the next invocation.
-      const sources: string[] = [];
-      for (const input of inputs) {
+      // Freeze source texts once per invocation, deduplicating official opponents.
+      const sources = await Promise.all(
+        inputs.map((input) => readBotSource(input.path, manifest.resolvedLimits.codeBytes)),
+      );
+      const unique = [...new Set(sources)];
+      for (let index = 0; index < unique.length; index += 2) {
         checkCancelled(signal);
-        const source = await readBotSource(input.path, manifest.resolvedLimits.codeBytes);
-        const validation = await validateSource({
-          source,
-          limits: cloneJson(manifest.resolvedLimits),
-          isolation: { kind: "local" },
-        });
-        checkCancelled(signal);
-        if (!validation.ok)
-          throw new Error(
-            `${input.player.id}: ${validation.error.type}: ${validation.error.message}`,
-          );
-        sources.push(source);
+        await Promise.all(
+          unique.slice(index, index + 2).map(async (source) => {
+            const validation = await validateSource({
+              source,
+              limits: cloneJson(manifest.resolvedLimits),
+              isolation: { kind: "local" },
+            });
+            if (!validation.ok)
+              throw new Error(
+                `${inputs[sources.indexOf(source)]!.player.id}: ${validation.error.type}: ${validation.error.message}`,
+              );
+          }),
+        );
       }
+      checkCancelled(signal);
       const players = freezeJson(inputs.map((input) => input.player));
       return {
         players,
-        async run({ seed, replay, signal: matchSignal, onMemory, onTick }) {
-          const matchId = `local-${randomUUID()}`;
-          const stats = counters();
-          const logBudget = new MatchLogBudget(manifest.resolvedLimits.logs.matchBytes);
-          const memorySink = replay
-            ? undefined
-            : new MemoryReplaySink<State, Action>(MAX_REPLAY_BYTES);
-          const sink: ReplaySink<State, Action> =
-            memorySink ?? new ReplayFileSink<State, Action>(replay!, MAX_REPLAY_BYTES);
-          const summary = await runMatch({
-            matchId,
-            game,
+        async run({ seed, replay, signal: matchSignal, onMemory, onTick, onMemoryTruncated }) {
+          return runMatchProcess({
+            module: options.module,
+            manifest: cloneJson(manifest) as GameCatalogEntry,
+            matchId: `local-${randomUUID()}`,
             players: cloneJson(players) as ReplayPlayer[],
+            sources,
             seed,
             captureLogs: true,
-            sink,
+            isolation: { kind: "local" },
+            ...(replay ? { replayPath: replay } : {}),
             ...(matchSignal ? { signal: matchSignal } : {}),
-            onTick: ({ record }) => {
-              stats.add(record);
-              onTick?.(record.tick + 1);
-            },
-            async createExecutor(player, context) {
-              const executor = createSandboxExecutor({
-                ...context,
-                playerId: player.id,
-                source: sources[player.slot]!,
-                sdkSource,
-                limits: cloneJson(manifest.resolvedLimits),
-                isolation: { kind: "local" },
-                parseAction: game.rules.parseAction,
-                logBudget,
-              });
-              if (!onMemory) return executor;
-              return {
-                async execute(tick, observation, defaultAction) {
-                  const outcome = await executor.execute(tick, observation, defaultAction);
-                  onMemory(player.id, tick, outcome.memory);
-                  return outcome;
-                },
-                close: () => executor.close(),
-              };
-            },
+            ...(onMemory ? { onMemory } : {}),
+            ...(onTick ? { onTick } : {}),
+            ...(onMemoryTruncated ? { onMemoryTruncated } : {}),
           });
-          return {
-            matchId,
-            result: summary.result,
-            finalStateHash: summary.finalStateHash,
-            ...stats.value,
-            ...(memorySink ? { replayData: memorySink.replay } : {}),
-          };
         },
       };
     },

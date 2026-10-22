@@ -67,7 +67,7 @@ pnpm arena run --bot ./bot.js --matches 20 --seed 42
 
 <table>
 <tr>
-<td width="33%" valign="top"><b>同一套沙箱</b><br>选手代码只在独立进程里的 V8 isolate 中跑，每人一个进程；本地工具与线上完全相同，每 tick 20 ms CPU 公平计量。</td>
+<td width="33%" valign="top"><b>同一套沙箱</b><br>选手代码只在独立进程里的 V8 isolate 中跑，每场一个进程、每人一个 isolate；本地工具与线上完全相同，每 tick 20 ms CPU 公平计量。</td>
 <td width="33%" valign="top"><b>确定性回放</b><br>回放只保存初始世界和每 tick 的动作，浏览器用同一套规则重演并校验最终哈希，错误、CPU、日志逐 tick 可查。</td>
 <td width="33%" valign="top"><b>实时排行榜</b><br>排位赛结算后双方分数立即生效，被匹配的一方同样计分；官方 bot 与 Boss 只陪练，不上榜。</td>
 </tr>
@@ -90,7 +90,8 @@ flowchart LR
   web[Vue 网站] <--> api
   api <--> db[(PostgreSQL)]
   worker[worker] -- 领取比赛 / 结算 --> db
-  worker --> sandbox[V8 isolate 沙箱<br/>每名选手一个进程]
+  worker --> runner[runner 比赛进程<br/>规则 · isolate · 回放]
+  cli --> runner
   worker --> replays[(gzip 回放)]
   replays -- 下载并重演校验 --> web
 ```
@@ -123,7 +124,7 @@ SI Arena 是一个通过网页参与的 AI 编程竞技游戏平台。玩家在�
 | 网站         | Vue 3、TypeScript、Vite、Vue Router、Tailwind CSS |
 | 业务后端     | Node.js 26、TypeScript、Fastify 5                 |
 | 数据库       | PostgreSQL 18、Drizzle ORM、node-postgres         |
-| 玩家代码执行 | isolated-vm（V8 isolate）、独立执行子进程         |
+| 玩家代码执行 | isolated-vm（V8 isolate）、独立比赛进程           |
 | 游戏扩展     | 独立游戏包：规则、SDK、说明、渲染器、官方 bot     |
 | 本地调试     | 与服务端共用引擎、游戏包和沙箱的 CLI 与可视化工具 |
 
@@ -160,9 +161,9 @@ API 提供 `/health`、`/api/games`、`/api/games/:gameId`，`/api/auth` 下的�
 
 PostgreSQL 的本地启动命令为 `docker compose -f deploy/compose.yaml up -d db`，数据保存在命名 volume；数据库连接使用 .env 中的 DATABASE_URL。首次使用先运行 `pnpm db:migrate` 创建表结构；server 启动时会幂等初始化 `official` 官方账号，并为每个已注册游戏安装官方 bot 源码（排位分与统计保持不变）；`BOSSES_DIR`（默认 `data/bosses`）下有 `<gameId>.js` 时同时安装该游戏的私有 Boss。游戏目录与规则页不依赖数据库连接，认证接口需要数据库。数据库集成测试需要 `ARENA_TEST_DATABASE_URL` 指向可创建临时库的连接，例如 `ARENA_TEST_DATABASE_URL=postgresql://si_arena:si_arena@127.0.0.1:5433/si_arena pnpm test --project server`；测试自建并清理独立数据库，未设置该变量时自动跳过。
 
-apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、player、cli 与 db（server 与 worker 共享的 Drizzle 表结构、连接和迁移）；games/paper 与 games/royale 分别包含圈地与圈地大逃杀的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
+apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、runner、player、cli 与 db（server 与 worker 共享的 Drizzle 表结构、连接和迁移）；games/paper 与 games/royale 分别包含圈地与圈地大逃杀的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
 
-`packages/sandbox` 提供可调用的独立进程执行器：V8 isolate 在本场成功 tick 间常驻、失败后重建、isolate CPU/堆/栈限制、Memory 提交与失败回滚、本地日志，以及受限源码校验。使用方法、Linux 进程内存隔离和性能命令见 [沙箱包说明](packages/sandbox/README.md)。
+`packages/runner` 提供整场独立进程执行器，`packages/sandbox` 提供每玩家独立 isolate：V8 isolate 在本场成功 tick 间常驻、失败后重建、isolate CPU/堆/栈限制、Memory 提交与失败回滚、本地日志，以及受限源码校验。使用方法、Linux 进程内存隔离和性能命令见 [runner 说明](packages/runner/README.md)。
 
 `packages/engine` 提供通用比赛编排、流式 gzip 回放和确定性重演校验，通过适配器调用沙箱。圈地包附带可信游戏定义、运行时基础 API 与官方示例 bot。玩家通过 `game.self.move(direction)` / `idle()` 登记意图，寻路与策略由玩家实现；其他游戏自行定义动作方法，平台不规定方向或角色模型。在根目录运行 `pnpm example:paper --seed 42` 可完成一场本地比赛、保存回放并验证重演，输出结果和回放绝对路径。使用方法见 [引擎说明](packages/engine/README.md)。
 
@@ -187,7 +188,7 @@ pnpm test:artifacts
 
 覆盖率由根配置统一汇总源码，包含未覆盖的源文件，输出文本、HTML 与 LCOV 报告至 `coverage/`。仅声明类型的模块没有可执行逻辑，不据此添加无意义的运行时测试。
 
-`pnpm test:artifacts` 先完成生产构建，再将公开 workspace 包打包、解压至仓库外并安装声明的运行依赖；使用未加载 TypeScript loader 的真实 Node 校验 exports、CLI、已编译 API、完整圈地比赛及沙箱子进程，并通过严格 NodeNext 消费者检查声明文件。该命令不发布 npm 包，不连接业务数据库，临时目录在结束后清理。
+`pnpm test:artifacts` 先完成生产构建，再将公开 workspace 包打包、解压至仓库外并安装声明的运行依赖；使用未加载 TypeScript loader 的真实 Node 校验 exports、CLI、已编译 API、完整圈地比赛及 runner 比赛子进程，并通过严格 NodeNext 消费者检查声明文件。该命令不发布 npm 包，不连接业务数据库，临时目录在结束后清理。
 
 ## 本地 CLI
 
@@ -202,7 +203,7 @@ pnpm arena replay --game paper ./replays/match-实际文件名.json.gz --verify 
 
 根注册配置同时登记圈地与圈地大逃杀，因此根目录命令需要 `--game` 选择游戏；独立开发包只含一个游戏，无需该参数。
 
-CLI 支持按发行下载初始化、指定 bot、官方或本地对手、顺序批量比赛、gzip 回放及日志校验。输出 JSON Lines，包含发行、完整限额、结果和回放绝对路径。回放无需 bot 文件。根脚本通过可信配置注册游戏，CLI 自身不绑定圈地。`arena dev` 实时调试服务依赖开发包内置的页面资源，在独立开发包内提供。命令与接入方式见 [CLI 说明](packages/cli/README.md)。
+CLI 支持按发行下载初始化、指定 bot、官方或本地对手、默认并行的批量比赛、gzip 回放及日志校验。输出 JSON Lines，包含发行、完整限额、结果和回放绝对路径。回放无需 bot 文件。根脚本通过可信配置注册游戏，CLI 自身不绑定圈地。`arena dev` 实时调试服务依赖开发包内置的页面资源，在独立开发包内提供。命令与接入方式见 [CLI 说明](packages/cli/README.md)。
 
 ## 网页参赛与回放
 

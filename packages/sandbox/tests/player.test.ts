@@ -4,8 +4,7 @@ import {
   type JsonValue,
   type ResourceLimitOverrides,
 } from "@si-arena/protocol";
-import { ExecutorProcess } from "../src/process";
-import { MatchLogBudget, SandboxPlayer, SandboxSystemError, validateSource } from "../src/index";
+import { MatchLogBudget, SandboxPlayer, SandboxSystemError } from "../src/index";
 import type { SandboxOptions } from "../src/index";
 
 const players: SandboxPlayer<JsonValue>[] = [];
@@ -29,7 +28,6 @@ async function create(
     source,
     matchId: "match",
     playerId: `p${players.length}`,
-    isolation: { kind: "local" },
     limits: limits(),
     sdkSource: `export default (o,{submit})=>{submit({type:"move"});return {...o,submit}}`,
     defaultAction: { type: "idle" },
@@ -198,7 +196,6 @@ test("a missing trusted SDK source fails fast instead of deep in the executor", 
       source: "export default ()=>{}",
       matchId: "match",
       playerId: "p",
-      isolation: { kind: "local" },
       limits: limits(),
       sdkSource: undefined as unknown as string,
       defaultAction: { type: "idle" },
@@ -270,7 +267,6 @@ test.each([
       },
     );
     expect(await player.execute(0, {})).toMatchObject({ ok: true, memory: { n: 1 } });
-    const pid = player.processId;
     expect(await player.execute(1, { fail: true })).toMatchObject({
       ok: false,
       error: { type },
@@ -281,7 +277,6 @@ test.each([
       action: { type: "move", calls: 1, cached: 1 },
       memory: { n: 2 },
     });
-    expect(player.processId).toBe(pid);
   },
 );
 
@@ -544,7 +539,6 @@ test("Function-constructor and indirect-eval import escapes load no modules and 
   const player = await create(
     "let settled = 0, rejected = 0;\n    const attempts = [];\n    const attempt = (label, run) => {\n      try {\n        const value = run();\n        attempts.push(label + ':' + typeof value);\n        if (value && typeof value.then === 'function')\n          value.then(() => { settled++; }, () => { rejected++; });\n      } catch (error) {\n        attempts.push(label + ':threw:' + (error && error.message ? error.message : String(error)));\n      }\n    };\n    attempt('newFunction-node', () => new Function('return import(\"node:fs\")')());\n    attempt('newFunction-remote', () => new Function('return import(\"https://example.invalid/x.js\")')());\n    attempt('newFunction-argument', () => new Function('m', 'return import(m)')('node:fs'));\n    attempt('indirectEval-node', () => (0, eval)('import(\"node:fs\")'));\n    attempt('indirectEval-declaration', () => (0, eval)('import x from \"node:fs\"'));\n    const realm = new Function('return this')();\n    export default ({game,Memory}) => {\n      Memory.attempts = attempts;\n      Memory.settled = settled;\n      Memory.rejected = rejected;\n      Memory.hostGlobals = [typeof process, typeof require, typeof global,\n        typeof realm.process, typeof realm.require, typeof realm.global, typeof realm.fetch];\n      return game.submit({type:'move'});\n    }",
   );
-  const pid = player.processId;
   const result = await player.execute(0, {});
   expect(result.ok).toBe(true);
   expect(result.action).toEqual({ type: "move" });
@@ -558,7 +552,6 @@ test("Function-constructor and indirect-eval import escapes load no modules and 
   for (const entry of attempts)
     expect(entry).toMatch(/^(newFunction|indirectEval)-[^:]+:(object|threw:)/);
   expect(attempts.some((entry) => entry.includes("threw"))).toBe(true);
-  expect(player.processId).toBe(pid);
   const promised = attempts.filter((entry) => entry.endsWith(":object")).length;
   expect(await player.execute(1, {})).toMatchObject({
     ok: true,
@@ -566,12 +559,11 @@ test("Function-constructor and indirect-eval import escapes load no modules and 
   });
 });
 
-test("one failing player cannot block another player's process", async () => {
+test("one failing player cannot block another player's isolate", async () => {
   const a = await create("export default ({game,Memory})=>{while(true){}}", {
     limits: limits({ cpuMs: 30 }),
   });
   const b = await create("export default ({game,Memory})=>{game.submit(({type:'move'}));}");
-  expect(a.processId).not.toBe(b.processId);
   const [failure, success] = await Promise.all([a.execute(0, {}), b.execute(0, {})]);
   expect(failure.error?.type).toBe("CPU_LIMIT");
   expect(success.ok).toBe(true);
@@ -719,71 +711,6 @@ test("throw objects with hostile getters yield a bounded diagnostic", async () =
   });
 });
 
-test("killed executors return an error, rebuild with a new generation, and retain Memory", async () => {
-  const player = await create(
-    "let calls=0;export default ({game,Memory})=>{Memory.n=(Memory.n??0)+1;return game.submit({type:'move',calls:++calls})}",
-  );
-  const before = await player.execute(0, {});
-  process.kill(player.processId!, "SIGKILL");
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  const failed = await player.execute(1, {});
-  expect(failed).toMatchObject({ ok: false, memory: { n: 1 }, error: { type: "EXECUTOR_ERROR" } });
-  const recovered = await player.execute(2, {});
-  expect(recovered).toMatchObject({
-    ok: true,
-    action: { type: "move", calls: 1 },
-    memory: { n: 2 },
-  });
-  expect(recovered.executionId).not.toBe(before.executionId);
-});
-
-test("a transient rebuild failure is retried on later ticks instead of wedging the player", async () => {
-  const player = await create(
-    "export default ({game,Memory})=>{Memory.n=(Memory.n??0)+1;return game.submit({type:'move'})}",
-  );
-  await player.execute(0, {});
-  process.kill(player.processId!, "SIGKILL");
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  const start = vi
-    .spyOn(ExecutorProcess, "start")
-    .mockRejectedValueOnce(new Error("simulated EMFILE"));
-  const failedTick = await player.execute(1, {});
-  expect(failedTick).toMatchObject({ ok: false, error: { type: "EXECUTOR_ERROR" } });
-  // The rebuild closes the dead process before spawning; wait for the mocked
-  // failure to settle so rebuildError is set before the next tick.
-  await vi.waitFor(() => expect(start).toHaveBeenCalledTimes(1));
-  // The failed rebuild must not become a permanent system error: the next tick
-  // triggers a fresh attempt (real start restored) and play continues.
-  const retrying = await player.execute(2, {});
-  expect(retrying).toMatchObject({ ok: false, error: { type: "EXECUTOR_ERROR" } });
-  const recovered = await player.execute(3, {});
-  expect(recovered).toMatchObject({ ok: true, memory: { n: 2 } });
-});
-
-test("wall watchdog kills a delayed executor and allows later ticks to recover", async () => {
-  // wallMs must clear the unbilled trusted per-tick setup (runtime, context,
-  // SDK) on slow shared CI runners; a stopped process never answers at any
-  // budget, so the watchdog semantics do not depend on the exact value.
-  const budget = limits({ cpuMs: 40, wallMs: 400 });
-  const player = await create(
-    "export default ({game,Memory})=>{Memory.n=(Memory.n??0)+1;return game.submit({type:'move'})}",
-    { limits: budget },
-  );
-  await player.execute(0, {});
-  const pid = player.processId!;
-  process.kill(pid, "SIGSTOP");
-  const output = await player.execute(1, {});
-  expect(output).toMatchObject({
-    ok: false,
-    error: { type: "EXECUTION_TIMEOUT" },
-    memory: { n: 1 },
-  });
-  // Rebuilding is asynchronous and has its own startup budget, independent of this tick.
-  await expect.poll(() => player.processId, { timeout: budget.startupMs }).toBeDefined();
-  expect(player.processId).not.toBe(pid);
-  expect(await player.execute(2, {})).toMatchObject({ ok: true, memory: { n: 2 } });
-}, 10000);
-
 test("platform input and trusted parser failures are system errors", async () => {
   const player = await create("export default ({game,Memory})=>{game.submit(({type:'move'}));}", {
     limits: limits({ observationBytes: 16 }),
@@ -875,29 +802,6 @@ test("duplicate ticks, concurrent requests and closed players are rejected", asy
   await expect(player.execute(2, {})).rejects.toThrow("closed");
 });
 
-test.each([
-  "import x from 'node:fs';export default ({game,Memory})=>{game.submit(x);}",
-  "export * from 'x'",
-  "export {x} from 'x'",
-  "export default ({game,Memory})=>{game.submit(import('x'));}",
-  "await Promise.resolve();export default ({game,Memory})=>{game.submit(1);}",
-  "function broken( {",
-])("isolated syntax validation rejects unsupported source: %s", async (source) => {
-  expect(
-    await validateSource({ source, limits: limits(), isolation: { kind: "local" } }),
-  ).toMatchObject({ ok: false, error: { type: "ENTRYPOINT_ERROR" } });
-});
-
-test("compile-only validation never evaluates top-level player code", async () => {
-  expect(
-    await validateSource({
-      source: "while(true){};export default ({game,Memory})=>{game.submit(1);}",
-      limits: limits(),
-      isolation: { kind: "local" },
-    }),
-  ).toEqual({ ok: true });
-});
-
 test("oversized source is rejected before creating an executor", async () => {
   await expect(create("x".repeat(1025), { limits: limits({ codeBytes: 1024 }) })).rejects.toThrow(
     "source",
@@ -943,25 +847,6 @@ test("steady-state ticks do not pay for static source checks", { retry: 2 }, asy
   expect(steady.resources?.cpuUsedUs).toBeLessThan(20_000 * factor);
 });
 
-test(
-  "large valid sources pass isolated validation under production budgets",
-  { retry: 2 },
-  async () => {
-    const factor = await cpuSpeedFactor();
-    // Billing the static check inside the validation window roughly doubled the
-    // cost and rejected valid sources of this size as CPU_LIMIT; compile alone
-    // fits the scaled budget with room to spare.
-    const filler = Array.from({ length: 1500 }, (_, i) => `const filler${i}=${i};`).join("");
-    expect(
-      await validateSource({
-        source: `${filler}export default ({game,Memory})=>{game.submit(({type:'move'}));}`,
-        limits: limits({ cpuMs: Math.ceil(20 * factor), wallMs: Math.ceil(500 * factor) }),
-        isolation: { kind: "local" },
-      }),
-    ).toEqual({ ok: true });
-  },
-);
-
 test("trusted setup is never CPU-interrupted and the player budget covers guest work", async () => {
   // Top-level player work far beyond a 1ms budget. With whole-tick billing,
   // slow hosts tripped the interrupt during trusted bootstrap evaluation and
@@ -991,4 +876,12 @@ test("sources rejected by the static check still fail the first tick as ENTRYPOI
     action: { type: "idle" },
     error: { type: "ENTRYPOINT_ERROR" },
   });
+});
+
+test("sloppy dynamically constructed entrypoints cannot inspect trusted caller arguments", async () => {
+  const player = await create(
+    `export default Function('args', 'args.Memory.hidden = arguments.callee.caller === null; args.game.submit({type:"move"});')`,
+  );
+  for (let tick = 0; tick < 2; tick++)
+    expect(await player.execute(tick, {})).toMatchObject({ ok: true, memory: { hidden: true } });
 });

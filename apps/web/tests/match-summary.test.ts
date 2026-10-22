@@ -12,7 +12,7 @@ const match: MatchDetail = {
   status: "completed",
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
-  release: "paper@0.2.0",
+  release: "paper@0.3.0",
   seed: 1,
   initiatorId: "initiator",
   participants: [

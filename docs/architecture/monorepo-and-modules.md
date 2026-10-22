@@ -2,7 +2,7 @@
 
 ## 目录
 
-仓库项目标识为 `si-arena`，产品名称为 SI Arena，SI 代表 Super Intelligence。对外发布的 npm 包统一使用 `@si-arena` 组织：公共包按职责命名为 `@si-arena/protocol`、`@si-arena/engine`、`@si-arena/sandbox`、`@si-arena/player` 和 `@si-arena/cli`，游戏包采用 `@si-arena/game-<gameId>`，圈地为 `@si-arena/game-paper`。平台 web、server 和 worker 是私有 workspace 应用，不作为玩家开发包发布。`@si-arena/db` 是私有共享包，承载 Drizzle 表结构、数据库连接工厂与迁移目录，仅供 server 和 worker 在 workspace 内部使用，不对外发布。
+仓库项目标识为 `si-arena`，产品名称为 SI Arena，SI 代表 Super Intelligence。对外发布的 npm 包统一使用 `@si-arena` 组织：公共包按职责命名为 `@si-arena/protocol`、`@si-arena/engine`、`@si-arena/sandbox`、`@si-arena/runner`、`@si-arena/player` 和 `@si-arena/cli`，游戏包采用 `@si-arena/game-<gameId>`，圈地为 `@si-arena/game-paper`。平台 web、server 和 worker 是私有 workspace 应用，不作为玩家开发包发布。`@si-arena/db` 是私有共享包，承载 Drizzle 表结构、数据库连接工厂与迁移目录，仅供 server 和 worker 在 workspace 内部使用，不对外发布。
 
 ```text
 configs/
@@ -19,7 +19,8 @@ apps/
 packages/
   protocol/              游戏契约、JSON 类型、回放协议
   engine/                通用 tick 循环与执行编排
-  sandbox/               玩家执行协议、父进程与子进程入口、isolate 运行时
+  sandbox/               isolate 运行时、资源计量、玩家提交
+  runner/                独立比赛进程、可信注册、有界通信与监督
   player/                Vue 回放播放器与通用控件
   cli/                   本地运行命令与调试服务
   db/                    共享 Drizzle 表结构、数据库连接与迁移（私有包）
@@ -43,8 +44,9 @@ games/
 - `engine` 依赖协议，通过执行适配器调用沙箱，不依赖某个具体游戏。
 - 游戏规则和 SDK 依赖协议及必要纯函数，不依赖平台业务。
 - `player` 依赖协议、引擎的浏览器兼容核心和 Vue，不执行 bot，不导入沙箱或引擎的 Node 文件入口。通用入口提供校验会话与调度，`player/browser` 提供文件读取与可信 renderer 注册。
-- `worker` 组装引擎、沙箱、游戏与持久化适配器。
-- `cli` 对应 npm 包 `@si-arena/cli`，提供 `arena` 可执行入口，组装同样的引擎、沙箱和游戏，使用本地文件代替数据库；`init` 按游戏下载对应开发包。
+- `runner` 依赖 engine、sandbox 与 protocol，在每场独立进程内组装规则、isolate 和回放写入，不依赖数据库。
+- `worker` 通过 runner 执行可信注册游戏，并负责租约、公开回放和数据库结算。
+- `cli` 对应 npm 包 `@si-arena/cli`，提供 `arena` 可执行入口，通过同样的 runner 执行游戏，使用本地文件代替数据库；`init` 按游戏下载对应开发包。
 - `web` 组装通用播放器与已注册游戏 renderer。
 
 依赖环、从游戏规则导入业务数据库、从本地工具调用平台私有 API 均应作为结构错误处理。
@@ -123,7 +125,7 @@ manifest 的 `botProtocolVersion` 是从 1 开始的整数，标识玩家代码�
 
 `@si-arena/engine` 通过工厂创建各玩家的执行适配器，不依赖 sandbox；适配器验证动作与 Memory，并在失败时保留旧 Memory。核心入口提供比赛与回放逻辑，可供浏览器使用；文件和 gzip 功能只从 `@si-arena/engine/node` 导出。回放使用 ReplaySink 流式追加完整 tick，候选文件生成后仍由 worker 按执行权和数据库事务发布、计分。接口与可运行示例见 [引擎说明](../../packages/engine/README.md)。
 
-CLI 与 worker 通过 sandbox 的 `createSandboxExecutor` 共用延迟启动与关闭逻辑，分别传入各自的源码、限额、日志开关和隔离配置。sandbox 通过结构兼容的接口适配引擎，不引入对 engine 或具体游戏的依赖。
+CLI 与 worker 通过 runner 共用比赛进程监督，传入显式可信游戏模块入口、冻结源码、配置与发行。runner 在独立比赛进程内组装 engine 和 sandbox，持有世界与已提交 Memory；sandbox 不依赖 engine、账号或数据库，engine 核心不依赖 Node。
 
 玩家代码采用单文件 ESM，同步导出默认函数：
 
@@ -144,7 +146,7 @@ export default function tick({ game, Memory }) {
 
 Memory 根必须是普通对象或无原型对象，其可枚举数据由有限数字、字符串、布尔值、null、稠密数组和普通对象组成。拒绝循环、undefined、BigInt、函数、Symbol、非有限数字、访问器和 Date/Map 等实例，不允许 JSON.stringify 的静默丢弃或转换替代协议校验。相同对象被多处引用可按 JSON 值展开，展开后的实际字节数受限。
 
-入口同步结束且返回 undefined；返回动作对象、Promise 或其他值为 `ENTRYPOINT_ERROR`。禁止静态 import、导出转发、动态 import 与顶层 await，模块加载器也拒绝导入。运行器不执行玩家排队的 Promise job，不提供定时器或网络。JS 语法先做 AST 约束检查，再用同版 V8 的模块编译（isolated-vm `compileModule`）校验，编译不执行顶层代码。
+入口同步结束且返回 undefined；返回动作对象、Promise 或其他值为 `ENTRYPOINT_ERROR`。禁止静态 import、导出转发、动态 import 与顶层 await，模块加载器也拒绝导入。V8 微任务在同 tick 内执行并计入相同 CPU 与墙钟预算，不能通过微任务绕过限额；运行器不提供定时器或网络。JS 语法先做 AST 约束检查，再用同版 V8 的模块编译（isolated-vm `compileModule`）校验，编译不执行顶层代码。
 
 SDK 定义游戏的公开事实、基础动作方法与私有意图收集器，不包含寻路或具体策略算法。运行时 SDK 在沙箱内部初始化，不把宿主对象、引擎引用或业务服务方法直接交给玩家。首版上传文件需要自包含，除默认入口外不开放任意模块导入；用户可在本地打包自己的辅助代码。
 

@@ -1,3 +1,4 @@
+import type { RoyaleEvent } from "@si-arena/game-royale/sdk";
 import { expect, test } from "vitest";
 import { cloneJson, snapshotJson } from "@si-arena/protocol";
 import { royaleManifest } from "@si-arena/game-royale";
@@ -35,7 +36,7 @@ const context = (state: RoyaleState, playerId = "alpha") => ({
 test("the manifest publishes the arena and default limits", () => {
   expect(royaleManifest).toMatchObject({
     id: "royale",
-    release: "royale@0.1.0",
+    release: "royale@0.2.0",
     botProtocolVersion: 1,
     minPlayers: 2,
     maxPlayers: 5,
@@ -316,3 +317,32 @@ test("generated games stay valid and replay identically from JSON records", () =
     }
   }
 }, 30000);
+
+test("shared immutable observation validation still checks identity and changed common fields", () => {
+  const state = snapshotJson(init());
+  const observations = state.players.map((player) =>
+    snapshotJson(royaleRules.observe(state, player.id)!),
+  );
+  const first = observations[0]!;
+  expect(observations[1]!.board).toBe(first.board);
+  for (const observation of observations)
+    expect(parseRoyaleObservation(observation).selfId).toBe(observation.selfId);
+  expect(() =>
+    parseRoyaleObservation(snapshotJson({ ...observations[1], selfId: first.selfId })),
+  ).toThrow(/identity/);
+  const zone = { ...first.zone, target: 999 };
+  expect(() => parseRoyaleObservation(snapshotJson({ ...first, zone }))).toThrow();
+  const players = first.players.map((player, i) => ({
+    ...player,
+    area: i === 0 ? 999 : player.area,
+  }));
+  expect(() => parseRoyaleObservation(snapshotJson({ ...first, players }))).toThrow();
+});
+
+test("mutable previous events cannot reuse an immutable world's cached observation", () => {
+  const state = snapshotJson(init());
+  const events: RoyaleEvent[] = [];
+  royaleRules.observe(state, "alpha", { events });
+  events.push({ type: "capture", playerId: "unknown", cells: [] });
+  expect(() => royaleRules.observe(state, "beta", { events })).toThrow();
+});

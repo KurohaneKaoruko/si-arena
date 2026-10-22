@@ -1,6 +1,6 @@
 import type { GameCatalogEntry } from "./game";
 import { stringifyJson } from "./json-data";
-import { resolveResourceLimits } from "./resources";
+import { assertGameResourceLimits, resolveResourceLimits } from "./resources";
 
 export interface GameDevelopment {
   prompt: string;
@@ -63,6 +63,7 @@ function descriptor(raw: unknown): void {
     stringifyJson(resolveResourceLimits(limits), { canonical: true }) ===
       stringifyJson(limits, { canonical: true }),
   );
+  assertGameResourceLimits(resolveResourceLimits(limits), Number(game.maxPlayers));
   text(v.engineCompatibility);
   const versions = record(v.components);
   check(Object.keys(versions).length > 0);

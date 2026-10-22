@@ -1,4 +1,4 @@
-import type { DeepReadonly } from "@si-arena/protocol";
+import { isJsonSnapshot, snapshotJson, type DeepReadonly } from "@si-arena/protocol";
 import { ROYALE_CONFIG, ROYALE_MAX_TICKS, royaleMapSize, royaleZoneTarget } from "../constants";
 import type {
   RoyaleEliminated,
@@ -103,6 +103,19 @@ function readEvents(raw: unknown, ids: readonly string[], side: number): RoyaleE
   });
 }
 
+const parsedCommon = new WeakMap<
+  object,
+  {
+    tick: unknown;
+    maxTicks: unknown;
+    zone: unknown;
+    players: unknown;
+    eliminated: unknown;
+    events: unknown;
+    parsed: DeepReadonly<RoyaleObservation>;
+  }
+>();
+
 /** Board grids that arrive as engine snapshots stay shared; callers must not mutate them. */
 export function parseRoyaleObservation(raw: unknown): DeepReadonly<RoyaleObservation> {
   const value = readRecord(
@@ -110,6 +123,31 @@ export function parseRoyaleObservation(raw: unknown): DeepReadonly<RoyaleObserva
     ["tick", "maxTicks", "selfId", "selfSlot", "board", "zone", "players", "eliminated", "events"],
     "Royale observation",
   );
+  const cacheKey =
+    isJsonSnapshot(raw) && value.board !== null && typeof value.board === "object"
+      ? value.board
+      : undefined;
+  const cached = cacheKey ? parsedCommon.get(cacheKey) : undefined;
+  if (
+    cached &&
+    cached.tick === value.tick &&
+    cached.maxTicks === value.maxTicks &&
+    cached.zone === value.zone &&
+    cached.players === value.players &&
+    cached.eliminated === value.eliminated &&
+    cached.events === value.events
+  ) {
+    const selfSlot = readInteger(
+      value.selfSlot,
+      0,
+      cached.parsed.players.length + cached.parsed.eliminated.length - 1,
+      "selfSlot",
+    );
+    const selfId = readId(value.selfId);
+    if (!cached.parsed.players.some((player) => player.id === selfId && player.slot === selfSlot))
+      throw new TypeError("Royale observation identity mismatch");
+    return { ...cached.parsed, selfId, selfSlot };
+  }
   if (
     !Array.isArray(value.players) ||
     !Array.isArray(value.eliminated) ||
@@ -221,7 +259,7 @@ export function parseRoyaleObservation(raw: unknown): DeepReadonly<RoyaleObserva
   const previousEvents = readEvents(value.events, [...ids], side);
   if (tick === 0 && (previousEvents.length || eliminated.length))
     throw new TypeError("The initial observation has no history");
-  return {
+  const parsed: RoyaleObservation = {
     tick,
     maxTicks: ROYALE_MAX_TICKS,
     selfId,
@@ -232,7 +270,26 @@ export function parseRoyaleObservation(raw: unknown): DeepReadonly<RoyaleObserva
     eliminated,
     events: previousEvents,
   };
+  if (cacheKey)
+    parsedCommon.set(cacheKey, {
+      tick: value.tick,
+      maxTicks: value.maxTicks,
+      zone: value.zone,
+      players: value.players,
+      eliminated: value.eliminated,
+      events: value.events,
+      parsed: snapshotJson(parsed),
+    });
+  return parsed;
 }
+
+const commonViews = new WeakMap<
+  object,
+  {
+    events: DeepReadonly<RoyaleEvent[]> | undefined;
+    base: DeepReadonly<Omit<RoyaleObservation, "selfId" | "selfSlot">>;
+  }
+>();
 
 export function observeRoyale(
   state: DeepReadonly<RoyaleState>,
@@ -243,6 +300,11 @@ export function observeRoyale(
   const self = snapshot.players.find((p) => p.id === playerId);
   if (!self) throw new TypeError("Unknown Royale player");
   if (self.death || royaleFinished(snapshot)) return null;
+  const known =
+    isJsonSnapshot(state) && (context?.events === undefined || isJsonSnapshot(context.events));
+  const cached = known ? commonViews.get(state) : undefined;
+  if (cached && cached.events === context?.events)
+    return { ...cached.base, selfId: self.id, selfSlot: self.slot } as RoyaleObservation;
   const areas = royaleAreas(snapshot.territory, snapshot.players.length);
   const players: RoyaleVisiblePlayer[] = [];
   const eliminated: RoyaleEliminated[] = [];
@@ -258,11 +320,9 @@ export function observeRoyale(
     else if (p.death)
       eliminated.push({ id: p.id, slot: p.slot, tick: p.death.tick, causes: [...p.death.causes] });
   }
-  return {
+  const base = {
     tick: snapshot.tick,
     maxTicks: snapshot.maxTicks,
-    selfId: self.id,
-    selfSlot: self.slot,
     board: {
       width: snapshot.width,
       height: snapshot.height,
@@ -279,4 +339,7 @@ export function observeRoyale(
       snapshot.width,
     ),
   };
+  const shared = known ? snapshotJson(base) : base;
+  if (known) commonViews.set(state, { events: context?.events, base: shared });
+  return { ...shared, selfId: self.id, selfSlot: self.slot } as RoyaleObservation;
 }

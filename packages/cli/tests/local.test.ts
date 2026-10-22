@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { readReplayFile } from "@si-arena/engine/node";
 import type { Replay } from "@si-arena/protocol";
 import { cloneJson } from "@si-arena/protocol";
@@ -170,7 +170,7 @@ test("cancelling a batch after a completed match keeps it and starts no further 
   const cancellation = new AbortController();
   try {
     await expect(
-      runCli(["run", "--bot", f.path, "--matches", "3"], {
+      runCli(["run", "--bot", f.path, "--jobs", "1", "--matches", "3"], {
         ...f.context,
         signal: cancellation.signal,
         write(line) {
@@ -224,6 +224,98 @@ test("cancellation during executor startup/execution removes the unfinished repl
     ).toEqual([]);
   } finally {
     clearTimeout(timer);
+    await f.cleanup();
+  }
+});
+
+test("parallel batches retain seed order and finish siblings after a system failure", async () => {
+  const f = await fixture();
+  try {
+    vi.spyOn(process, "availableMemory").mockReturnValue(8 * 1024 * 1024 * 1024);
+    const prepared = await f.registration.prepare([f.path]);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let active = 0,
+      peak = 0;
+    vi.spyOn(f.registration, "prepare").mockResolvedValue({
+      ...prepared,
+      async run({ seed }) {
+        active++;
+        peak = Math.max(peak, active);
+        try {
+          if (seed === 42) await gate;
+          if (seed === 43) {
+            release();
+            throw new Error("simulated runner crash");
+          }
+          return {
+            matchId: `seed-${seed}`,
+            result: {
+              reason: "tick-limit",
+              completedTicks: 3,
+              players: prepared.players.map((player) => ({ id: player.id, rank: 1, score: 0 })),
+            },
+            finalStateHash: "0".repeat(64),
+            errorCount: 0,
+            logCount: 0,
+            truncatedTicks: 0,
+          };
+        } finally {
+          active--;
+        }
+      },
+    });
+    await expect(
+      runCli(["run", "--bot", f.path, "--matches", "3", "--jobs", "2", "--seed", "42"], f.context),
+    ).rejects.toThrow("1 match(es)");
+    const records = f.lines.map((line) => JSON.parse(line));
+    expect(records.slice(1, -1).map((row) => [row.type, row.seed])).toEqual([
+      ["match", 42],
+      ["match-error", 43],
+      ["match", 44],
+    ]);
+    expect(records.at(-1)).toMatchObject({ type: "batch", failedMatches: 1, jobs: 2 });
+    expect(peak).toBe(2);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("parallel batch cancellation drains every in-flight match and starts no queued seeds", async () => {
+  const f = await fixture();
+  const controller = new AbortController();
+  try {
+    vi.spyOn(process, "availableMemory").mockReturnValue(8 * 1024 * 1024 * 1024);
+    const prepared = await f.registration.prepare([f.path]);
+    let started = 0,
+      active = 0;
+    vi.spyOn(f.registration, "prepare").mockResolvedValue({
+      ...prepared,
+      async run(options) {
+        started++;
+        active++;
+        try {
+          const result = prepared.run(options);
+          if (started === 2) controller.abort();
+          return await result;
+        } finally {
+          active--;
+        }
+      },
+    });
+    await expect(
+      runCli(["run", "--bot", f.path, "--jobs", "2", "--matches", "5"], {
+        ...f.context,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow(/cancelled|stopped/);
+    expect(started).toBe(2);
+    expect(active).toBe(0);
+    expect(await readdir(join(f.cwd, "replays"))).toEqual([]);
+    expect(f.lines.map((line) => JSON.parse(line).type)).toEqual(["release"]);
+  } finally {
     await f.cleanup();
   }
 });

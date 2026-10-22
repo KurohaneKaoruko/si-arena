@@ -1,6 +1,6 @@
 import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ProcessIsolation } from "@si-arena/sandbox";
+import type { ProcessIsolation } from "@si-arena/runner";
 
 export interface WorkerConfig {
   databaseUrl: string;

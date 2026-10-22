@@ -50,7 +50,7 @@ export function readGrid(
     }
     if (Object.isFrozen(raw)) validGrids.set(raw as object, max);
   }
-  if (share && isJsonSnapshot(raw)) return raw as number[];
+  if (isJsonSnapshot(raw)) return share ? (raw as number[]) : Array.from(raw as number[]);
   return (raw as number[]).map((cell) => (cell === 0 ? 0 : cell));
 }
 
@@ -95,8 +95,23 @@ export function parseRoyaleState(raw: unknown): RoyaleState {
 }
 
 /** parseRoyaleState for read-only use: engine snapshot grids are shared, not copied. */
+const validatedStates = new WeakMap<object, DeepReadonly<RoyaleState>>();
+
 export function viewRoyaleState(raw: unknown): DeepReadonly<RoyaleState> {
-  return readRoyaleState(raw, true);
+  const known = raw !== null && typeof raw === "object" && isJsonSnapshot(raw);
+  if (known) {
+    const cached = validatedStates.get(raw as object);
+    if (cached) return cached;
+  }
+
+  const result = readRoyaleState(raw, true);
+
+  if (known) {
+    const frozen = raw as DeepReadonly<RoyaleState>;
+    validatedStates.set(raw as object, frozen);
+    return frozen;
+  }
+  return result;
 }
 
 function readRoyaleState(raw: unknown, share: boolean): RoyaleState {
@@ -275,8 +290,17 @@ export function initRoyale(input: InitInput): RoyaleState {
 }
 
 /** Territory cells per slot. */
-export function royaleAreas(territory: readonly number[], players: number): number[] {
+const areaCache = new WeakMap<object, Map<number, readonly number[]>>();
+export function royaleAreas(territory: readonly number[], players: number): readonly number[] {
+  const known = isJsonSnapshot(territory);
+  const cached = known ? areaCache.get(territory)?.get(players) : undefined;
+  if (cached) return cached;
   const areas = Array<number>(players).fill(0);
   for (const owner of territory) if (owner >= 0) areas[owner]!++;
+  if (known) {
+    const entries = areaCache.get(territory) ?? new Map<number, readonly number[]>();
+    entries.set(players, Object.freeze(areas));
+    areaCache.set(territory, entries);
+  }
   return areas;
 }

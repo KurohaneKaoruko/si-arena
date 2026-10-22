@@ -74,6 +74,7 @@ try {
       "packages/protocol",
       "packages/engine",
       "packages/sandbox",
+      "packages/runner",
       "packages/player",
       "packages/cli",
       registration.directory,
@@ -133,7 +134,7 @@ const stop = () => cancellation.abort();
 process.once('SIGINT', stop); process.once('SIGTERM', stop);
 try {
   if (Number(process.versions.node.split('.')[0]) < 26) throw new Error('SI Arena requires Node.js 26 or newer');
-  await runCli(process.argv.slice(2), { games: [defineLocalGame({ game: gameModule[${JSON.stringify(registration.gameExport)}], sdkSource: gameModule[${JSON.stringify(registration.sdkSourceExport)}], officialBotUrl: gameModule.officialBotUrl })], viewerDirectory: fileURLToPath(new URL('./dist/viewer/', import.meta.url)), signal: cancellation.signal });
+  await runCli(process.argv.slice(2), { games: [defineLocalGame({ game: gameModule[${JSON.stringify(registration.gameExport)}], module: {url: import.meta.resolve('${packageName}/game'),gameExport:${JSON.stringify(registration.gameExport)},sdkSourceExport:${JSON.stringify(registration.sdkSourceExport)}}, officialBotUrl: gameModule.officialBotUrl })], viewerDirectory: fileURLToPath(new URL('./dist/viewer/', import.meta.url)), signal: cancellation.signal });
 } catch (error) {
   if (!cancellation.signal.aborted) console.error(JSON.stringify({ type: 'error', message: error instanceof Error ? error.message : 'Local operation failed' }));
   process.exitCode = cancellation.signal.aborted ? 130 : 1;

@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { gameEntries, matchParticipants } from "@si-arena/db";
 import type { Executor } from "@si-arena/db";
-import type { ProcessIsolation } from "@si-arena/sandbox";
+import type { ProcessIsolation } from "@si-arena/runner";
 import { failMatch, renewLease, RENEW_INTERVAL_MS, type ClaimedMatch } from "./claim";
 import { findWorkerGame } from "./games";
 import type { ReplayStore } from "./replay-store";

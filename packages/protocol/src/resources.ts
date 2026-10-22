@@ -17,7 +17,7 @@ export interface ResourceLimits {
   resultBytes: number;
   ipcBytes: number;
   errorBytes: number;
-  processMemoryBytes: number;
+  runnerMemoryBytes: number;
   startupMs: number;
   logs: LogLimits;
 }
@@ -41,7 +41,7 @@ export const DEFAULT_RESOURCE_LIMITS: Readonly<ResourceLimits> = Object.freeze({
   resultBytes: 96 * KiB,
   ipcBytes: MiB,
   errorBytes: 4 * KiB,
-  processMemoryBytes: 256 * MiB,
+  runnerMemoryBytes: 512 * MiB,
   startupMs: 5000,
   logs: Object.freeze({ lineBytes: 2 * KiB, tickLines: 32, tickBytes: 8 * KiB, matchBytes: MiB }),
 });
@@ -82,8 +82,8 @@ export function resolveResourceLimits(overrides: ResourceLimitOverrides = {}): R
     throw new RangeError("stackBytes must be below heapBytes");
   if (limits.memoryBytes >= limits.heapBytes)
     throw new RangeError("memoryBytes must be below heapBytes");
-  if (limits.processMemoryBytes < limits.heapBytes + 128 * MiB) {
-    throw new RangeError("processMemoryBytes must reserve 128MiB beyond heapBytes");
+  if (limits.runnerMemoryBytes < limits.heapBytes + 128 * MiB) {
+    throw new RangeError("runnerMemoryBytes must reserve 128MiB beyond heapBytes");
   }
   if (
     limits.logs.lineBytes > limits.logs.tickBytes ||
@@ -117,4 +117,11 @@ function assertRecord(key: string, value: unknown): void {
   if (prototype !== Object.prototype && prototype !== null) {
     throw new TypeError(`${key} must be a plain object`);
   }
+}
+
+/** Whole-match capacity is checked at the release boundary, before any player runs. */
+export function assertGameResourceLimits(limits: ResourceLimits, maxPlayers: number): void {
+  assertPositiveInteger("maxPlayers", maxPlayers);
+  if (limits.runnerMemoryBytes < maxPlayers * Math.max(8 * MiB, limits.heapBytes) + 128 * MiB)
+    throw new RangeError("runnerMemoryBytes must cover all player heaps and 128MiB host memory");
 }

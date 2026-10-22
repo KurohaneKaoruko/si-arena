@@ -106,6 +106,8 @@ export const localGame: GameDefinition<State, Observation, Action, never> = {
   },
 };
 
+export const SDK_SOURCE = "export default (o,{submit})=>{submit({add:0});return {...o,submit}}";
+
 export async function fixture(bot = "export default ({game,Memory})=>{game.submit(({add:1}));}") {
   const cwd = await mkdtemp(join(tmpdir(), "si-arena-cli-"));
   const official = join(cwd, "official.js");
@@ -114,7 +116,11 @@ export async function fixture(bot = "export default ({game,Memory})=>{game.submi
   await writeFile(path, bot);
   const registration = defineLocalGame({
     game: localGame,
-    sdkSource: "export default (o,{submit})=>{submit({add:0});return {...o,submit}}",
+    module: {
+      url: new URL("./fixture.ts", import.meta.url).href,
+      gameExport: "localGame",
+      sdkSourceExport: "SDK_SOURCE",
+    },
     officialBotUrl: pathToFileURL(official),
   });
   const lines: string[] = [];

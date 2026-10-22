@@ -1,6 +1,7 @@
 import ivm from "isolated-vm";
 import {
   truncateUtf8,
+  stringifyJson,
   type ExecuteTickInput,
   type ExecutionError,
   type PlayerLog,
@@ -21,22 +22,8 @@ export interface RuntimeOutput {
   cpuUsedUs: number;
 }
 
-let validatedSource: string | null = null;
-type GuestFunction = ivm.Reference<(...args: any[]) => unknown>;
-type Bootstrap = ivm.Reference<Record<"begin" | "run" | "prepare", (...args: any[]) => unknown>>;
-
-/**
- * Run the trusted AST check while the executor binds, so tick 0 does not spend
- * its wall-clock budget on it. A rejected source is reported by the first tick.
- */
-export function prevalidateSource(source: string): void {
-  try {
-    checkSource(source);
-    validatedSource = source;
-  } catch (error) {
-    if (!(error instanceof SyntaxError || error instanceof RangeError)) throw error;
-  }
-}
+type GuestFunction = ivm.Reference<(...args: unknown[]) => unknown>;
+type Bootstrap = ivm.Reference<Record<"run" | "prepare" | "tick", (...args: unknown[]) => unknown>>;
 
 const ENTRYPOINT_INVALID = JSON.stringify({
   ok: false,
@@ -56,19 +43,34 @@ function resourceFailure(name: string, message: string): ExecutionError | undefi
 /** One player's volatile VM. Only the parent owns committed JSON Memory. */
 export class GuestSession {
   private vm: MeteredRuntime | undefined;
-  private begin: GuestFunction | undefined;
   private run: GuestFunction | undefined;
   private prepare: GuestFunction | undefined;
+  private tick: GuestFunction | undefined;
   private sdk: GuestFunction | undefined;
   private entry: GuestFunction | undefined;
   private binding:
     | (Pick<ExecuteTickInput, "matchId" | "playerId" | "executionId" | "source" | "captureLogs"> & {
         sdkSource: string;
-        limitsKey: string;
+        limits: ResourceLimits;
       })
     | undefined;
   private onLog: (log: PlayerLog) => void = () => {};
   private onTruncated: () => void = () => {};
+
+  private source: string | undefined;
+  private validSource = false;
+
+  prepareSource(source: string): void {
+    if (this.source === source) return;
+    this.source = source;
+    try {
+      checkSource(source);
+      this.validSource = true;
+    } catch (error) {
+      if (!(error instanceof SyntaxError || error instanceof RangeError)) throw error;
+      this.validSource = false;
+    }
+  }
 
   async execute(
     input: ExecuteTickInput,
@@ -77,7 +79,6 @@ export class GuestSession {
     onLog: (log: PlayerLog) => void,
     onTruncated: () => void,
   ): Promise<RuntimeOutput> {
-    const limitsKey = JSON.stringify(input.limits);
     const bound = this.binding;
     if (
       bound &&
@@ -87,7 +88,7 @@ export class GuestSession {
         input.source !== bound.source ||
         sdkSource !== bound.sdkSource ||
         input.captureLogs !== bound.captureLogs ||
-        limitsKey !== bound.limitsKey)
+        input.limits !== bound.limits)
     )
       throw new Error("A guest session cannot change its player or release");
     this.binding ??= {
@@ -97,24 +98,19 @@ export class GuestSession {
       source: input.source,
       captureLogs: input.captureLogs,
       sdkSource,
-      limitsKey,
+      limits: input.limits,
     };
-    if (input.source !== validatedSource) {
-      try {
-        checkSource(input.source);
-      } catch (error) {
-        if (!(error instanceof SyntaxError || error instanceof RangeError)) throw error;
-        return { payload: ENTRYPOINT_INVALID, cpuUsedUs: 0 };
-      }
-      validatedSource = input.source;
-    }
+    this.prepareSource(input.source);
+    if (!this.validSource) return { payload: ENTRYPOINT_INVALID, cpuUsedUs: 0 };
     this.onLog = onLog;
     this.onTruncated = onTruncated;
     const warm = this.vm !== undefined;
     const vm = (this.vm ??= new MeteredRuntime(input.limits));
     if (warm) vm.startTick();
     const { isolate, context } = vm;
-    const wall = { timeout: input.limits.wallMs };
+    const deadline = performance.now() + input.limits.wallMs;
+    const wall = () => ({ timeout: Math.max(1, Math.ceil(deadline - performance.now())) });
+    const watchdog = setTimeout(() => vm.expireWall(), input.limits.wallMs);
     let succeeded = false;
     try {
       if (!warm) {
@@ -127,29 +123,24 @@ export class GuestSession {
           },
           { sync: true },
         );
-        const factory = context.evalSync(BOOTSTRAP, { reference: true, ...wall }) as GuestFunction;
-        const boot = factory.applySync(undefined, [emit], {
+        const factory = context.evalSync(BOOTSTRAP, {
+          reference: true,
+          ...wall(),
+        }) as GuestFunction;
+        const beginBudget = new ivm.Callback(() => vm.beginGuest(), { sync: true });
+        const boot = factory.applySync(undefined, [emit, beginBudget], {
           result: { reference: true },
-          ...wall,
+          ...wall(),
         }) as Bootstrap;
-        this.begin = boot.getSync("begin", { reference: true });
         this.run = boot.getSync("run", { reference: true });
         this.prepare = boot.getSync("prepare", { reference: true });
+        this.tick = boot.getSync("tick", { reference: true });
       }
-      const config = JSON.stringify({
-        observation: input.observation,
-        memory: input.memory,
-        limits: input.limits,
-        captureLogs: input.captureLogs,
-        logBytes,
-      });
-      // The parser is captured inside the trusted closure before player code ever runs.
-      this.begin!.applySync(undefined, [config], wall);
       if (!warm) {
         try {
           const module = isolate.compileModuleSync(sdkSource, { filename: "arena-sdk.js" });
           module.instantiateSync(context, NO_IMPORTS);
-          module.evaluateSync(wall);
+          module.evaluateSync(wall());
           this.sdk = module.namespace.getSync("default", { reference: true }) as GuestFunction;
           if (this.sdk.typeof !== "function")
             throw new Error("Trusted SDK must export a game API factory");
@@ -159,7 +150,14 @@ export class GuestSession {
       }
       // Only the trusted factory receives the submission channel. All methods
       // and command collection stay inside the isolate; no per-command host callbacks.
-      this.prepare!.applySync(undefined, [this.sdk!.derefInto()], wall);
+      const config = stringifyJson({
+        observation: input.observation,
+        memory: input.memory,
+        limits: input.limits,
+        captureLogs: input.captureLogs,
+        logBytes,
+      });
+      if (!warm) this.prepare!.applySync(undefined, [config, this.sdk!.derefInto()], wall());
       let payload: string;
       try {
         payload = await vm.guest(async () => {
@@ -171,25 +169,33 @@ export class GuestSession {
               return ENTRYPOINT_INVALID;
             }
             module.instantiateSync(context, NO_IMPORTS);
-            await module.evaluate(wall);
+            await module.evaluate(wall());
             this.entry = module.namespace.getSync("default", { reference: true }) as GuestFunction;
           }
-          const output: unknown = await this.run!.apply(undefined, [this.entry.derefInto()], wall);
+          const output: unknown = warm
+            ? await this.tick!.apply(
+                undefined,
+                [config, this.sdk!.derefInto(), this.entry.derefInto()],
+                wall(),
+              )
+            : await this.run!.apply(undefined, [this.entry.derefInto()], wall());
           if (typeof output !== "string")
             throw new Error("Trusted serializer returned a non-string");
           return output;
-        });
+        }, warm);
         if (Buffer.byteLength(payload) > input.limits.resultBytes)
           payload = JSON.stringify({
             ok: false,
             error: { type: "INVALID_ACTION", message: "Execution result exceeds byte limit" },
           });
       } catch (error) {
+        if (!vm.inGuest && !vm.failure()) throw error;
         payload = JSON.stringify({
           ok: false,
           error: vm.failure() ?? diagnose(error, input.limits),
         });
       }
+      if (performance.now() > deadline) vm.expireWall();
       const failure = vm.failure();
       if (failure) payload = JSON.stringify({ ok: false, error: failure });
       succeeded = (JSON.parse(payload) as { ok: boolean }).ok;
@@ -204,6 +210,7 @@ export class GuestSession {
         cpuUsedUs: vm.billedCpuUs(),
       };
     } finally {
+      clearTimeout(watchdog);
       this.onLog = () => {};
       this.onTruncated = () => {};
       if (!succeeded) this.close();
@@ -213,7 +220,7 @@ export class GuestSession {
   close(): void {
     const vm = this.vm;
     this.vm = undefined;
-    this.begin = this.prepare = this.run = this.sdk = this.entry = undefined;
+    this.tick = this.prepare = this.run = this.sdk = this.entry = undefined;
     vm?.close();
   }
 }
@@ -265,12 +272,13 @@ class MeteredRuntime {
   private guestStartNs = 0n;
   private lastCpuNs = 0n;
   private cpuFailed = false;
+  private wallFailed = false;
   inGuest = false;
 
   constructor(private readonly limits: ResourceLimits) {
     this.isolate = new ivm.Isolate({
       memoryLimit: Math.max(MIN_ISOLATE_MIB, Math.ceil(limits.heapBytes / MiB)),
-      // V8 cannot continue after an unrecoverable fault; the parent rebuilds this process.
+      // V8 cannot continue after an unrecoverable fault; the match process must fail.
       onCatastrophicError: () => process.exit(70),
     });
     this.context = this.isolate.createContextSync();
@@ -278,7 +286,7 @@ class MeteredRuntime {
 
   startTick(): void {
     this.guestStartNs = 0n;
-    this.inGuest = this.cpuFailed = false;
+    this.inGuest = this.cpuFailed = this.wallFailed = false;
   }
   private cpuNs(): bigint {
     if (!this.isolate.isDisposed) this.lastCpuNs = this.isolate.cpuTime;
@@ -292,12 +300,17 @@ class MeteredRuntime {
    * wall-clock interrupt, so a 1ms poll terminates the isolate once the CPU budget
    * is spent; the wall timeout and the parent watchdog remain as backstops.
    */
-  async guest<T>(work: () => Promise<T>): Promise<T> {
+  beginGuest(): void {
+    // The private bootstrap callback can start billing only once per tick.
+    if (this.inGuest) return;
     this.guestStartNs = this.cpuNs();
     this.inGuest = true;
+  }
+  async guest<T>(work: () => Promise<T>, deferred = false): Promise<T> {
+    if (!deferred) this.beginGuest();
     const budgetNs = BigInt(this.limits.cpuMs) * 1_000_000n;
     const poll = setInterval(() => {
-      if (this.cpuNs() - this.guestStartNs > budgetNs && !this.isolate.isDisposed) {
+      if (this.inGuest && this.cpuNs() - this.guestStartNs > budgetNs && !this.isolate.isDisposed) {
         this.cpuFailed = true;
         this.isolate.dispose();
       }
@@ -308,9 +321,14 @@ class MeteredRuntime {
       clearInterval(poll);
     }
   }
+  expireWall(): void {
+    this.wallFailed = true;
+    if (!this.isolate.isDisposed) this.isolate.dispose();
+  }
   failure(): ExecutionError | undefined {
     if (this.inGuest && this.billedCpuUs() > this.limits.cpuMs * 1000) this.cpuFailed = true;
     if (this.cpuFailed) return { type: "CPU_LIMIT", message: "Tick CPU budget exceeded" };
+    if (this.wallFailed) return { type: "EXECUTION_TIMEOUT", message: "Tick wall time exceeded" };
     if (this.isolate.isDisposed)
       return { type: "HEAP_LIMIT", message: "Isolate heap limit exceeded" };
     return undefined;

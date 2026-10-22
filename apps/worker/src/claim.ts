@@ -22,8 +22,11 @@ export type ClaimableRelease = { gameId: string; release: string };
 export async function claimNextMatch(
   db: Executor,
   claimable: readonly ClaimableRelease[],
+  capacityBytes?: number,
 ): Promise<ClaimedMatch | null> {
-  if (claimable.length === 0) return null;
+  if (capacityBytes !== undefined && (!Number.isSafeInteger(capacityBytes) || capacityBytes < 0))
+    throw new RangeError("Worker memory capacity must be a non-negative safe integer");
+  if (claimable.length === 0 || capacityBytes === 0) return null;
   const pairs = claimable.map((release) =>
     and(eq(matches.gameId, release.gameId), eq(matches.release, release.release)),
   );
@@ -31,7 +34,15 @@ export async function claimNextMatch(
     const rows = await tx
       .select({ id: matches.id })
       .from(matches)
-      .where(and(eq(matches.status, "pending"), or(...pairs)))
+      .where(
+        and(
+          eq(matches.status, "pending"),
+          or(...pairs),
+          capacityBytes === undefined
+            ? undefined
+            : sql`(${matches.resolvedLimits}->>'runnerMemoryBytes')::bigint <= ${capacityBytes}`,
+        ),
+      )
       .orderBy(matches.createdAt)
       .limit(1)
       .for("update", { skipLocked: true });

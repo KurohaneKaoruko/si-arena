@@ -1,4 +1,4 @@
-import { validateSource } from "@si-arena/sandbox";
+import { validateSource } from "@si-arena/runner";
 import type { ResourceLimits } from "@si-arena/protocol";
 import { createConcurrencyLimiter } from "../concurrency";
 

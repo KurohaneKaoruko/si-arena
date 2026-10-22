@@ -57,6 +57,10 @@ class MemoryTrace {
     return this.truncated;
   }
 
+  truncate(): void {
+    this.truncated = true;
+  }
+
   commit(playerId: string, tick: number, memory: JsonObject): void {
     if (this.truncated) return;
     const text = JSON.stringify(memory);
@@ -236,6 +240,7 @@ export class DevSession {
         seed,
         signal: controller.signal,
         onMemory: (playerId, tick, memory) => trace.commit(playerId, tick, memory),
+        onMemoryTruncated: () => trace.truncate(),
         onTick: (completedTicks) => {
           if (this.current.run === run) this.current.completedTicks = completedTicks;
         },

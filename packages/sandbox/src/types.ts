@@ -8,8 +8,6 @@ import type {
   ResourceLimits,
 } from "@si-arena/protocol";
 
-export type ProcessIsolation = { kind: "local" } | { kind: "cgroup-v2"; root: string };
-
 export interface SandboxOptions<Action extends JsonValue> {
   matchId: string;
   playerId: string;
@@ -17,7 +15,6 @@ export interface SandboxOptions<Action extends JsonValue> {
   /** Trusted guest ESM: default (observation, { submit, reject }) => game view. */
   sdkSource: string;
   limits: ResourceLimits;
-  isolation: ProcessIsolation;
   parseAction(raw: JsonValue): ActionParseResult<Action>;
   defaultAction: Action;
   captureLogs?: boolean;
@@ -50,13 +47,6 @@ export interface TickOutcome<Action extends JsonValue> extends ExecutionIdentity
   logsTruncated?: true;
   resources?: { cpuUsedUs: number; memoryBytes?: number };
 }
-
-export interface SourceValidationOptions {
-  source: string;
-  limits: ResourceLimits;
-  isolation: ProcessIsolation;
-}
-export type SourceValidationResult = { ok: true } | { ok: false; error: ExecutionError };
 
 export class SandboxSystemError extends Error {
   override name = "SandboxSystemError";

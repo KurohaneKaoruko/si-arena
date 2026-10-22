@@ -1,7 +1,7 @@
 import { mkdir, readFile, rmdir, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import type { ProcessIsolation } from "./types";
-import { SandboxSystemError } from "./types";
+import { RunnerSystemError } from "./types";
 
 export interface ProcessGroup {
   wasOomKilled(): Promise<boolean>;
@@ -17,7 +17,7 @@ export async function isolateProcess(
 ): Promise<ProcessGroup> {
   if (isolation.kind === "local") return { wasOomKilled: async () => false, close: async () => {} };
   if (process.platform !== "linux" || !isAbsolute(isolation.root))
-    throw new SandboxSystemError("cgroup-v2 requires Linux and an absolute delegated directory");
+    throw new RunnerSystemError("cgroup-v2 requires Linux and an absolute delegated directory");
   const path = join(isolation.root, `arena-${id}`);
   try {
     await mkdir(path);
@@ -32,7 +32,7 @@ export async function isolateProcess(
     await writeFile(join(path, "cgroup.procs"), String(pid));
   } catch {
     await rmdir(path).catch(() => {});
-    throw new SandboxSystemError("Cannot establish independent cgroup resource limits");
+    throw new RunnerSystemError("Cannot establish independent cgroup resource limits");
   }
   return {
     wasOomKilled: async () => {
