@@ -18,6 +18,10 @@
   dir: packages/cli
   intents:
     - bright-isolates-run
+"@si-arena/cli@0.6.0":
+  dir: packages/cli
+  intents:
+    - match-runner
 "@si-arena/engine@0.2.0":
   dir: packages/engine
   intents:
@@ -38,6 +42,10 @@
   dir: packages/engine
   intents:
     - bright-isolates-run
+"@si-arena/engine@0.6.0":
+  dir: packages/engine
+  intents:
+    - match-runner
 "@si-arena/game-paper@0.2.0":
   dir: games/paper
   intents:
@@ -58,6 +66,10 @@
   dir: games/paper
   intents:
     - bright-isolates-run
+"@si-arena/game-paper@0.6.0":
+  dir: games/paper
+  intents:
+    - match-runner
 "@si-arena/game-royale@0.4.0":
   dir: games/royale
   intents:
@@ -66,6 +78,10 @@
   dir: games/royale
   intents:
     - bright-isolates-run
+"@si-arena/game-royale@0.6.0":
+  dir: games/royale
+  intents:
+    - match-runner
 "@si-arena/player@0.2.0":
   dir: packages/player
   intents:
@@ -110,6 +126,14 @@
   dir: packages/protocol
   intents:
     - bright-isolates-run
+"@si-arena/protocol@0.6.0":
+  dir: packages/protocol
+  intents:
+    - match-runner
+"@si-arena/runner@0.6.0":
+  dir: packages/runner
+  intents:
+    - match-runner
 "@si-arena/sandbox@0.2.0":
   dir: packages/sandbox
   intents:
@@ -130,3 +154,7 @@
   dir: packages/sandbox
   intents:
     - bright-isolates-run
+"@si-arena/sandbox@0.6.0":
+  dir: packages/sandbox
+  intents:
+    - match-runner
