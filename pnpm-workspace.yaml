@@ -17,6 +17,7 @@ versioning:
         "@si-arena/game-royale",
         "@si-arena/game-snake",
         "@si-arena/game-bomber",
+        "@si-arena/game-tank",
         "@si-arena/cli",
       ]
   ignore:

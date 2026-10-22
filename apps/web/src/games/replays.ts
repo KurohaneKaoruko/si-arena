@@ -20,6 +20,8 @@ import {
   bomberHighlights,
   bomberPlayerSummaries,
 } from "@si-arena/game-bomber/renderer";
+import { tankGame } from "@si-arena/game-tank/game";
+import { drawTankBoard, tankHighlights, tankPlayerSummaries } from "@si-arena/game-tank/renderer";
 
 type ReplayGameOptions<
   State extends { tick: number },
@@ -28,7 +30,7 @@ type ReplayGameOptions<
   Event,
 > = Parameters<typeof defineReplayGame<State, Observation, Action, Event>>[0];
 
-/** The animation input shared by the grid renderers (paper, royale, bomber). */
+/** The animation input shared by the grid renderers (paper, royale, bomber, tank). */
 interface BoardAnimation<State, Event> {
   previousState: DeepReadonly<State>;
   events: DeepReadonly<Event[]>;
@@ -78,6 +80,10 @@ export const replayGames = [
   boardReplay(bomberGame, drawBomberBoard, bomberPlayerSummaries, bomberHighlights, {
     aspectRatio: 15 / 13,
     scoreUnit: "分",
+  }),
+  boardReplay(tankGame, drawTankBoard, tankPlayerSummaries, tankHighlights, {
+    aspectRatio: 21 / 15,
+    scoreUnit: "HP",
   }),
 ];
 

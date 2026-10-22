@@ -192,6 +192,21 @@ for (let tick = 0; tick < 400 && !bomberResult; tick++) {
 if (bomberResult?.reason !== "elimination" || bomberResult.completedTicks !== 300 || bomberResult.players.some(p => p.rank !== 1 || p.score !== 0)) {
   throw new Error("Standalone bomber match returned an unexpected result");
 }
+import { tankGame, TANK_SDK_SOURCE, officialBotUrl as tankBotUrl } from "@si-arena/game-tank/game";
+const tankRegistration = defineLocalGame({game:tankGame,officialBotUrl:tankBotUrl,module:{url:import.meta.resolve("@si-arena/game-tank/game"),gameExport:"tankGame",sdkSourceExport:"TANK_SDK_SOURCE"}});
+if(tankRegistration.manifest.id!=="tank"||tankRegistration.manifest.maxPlayers!==2)throw new Error("Packed tank registration failed");
+let tankState = tankGame.rules.init({
+  seed: 2, config: tankGame.manifest.config,
+  players: [{ id: "alpha", slot: 0 }, { id: "beta", slot: 1 }],
+});
+let tankResult = undefined as ReturnType<typeof tankGame.rules.step>["result"];
+for (let tick = 0; tick < 600 && !tankResult; tick++) {
+  const output = tankGame.rules.step(tankState, { alpha: { type: "idle" as const }, beta: { type: "idle" as const } });
+  tankState = output.nextState; tankResult = output.result;
+}
+if (tankResult?.reason !== "tick-limit" || tankResult.completedTicks !== 600 || tankResult.players.some(p => p.rank !== 1 || p.score !== 3 || !p.alive)) {
+  throw new Error("Standalone tank match returned an unexpected result");
+}
 const bot = await SandboxPlayer.create({
   matchId: "artifact", playerId: "alpha", source: "let calls=0;export default ({game,Memory})=>{calls++;Memory.n=(Memory.n??0)+1;Memory.calls=calls;game.act()}",
   sdkSource: "export default (o,{submit})=>{submit({type:'idle'});return {act(){submit({type:o.fail?'invalid':'idle'})}}}",

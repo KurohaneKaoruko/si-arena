@@ -7,6 +7,7 @@ import {
 import * as royale from "@si-arena/game-royale/game";
 import * as snake from "@si-arena/game-snake/game";
 import * as bomber from "@si-arena/game-bomber/game";
+import * as tank from "@si-arena/game-tank/game";
 
 // Trusted build registrations: adding a game does not change the archive builder.
 export const devkitGames = [
@@ -53,5 +54,16 @@ export const devkitGames = [
     developmentFiles: bomber.developmentFiles,
     officialBotUrl: bomber.officialBotUrl,
     sdkSource: bomber.BOMBER_SDK_SOURCE,
+  },
+  {
+    game: tank.tankGame,
+    packageName: "@si-arena/game-tank",
+    directory: "games/tank",
+    gameExport: "tankGame",
+    sdkSourceExport: "TANK_SDK_SOURCE",
+    sdkInputType: "TankTickInput",
+    developmentFiles: tank.developmentFiles,
+    officialBotUrl: tank.officialBotUrl,
+    sdkSource: tank.TANK_SDK_SOURCE,
   },
 ];

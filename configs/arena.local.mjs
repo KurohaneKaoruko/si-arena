@@ -3,6 +3,7 @@ import { paperGame, officialBotUrl } from "@si-arena/game-paper/game";
 import * as royale from "@si-arena/game-royale/game";
 import * as snake from "@si-arena/game-snake/game";
 import * as bomber from "@si-arena/game-bomber/game";
+import * as tank from "@si-arena/game-tank/game";
 
 // Trusted repository registration. Player sources are read as text and only run in the isolated V8 sandbox.
 export default [
@@ -41,5 +42,14 @@ export default [
       sdkSourceExport: "BOMBER_SDK_SOURCE",
     },
     officialBotUrl: bomber.officialBotUrl,
+  }),
+  defineLocalGame({
+    game: tank.tankGame,
+    module: {
+      url: import.meta.resolve("@si-arena/game-tank/game"),
+      gameExport: "tankGame",
+      sdkSourceExport: "TANK_SDK_SOURCE",
+    },
+    officialBotUrl: tank.officialBotUrl,
   }),
 ];

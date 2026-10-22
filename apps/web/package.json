@@ -18,6 +18,7 @@
     "@si-arena/game-paper": "workspace:*",
     "@si-arena/game-royale": "workspace:*",
     "@si-arena/game-snake": "workspace:*",
+    "@si-arena/game-tank": "workspace:*",
     "@si-arena/player": "workspace:*",
     "@si-arena/protocol": "workspace:*",
     "vue": "catalog:",

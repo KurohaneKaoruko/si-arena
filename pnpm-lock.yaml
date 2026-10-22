@@ -289,6 +289,9 @@ importers:
       '@si-arena/game-snake':
         specifier: workspace:*
         version: link:games/snake
+      '@si-arena/game-tank':
+        specifier: workspace:*
+        version: link:games/tank
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:packages/protocol
@@ -358,6 +361,9 @@ importers:
       '@si-arena/game-snake':
         specifier: workspace:*
         version: link:../../games/snake
+      '@si-arena/game-tank':
+        specifier: workspace:*
+        version: link:../../games/tank
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -398,6 +404,9 @@ importers:
       '@si-arena/game-snake':
         specifier: workspace:*
         version: link:../../games/snake
+      '@si-arena/game-tank':
+        specifier: workspace:*
+        version: link:../../games/tank
       '@si-arena/player':
         specifier: workspace:*
         version: link:../../packages/player
@@ -450,6 +459,9 @@ importers:
       '@si-arena/game-snake':
         specifier: workspace:*
         version: link:../../games/snake
+      '@si-arena/game-tank':
+        specifier: workspace:*
+        version: link:../../games/tank
       '@si-arena/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -500,6 +512,19 @@ importers:
         version: link:../../packages/sandbox
 
   games/snake:
+    dependencies:
+      '@si-arena/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+    devDependencies:
+      '@si-arena/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@si-arena/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
+
+  games/tank:
     dependencies:
       '@si-arena/protocol':
         specifier: workspace:*

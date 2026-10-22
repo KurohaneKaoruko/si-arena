@@ -15,6 +15,11 @@ import {
   developmentFiles as bomberDevelopmentFiles,
   officialBotUrl as bomberOfficialBotUrl,
 } from "@si-arena/game-bomber/game";
+import { tankCatalogEntry } from "@si-arena/game-tank";
+import {
+  developmentFiles as tankDevelopmentFiles,
+  officialBotUrl as tankOfficialBotUrl,
+} from "@si-arena/game-tank/game";
 import type { GameCatalogEntry } from "@si-arena/protocol";
 
 export interface RegisteredGame {
@@ -39,6 +44,11 @@ export const registeredGames: readonly RegisteredGame[] = [
     entry: bomberCatalogEntry,
     officialBotUrl: bomberOfficialBotUrl,
     developmentFiles: bomberDevelopmentFiles,
+  },
+  {
+    entry: tankCatalogEntry,
+    officialBotUrl: tankOfficialBotUrl,
+    developmentFiles: tankDevelopmentFiles,
   },
 ];
 

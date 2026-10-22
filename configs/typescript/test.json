@@ -28,6 +28,7 @@
     "../../games/paper/tests/**",
     "../../games/royale/tests/**",
     "../../games/snake/tests/**",
-    "../../games/bomber/tests/**"
+    "../../games/bomber/tests/**",
+    "../../games/tank/tests/**"
   ]
 }

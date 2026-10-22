@@ -7,6 +7,8 @@ import { snakeGame } from "@si-arena/game-snake/game";
 import { drawSnakeBoard } from "@si-arena/game-snake/renderer";
 import { bomberGame } from "@si-arena/game-bomber/game";
 import { drawBomberBoard } from "@si-arena/game-bomber/renderer";
+import { tankGame } from "@si-arena/game-tank/game";
+import { drawTankBoard } from "@si-arena/game-tank/renderer";
 
 export interface GamePreviewScene {
   aspectRatio: number;
@@ -112,6 +114,32 @@ export const gamePreviews: ReadonlyMap<string, (game: GameCatalogEntry) => GameP
           aspectRatio: state.width / state.height,
           draw: (context, width, height) =>
             drawBomberBoard(context, state, width, height, {
+              previousState: state,
+              events: [],
+              progress: 1,
+              reducedMotion: true,
+              erroredPlayers: new Set(),
+            }),
+        };
+      },
+    ],
+    [
+      tankGame.manifest.id,
+      (game) => {
+        if (game.release !== tankGame.manifest.release)
+          throw new Error("未注册此游戏发行的初始画面。");
+        const state = tankGame.rules.init({
+          seed: 42,
+          config: tankGame.parseConfig(game.config),
+          players: Array.from({ length: game.maxPlayers }, (_, slot) => ({
+            id: `preview-${slot + 1}`,
+            slot,
+          })),
+        });
+        return {
+          aspectRatio: state.width / state.height,
+          draw: (context, width, height) =>
+            drawTankBoard(context, state, width, height, {
               previousState: state,
               events: [],
               progress: 1,
