@@ -31,8 +31,8 @@
  *   equal routes every tick.
  *
  * The bot uses the same observation, SDK, Memory and limits as every player.
- * Every search is bounded by the 315-cell map, so a tick costs well under a
- * millisecond.
+ * Every search is bounded by the 315-cell map, so a tick costs at most a few
+ * milliseconds.
  */
 
 const DIRECTIONS = ["up", "right", "down", "left"];
