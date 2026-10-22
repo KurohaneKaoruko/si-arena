@@ -7,7 +7,7 @@
 ## 强度标准与验证
 
 - 验收底线：本地与 3 个官方示例 bot 同场打满 20 局（`pnpm arena run --bot ./bot.js --opponent ./bots/official.js --opponent ./bots/official.js --opponent ./bots/official.js --matches 20 --seed 42`），按每场 `match` 行 `result.players` 中的 `rank` 计算，你的平均名次优于官方 bot，且没有任何 tick 执行错误（批量汇总行的胜负只按第 1 名计）；未达标必须继续改进并复测。
-- 只给 `--bot` 时自动补满 4 席官方 bot（四人局）；每个 `--opponent` 替换一席对手，最多 3 个。两人局（`--opponent ./bots/official.js`）与四人局都要测：地图大小随人数变化。
+- 只给 `--bot` 时自动补满 4 席官方 bot（四人局）；给出 `--opponent` 后人数等于 1 + 对手数，最多 3 个对手。两人局（一个 `--opponent ./bots/official.js`）与四人局都要测：地图大小随人数变化。
 - 换起始种子复测（如 `--seed 1337`）确认不是种子运气；也可以挂自己的旧版本对弈，避免只针对官方 bot 过拟合。
 - 分析败局而不是猜测：events 里的 death 记录了每次出局的原因，据此定位是饿死、追食物撞身、被堵死还是头对头吃亏。
 - `pnpm arena dev --bot ./bot.js` 启动可视化调试页：命令输出本地 URL，在浏览器打开；整场自动跑完后可逐 tick 观察各方行为，再针对性修改策略。
