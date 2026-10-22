@@ -11,12 +11,16 @@ import { releaseRoutes } from "./games/releases";
 export function buildApp(
   options: {
     logger?: boolean | { level: string };
+    trustProxy?: string | undefined;
     db?: NodePgDatabase;
     replaysDir?: string;
     releasesDir?: string;
   } = {},
 ) {
-  const app = Fastify({ logger: options.logger ?? false });
+  const app = Fastify({
+    logger: options.logger ?? false,
+    trustProxy: options.trustProxy ?? false,
+  });
   void app.register(releaseRoutes(options.releasesDir));
   app.setErrorHandler((error: FastifyError, request, reply) => {
     const status =

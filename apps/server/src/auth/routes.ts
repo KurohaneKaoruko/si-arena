@@ -5,7 +5,7 @@ import { normalizeUsername, validatePassword, validateUsername } from "@si-arena
 import { sessions, users } from "@si-arena/db";
 import { sendError } from "../http/errors";
 import { dummyPasswordHash, hashPassword, passwordHashLimiter, verifyPassword } from "./password";
-import { consumeAuthRateLimit } from "./rate-limit";
+import { checkAuthRateLimit, consumeAuthRateLimit } from "./rate-limit";
 import { createSession, loadSession } from "./session";
 
 const AUTH_BODY_LIMIT = 4096;
@@ -46,7 +46,7 @@ export function authRoutes(db: NodePgDatabase): FastifyPluginAsync {
     });
 
     app.post("/register", { bodyLimit: AUTH_BODY_LIMIT }, async (request, reply) => {
-      const decision = await consumeAuthRateLimit(db, "register", request.ip);
+      const decision = await checkAuthRateLimit(db, "register", request.ip);
       if (!decision.allowed) {
         return sendError(
           reply,
@@ -81,6 +81,8 @@ export function authRoutes(db: NodePgDatabase): FastifyPluginAsync {
           });
         const user = inserted[0];
         if (user === undefined) return sendError(reply, 409, "USERNAME_TAKEN", "用户名已被占用");
+        // Check-then-consume: concurrent sign-ups can overshoot the limit by the hash pool size.
+        await consumeAuthRateLimit(db, "register", request.ip);
         const token = await createSession(db, user.id);
         return reply.status(201).send({ user: toAuthUser(user), token });
       } finally {

@@ -35,6 +35,8 @@ services:
       DATABASE_URL: postgresql://si_arena:${POSTGRES_PASSWORD}@db:5432/si_arena
       API_HOST: 0.0.0.0
       API_PORT: "3000"
+      # 信任 Docker 内网里的 caddy 转发的客户端 IP；不设则所有用户共用 caddy 的 IP，共享登录/注册限流。
+      TRUST_PROXY: ${TRUST_PROXY:-uniquelocal}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       REPLAYS_DIR: /data/replays
       DEVKITS_DIR: /data/releases

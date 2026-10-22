@@ -17,3 +17,10 @@ test("replay directory is relative to the repository root and preserves absolute
     fileURLToPath(new URL("../../../data/replays", import.meta.url)),
   );
 });
+
+test("trust proxy defaults to none", () => {
+  const base = { DATABASE_URL: "postgresql://localhost/si_arena" };
+  expect(readServerConfig(base).trustProxy).toBeUndefined();
+  expect(readServerConfig({ ...base, TRUST_PROXY: "" }).trustProxy).toBeUndefined();
+  expect(readServerConfig({ ...base, TRUST_PROXY: "uniquelocal" }).trustProxy).toBe("uniquelocal");
+});

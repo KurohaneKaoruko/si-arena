@@ -9,6 +9,7 @@ const config = readServerConfig();
 const { db, close } = createDatabase(config.databaseUrl);
 const app = buildApp({
   logger: { level: config.logLevel },
+  trustProxy: config.trustProxy,
   db,
   replaysDir: config.replaysDir,
   releasesDir: config.releasesDir,
