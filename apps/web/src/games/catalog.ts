@@ -19,10 +19,10 @@ export function useCatalog(): Catalog {
   return inject(key, load, true);
 }
 
-/** The head-to-head game behind the「圈地 1v1」entry: the first game without an arena. */
-export const duelGame = (games: readonly GameCatalogEntry[] | undefined) =>
-  games?.find((game) => !game.arena);
+/** Head-to-head games in catalog order: every game without an arena is matched 1v1. */
+export const duelGames = (games: readonly GameCatalogEntry[] | undefined) =>
+  games?.filter((game) => !game.arena) ?? [];
 
-/** The game behind「大逃杀」: the first game whose manifest declares an arena. */
-export const arenaGame = (games: readonly GameCatalogEntry[] | undefined) =>
-  games?.find((game) => game.arena);
+/** Games whose manifest declares a shared arena, in catalog order. */
+export const arenaGames = (games: readonly GameCatalogEntry[] | undefined) =>
+  games?.filter((game) => game.arena) ?? [];

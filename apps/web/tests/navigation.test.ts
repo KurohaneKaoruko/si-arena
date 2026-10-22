@@ -37,19 +37,26 @@ test("an unknown route can return to the lobby through the rendered navigation l
   expect(wrapper.get("a.skip-link").attributes("href")).toBe("#main-content");
 });
 
-test("the header resolves the duel and arena entries from the catalog", async () => {
+test("the header lists every catalog game, arena games by their arena page", async () => {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: "/:pathMatch(.*)*", component: { render: () => h("h1", "页面") } }],
   });
-  await router.push("/royale");
+  await router.push("/games/royale/arena");
   const wrapper = mount(App, { global: { plugins: [router] } });
   await flushPromises();
   const nav = wrapper.get('nav[aria-label="主导航"]');
-  expect(nav.get('a[href="/games/paper"]').text()).toBe("圈地 1v1");
-  const royaleLink = nav.get('a[href="/royale"]');
-  expect(royaleLink.text()).toContain("新");
+  expect(nav.get('a[href="/games/paper"]').text()).toBe("网格圈地");
+  const royaleLink = nav.get('a[href="/games/royale/arena"]');
+  expect(royaleLink.text()).toBe("圈地大逃杀");
   expect(royaleLink.attributes("aria-current")).toBe("page");
+  expect(nav.findAll("a").map((link) => link.text())).toStrictEqual([
+    "大厅",
+    "网格圈地",
+    "圈地大逃杀",
+    "排行榜",
+    "本地回放",
+  ]);
   const toggle = wrapper.get('button[aria-controls="site-menu"]');
   expect(toggle.attributes("aria-expanded")).toBe("false");
   await toggle.trigger("click");

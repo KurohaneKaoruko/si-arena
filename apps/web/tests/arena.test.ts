@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { paperGame } from "@si-arena/game-paper/game";
 import type { ArenaStatusResponse, MatchDetail } from "@si-arena/protocol";
-import RoyalePage from "../src/pages/RoyalePage.vue";
+import ArenaPage from "../src/pages/ArenaPage.vue";
 import { clearSession, signIn } from "../src/auth/session";
 
 enableAutoUnmount(afterEach);
@@ -91,9 +91,9 @@ async function setup() {
     history: createMemoryHistory(),
     routes: [{ path: "/:pathMatch(.*)*", component: { template: "<p />" } }],
   });
-  await router.push("/royale");
+  await router.push("/games/royale/arena");
   vi.useFakeTimers();
-  const wrapper = mount(RoyalePage, { global: { plugins: [router] } });
+  const wrapper = mount(ArenaPage, { props: { gameId: "royale" }, global: { plugins: [router] } });
   await flushPromises();
   const reads = () =>
     fetch.mock.calls.filter(

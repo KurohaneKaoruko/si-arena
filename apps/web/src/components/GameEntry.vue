@@ -6,7 +6,7 @@ import { parseGameMe, parseMatch } from "../api/contracts";
 import { useApiResource } from "../composables/useApiResource";
 import { useMatchRequest } from "../composables/useMatchRequest";
 import { useStrategyUpload } from "../composables/useStrategyUpload";
-import { gameMatchLocation } from "../games/locations";
+import { gameArenaPath, gameMatchLocation } from "../games/locations";
 import { shortTime } from "../utils/time";
 import AppBadge from "./ui/AppBadge.vue";
 import AppButton from "./ui/AppButton.vue";
@@ -197,7 +197,7 @@ defineExpose({ refresh, data });
         v-if="game.arena"
         size="lg"
         :variant="data.code ? 'primary' : 'secondary'"
-        to="/royale"
+        :to="gameArenaPath(game.id)"
         >前往竞技场</AppButton
       >
       <AppButton

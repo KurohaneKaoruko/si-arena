@@ -2,9 +2,9 @@
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { session } from "../auth/session";
-import { arenaGame, duelGame, useCatalog } from "../games/catalog";
+import { useCatalog } from "../games/catalog";
+import { gameArenaPath } from "../games/locations";
 import AppLogo from "./AppLogo.vue";
-import AppBadge from "./ui/AppBadge.vue";
 import AppButton from "./ui/AppButton.vue";
 
 defineProps<{ wide?: boolean }>();
@@ -13,31 +13,14 @@ const catalog = useCatalog();
 const open = ref(false);
 
 const links = computed(() => {
-  const games = catalog.data.value?.games;
-  const duel = duelGame(games);
-  const arena = arenaGame(games);
+  const games = catalog.data.value?.games ?? [];
   const gameId = route.params.gameId;
   return [
     { to: "/", label: "大厅", active: route.path === "/" },
-    ...(duel
-      ? [
-          {
-            to: `/games/${encodeURIComponent(duel.id)}`,
-            label: "圈地 1v1",
-            active: gameId === duel.id,
-          },
-        ]
-      : []),
-    ...(arena
-      ? [
-          {
-            to: "/royale",
-            label: "大逃杀",
-            fresh: true,
-            active: route.path === "/royale" || gameId === arena.id,
-          },
-        ]
-      : []),
+    ...games.map((game) => {
+      const to = game.arena ? gameArenaPath(game.id) : `/games/${encodeURIComponent(game.id)}`;
+      return { to, label: game.name, active: route.path === to || gameId === game.id };
+    }),
     { to: "/leaderboard", label: "排行榜", active: route.path === "/leaderboard" },
     { to: "/replays", label: "本地回放", active: route.path === "/replays" },
   ];
@@ -77,7 +60,7 @@ watch(
           class="flex min-h-11 items-center gap-1.5 rounded-[0.5rem] px-3.5 text-[15px] whitespace-nowrap transition"
           :class="link.active ? 'bg-subtle font-medium text-ink' : 'text-soft hover:text-ink'"
           :aria-current="link.active ? 'page' : undefined"
-          >{{ link.label }}<AppBadge v-if="link.fresh" tone="solid">新</AppBadge></RouterLink
+          >{{ link.label }}</RouterLink
         >
       </nav>
       <div class="ml-auto flex shrink-0 items-center gap-1.5">

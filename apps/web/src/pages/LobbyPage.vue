@@ -4,7 +4,7 @@ import { RouterLink } from "vue-router";
 import { parseHistory, parseLeaderboard } from "../api/contracts";
 import { session } from "../auth/session";
 import { useApiResource } from "../composables/useApiResource";
-import { arenaGame, duelGame, useCatalog } from "../games/catalog";
+import { duelGames, useCatalog } from "../games/catalog";
 import ArenaModeCard from "../components/lobby/ArenaModeCard.vue";
 import DuelModeCard from "../components/lobby/DuelModeCard.vue";
 import GamePreview from "../components/GamePreview.vue";
@@ -13,8 +13,10 @@ import AppButton from "../components/ui/AppButton.vue";
 import StateBlock from "../components/ui/StateBlock.vue";
 
 const catalog = useCatalog();
-const duel = computed(() => duelGame(catalog.data.value?.games));
-const arena = computed(() => arenaGame(catalog.data.value?.games));
+const games = computed(() => catalog.data.value?.games ?? []);
+// The hero and the ranking tiles follow the first head-to-head game, the mode grid lists them all.
+const duel = computed(() => duelGames(games.value)[0]);
+const featured = computed(() => duel.value ?? games.value[0]);
 const duelApi = computed(() =>
   duel.value ? `/api/games/${encodeURIComponent(duel.value.id)}` : null,
 );
@@ -44,13 +46,13 @@ const recent = useApiResource(
         </p>
         <div class="flex flex-wrap gap-3 pt-2">
           <AppButton
-            v-if="duel"
+            v-if="featured"
             variant="primary"
             size="lg"
             class="text-base"
-            :to="`/games/${encodeURIComponent(duel.id)}`"
+            :to="`/games/${encodeURIComponent(featured.id)}`"
           >
-            进入圈地 1v1
+            进入{{ featured.name }}
             <svg
               class="size-[18px]"
               viewBox="0 0 24 24"
@@ -64,10 +66,15 @@ const recent = useApiResource(
               <path d="M5 12h14M13 6l6 6-6 6" />
             </svg>
           </AppButton>
-          <AppButton v-if="arena" size="lg" class="text-base" to="/royale">看大逃杀</AppButton>
+          <AppButton size="lg" class="text-base" href="#modes-title">全部玩法</AppButton>
         </div>
       </div>
-      <GamePreview v-if="duel" class="min-w-0 flex-[1_1_22.5rem]" :game="duel" :fit="false" />
+      <GamePreview
+        v-if="featured"
+        class="min-w-0 flex-[1_1_22.5rem]"
+        :game="featured"
+        :fit="false"
+      />
     </section>
 
     <section aria-labelledby="modes-title" class="flex flex-col gap-4">
@@ -79,18 +86,22 @@ const recent = useApiResource(
         :message="catalog.error.value"
         @retry="catalog.reload"
       />
-      <StateBlock v-else-if="!duel && !arena" status="empty" message="暂时还没有可玩的游戏。" />
+      <StateBlock v-else-if="!games.length" status="empty" message="暂时还没有可玩的游戏。" />
       <div v-else class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-5">
-        <DuelModeCard v-if="duel" :game="duel" />
-        <ArenaModeCard v-if="arena" :game="arena" />
+        <template v-for="game in games" :key="game.id">
+          <ArenaModeCard v-if="game.arena" :game="game" />
+          <DuelModeCard v-else :game="game" />
+        </template>
       </div>
     </section>
 
     <section v-if="duel" class="flex flex-wrap gap-5">
       <div class="card flex min-w-0 flex-[1_1_26rem] flex-col gap-3.5 p-6">
         <div class="flex items-baseline justify-between gap-3">
-          <h2 class="text-lg font-bold">1v1 排行前 5</h2>
-          <RouterLink class="link text-sm" to="/leaderboard">完整排行榜</RouterLink>
+          <h2 class="text-lg font-bold">{{ duel.name }} 排行前 5</h2>
+          <RouterLink class="link text-sm" :to="{ path: '/leaderboard', query: { game: duel.id } }"
+            >完整排行榜</RouterLink
+          >
         </div>
         <StateBlock v-if="top.status.value === 'loading'" status="loading" />
         <StateBlock

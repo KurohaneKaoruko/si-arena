@@ -37,10 +37,13 @@ export const router = createRouter({
       component: () => import("../pages/LobbyPage.vue"),
       meta: { title: "大厅", backdrop: true },
     },
+    // The first arena kept its original address.
+    { path: "/royale", redirect: "/games/royale/arena" },
     {
-      path: "/royale",
-      component: () => import("../pages/RoyalePage.vue"),
-      meta: { title: "大逃杀" },
+      path: "/games/:gameId/arena",
+      component: () => import("../pages/ArenaPage.vue"),
+      props: true,
+      meta: { title: "竞技场" },
     },
     {
       path: "/leaderboard",

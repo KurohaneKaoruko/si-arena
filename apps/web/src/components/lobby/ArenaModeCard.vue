@@ -4,8 +4,8 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { session } from "../../auth/session";
 import { useArena } from "../../composables/useArena";
+import { gameArenaPath } from "../../games/locations";
 import { relativeTime } from "../../utils/time";
-import AppBadge from "../ui/AppBadge.vue";
 import AppButton from "../ui/AppButton.vue";
 
 const props = defineProps<{ game: GameCatalogEntry }>();
@@ -25,16 +25,14 @@ const lastText = computed(() => {
   return `上一局 ${relativeTime(run.updatedAt)}结束 · 冠军 ${champion || "—"}`;
 });
 async function start() {
-  if (await arena.start()) await router.push("/royale");
+  if (await arena.start()) await router.push(gameArenaPath(props.game.id));
 }
 </script>
 
 <template>
   <article class="card flex flex-col gap-[1.125rem] border-accent-line p-6 sm:p-7">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h3 class="flex items-center gap-2.5 text-2xl font-bold">
-        {{ game.name }}<AppBadge tone="solid">新</AppBadge>
-      </h3>
+      <h3 class="text-2xl font-bold">{{ game.name }} · 竞技场</h3>
       <span
         class="rounded-[0.375rem] border border-line-strong px-2 py-1 font-mono text-xs text-soft"
         >{{ game.arena?.seats }} 人 · {{ game.maxTicks }} tick</span
@@ -81,7 +79,7 @@ async function start() {
         @click="start"
         >开一局</AppButton
       >
-      <AppButton to="/royale">看最近 {{ game.arena?.keepMatches }} 场</AppButton>
+      <AppButton :to="gameArenaPath(game.id)">看最近 {{ game.arena?.keepMatches }} 场</AppButton>
     </div>
   </article>
 </template>

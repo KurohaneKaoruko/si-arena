@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MatchDetail } from "@si-arena/protocol";
 import { computed, ref } from "vue";
-import { arenaGame, useCatalog } from "../games/catalog";
+import { useCatalog } from "../games/catalog";
 import { gamePresentations } from "../games/index";
 import { useArena } from "../composables/useArena";
 import { useMatchReplay } from "../composables/useMatchReplay";
@@ -14,8 +14,11 @@ import AppBadge from "../components/ui/AppBadge.vue";
 import AppButton from "../components/ui/AppButton.vue";
 import StateBlock from "../components/ui/StateBlock.vue";
 
+const props = defineProps<{ gameId: string }>();
 const catalog = useCatalog();
-const game = computed(() => arenaGame(catalog.data.value?.games));
+const game = computed(() =>
+  catalog.data.value?.games.find((entry) => entry.id === props.gameId && entry.arena),
+);
 const arena = useArena(() => game.value);
 const status = arena.status.data;
 const presentation = computed(() =>
@@ -49,15 +52,15 @@ function runSummary(run: MatchDetail) {
     :message="catalog.error.value"
     @retry="catalog.reload"
   />
-  <StateBlock v-else-if="!game" status="empty" message="大逃杀暂未开放。" />
+  <StateBlock v-else-if="!game" status="empty" message="这个游戏没有竞技场。" />
   <div v-else class="flex flex-col gap-8">
     <section class="flex flex-wrap items-stretch gap-6">
       <div class="flex min-w-0 flex-[999_1_32rem] flex-col justify-center gap-3.5">
-        <p class="eyebrow">BATTLE ROYALE · {{ game.arena?.seats }} PLAYERS</p>
+        <p class="eyebrow">ARENA · {{ game.arena?.seats }} PLAYERS</p>
         <h1 class="text-[34px] leading-tight font-black sm:text-[40px]">{{ game.name }}</h1>
         <p class="max-w-[39rem] text-base leading-7 text-soft">{{ game.description }}</p>
         <div class="flex flex-wrap gap-2.5 pt-1">
-          <AppButton :to="`/games/${encodeURIComponent(game.id)}`">上传大逃杀代码</AppButton>
+          <AppButton :to="`/games/${encodeURIComponent(game.id)}`">上传参赛代码</AppButton>
           <AppButton variant="ghost" :to="`/games/${encodeURIComponent(game.id)}/development`"
             >开发资料</AppButton
           >
@@ -80,7 +83,7 @@ function runSummary(run: MatchDetail) {
       <StateBlock
         v-else-if="status && !status.lineup.length"
         status="empty"
-        message="还没有选手上传大逃杀代码。"
+        message="还没有选手上传这个游戏的代码。"
       />
       <ol
         v-else-if="status"
@@ -134,7 +137,7 @@ function runSummary(run: MatchDetail) {
             role="tab"
             :aria-selected="run.id === selected?.id"
             :tabindex="run.id === selected?.id ? 0 : -1"
-            aria-controls="royale-replay"
+            aria-controls="arena-replay"
             class="flex min-h-11 flex-col items-start justify-center gap-px rounded-[0.5625rem] px-3.5 py-1 text-left text-sm transition"
             :class="
               run.id === selected?.id ? 'bg-accent text-on-accent' : 'text-ink hover:bg-subtle'
@@ -146,7 +149,7 @@ function runSummary(run: MatchDetail) {
           </button>
         </div>
       </div>
-      <div id="royale-replay" :role="status?.recent.length ? 'tabpanel' : undefined">
+      <div id="arena-replay" :role="status?.recent.length ? 'tabpanel' : undefined">
         <StateBlock
           v-if="status && !selected"
           status="empty"
