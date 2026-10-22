@@ -21,7 +21,7 @@ test.each([
   ".gitignore",
   "vendor/si-arena-cli-0.0.0.tgz",
   "sdk/index.d.ts",
-  "LICENSES/quickjs.txt",
+  "LICENSES/isolated-vm-LICENSE",
 ])("accepts portable archive path %s", (path) => {
   expect(isSafeDevkitPath(path)).toBe(true);
 });

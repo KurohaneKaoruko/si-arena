@@ -12,9 +12,7 @@
     "directory": "packages/sandbox"
   },
   "files": [
-    "dist",
-    "runtime",
-    "native"
+    "dist"
   ],
   "type": "module",
   "exports": {
@@ -27,19 +25,16 @@
     "access": "public"
   },
   "scripts": {
-    "build:wasm": "node native/build.mjs",
     "build": "tsdown --config ../../tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsdown --config ../../tsdown.config.ts --watch",
     "prepack": "pnpm build",
-    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project sandbox",
-    "benchmark": "pnpm build && node native/benchmark.mjs"
+    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project sandbox"
   },
   "dependencies": {
-    "@jitl/quickjs-wasmfile-release-sync": "catalog:",
     "@si-arena/protocol": "workspace:*",
     "acorn": "catalog:",
-    "quickjs-emscripten-core": "catalog:"
+    "isolated-vm": "catalog:"
   },
   "devDependencies": {
     "tsx": "catalog:"

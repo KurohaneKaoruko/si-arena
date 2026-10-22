@@ -10,7 +10,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](configs/typescript/base.json)
 [![Vue 3](https://img.shields.io/badge/Vue-3-42B883?logo=vuedotjs&logoColor=white)](apps/web)
 [![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)](deploy/compose.yaml)
-[![QuickJS-WASM](https://img.shields.io/badge/sandbox-QuickJS--WASM-C5F04A)](packages/sandbox)
+[![V8 isolate](https://img.shields.io/badge/sandbox-V8_isolate-C5F04A)](packages/sandbox)
 [![npm](https://img.shields.io/npm/v/@si-arena/cli?label=%40si-arena%2Fcli&color=CB3837&logo=npm)](https://www.npmjs.com/package/@si-arena/cli)
 [![MIT](https://img.shields.io/badge/license-MIT-7E8898)](LICENSE)
 
@@ -67,7 +67,7 @@ pnpm arena run --bot ./bot.js --matches 20 --seed 42
 
 <table>
 <tr>
-<td width="33%" valign="top"><b>同一套沙箱</b><br>选手代码只在 QuickJS-WASM 里跑，每人一个独立进程；本地工具与线上完全相同，每 tick 20 ms CPU 公平计量。</td>
+<td width="33%" valign="top"><b>同一套沙箱</b><br>选手代码只在独立进程里的 V8 isolate 中跑，每人一个进程；本地工具与线上完全相同，每 tick 20 ms CPU 公平计量。</td>
 <td width="33%" valign="top"><b>确定性回放</b><br>回放只保存初始世界和每 tick 的动作，浏览器用同一套规则重演并校验最终哈希，错误、CPU、日志逐 tick 可查。</td>
 <td width="33%" valign="top"><b>实时排行榜</b><br>排位赛结算后双方分数立即生效，被匹配的一方同样计分；官方 bot 与 Boss 只陪练，不上榜。</td>
 </tr>
@@ -90,7 +90,7 @@ flowchart LR
   web[Vue 网站] <--> api
   api <--> db[(PostgreSQL)]
   worker[worker] -- 领取比赛 / 结算 --> db
-  worker --> sandbox[QuickJS-WASM 沙箱<br/>每名选手一个进程]
+  worker --> sandbox[V8 isolate 沙箱<br/>每名选手一个进程]
   worker --> replays[(gzip 回放)]
   replays -- 下载并重演校验 --> web
 ```
@@ -117,15 +117,15 @@ SI Arena 是一个通过网页参与的 AI 编程竞技游戏平台。玩家在�
 
 ## 技术方向
 
-| 部分         | 选型                                                        |
-| ------------ | ----------------------------------------------------------- |
-| 仓库与包管理 | pnpm 12 workspace monorepo                                  |
-| 网站         | Vue 3、TypeScript、Vite、Vue Router、Tailwind CSS           |
-| 业务后端     | Node.js 26、TypeScript、Fastify 5                           |
-| 数据库       | PostgreSQL 18、Drizzle ORM、node-postgres                   |
-| 玩家代码执行 | quickjs-emscripten 同步发行版、QuickJS-WASM、独立执行子进程 |
-| 游戏扩展     | 独立游戏包：规则、SDK、说明、渲染器、官方 bot               |
-| 本地调试     | 与服务端共用引擎、游戏包和沙箱的 CLI 与可视化工具           |
+| 部分         | 选型                                              |
+| ------------ | ------------------------------------------------- |
+| 仓库与包管理 | pnpm 12 workspace monorepo                        |
+| 网站         | Vue 3、TypeScript、Vite、Vue Router、Tailwind CSS |
+| 业务后端     | Node.js 26、TypeScript、Fastify 5                 |
+| 数据库       | PostgreSQL 18、Drizzle ORM、node-postgres         |
+| 玩家代码执行 | isolated-vm（V8 isolate）、独立执行子进程         |
+| 游戏扩展     | 独立游戏包：规则、SDK、说明、渲染器、官方 bot     |
+| 本地调试     | 与服务端共用引擎、游戏包和沙箱的 CLI 与可视化工具 |
 
 回放保存初始世界状态和每 tick 的有效动作意图，通过确定性的规则引擎还原比赛，不依赖玩家代码。本地回放可以包含玩家日志；本地与服务端回放都记录执行错误。
 
@@ -143,7 +143,7 @@ pnpm dev
 
 源码的相对 TypeScript 导入省略扩展名，例如 `import { buildApp } from "./app"`。TypeScript 使用 Bundler 模块解析并负责类型检查；Node 应用和共享包通过根 `tsdown.config.ts` 构建 ESM 与类型声明，保持各包既有 dist 路径，输出中的导入由构建器处理为 Node 可直接加载的形式。前端继续使用 Vite；Vue、CSS 等资源引用保留扩展名。
 
-API 提供 `/health`、`/api/games`、`/api/games/:gameId`，`/api/auth` 下的注册、登录、当前会话、登出与密码修改接口，以及按游戏的参赛信息（`/me`）、代码上传（`PUT /me/code`，text/plain）、主动匹配（`POST /matches`，幂等键请求头）、排行榜与比赛详情查询。上传走沙箱静态校验（受限 AST + 同版 QuickJS compileOnly）。health 仅表示 HTTP 进程存活，不代表数据库或比赛执行服务就绪。worker 独立进程直连数据库领取已有比赛，按冻结发行执行整场、把回放写入 `REPLAYS_DIR`（终稿 `<matchId>.json.gz`，候选在 `candidates/` 下），并在单事务中完成 Elo 结算；worker 不创建比赛。
+API 提供 `/health`、`/api/games`、`/api/games/:gameId`，`/api/auth` 下的注册、登录、当前会话、登出与密码修改接口，以及按游戏的参赛信息（`/me`）、代码上传（`PUT /me/code`，text/plain）、主动匹配（`POST /matches`，幂等键请求头）、排行榜与比赛详情查询。上传走沙箱静态校验（受限 AST + 同版 V8 模块编译）。health 仅表示 HTTP 进程存活，不代表数据库或比赛执行服务就绪。worker 独立进程直连数据库领取已有比赛，按冻结发行执行整场、把回放写入 `REPLAYS_DIR`（终稿 `<matchId>.json.gz`，候选在 `candidates/` 下），并在单事务中完成 Elo 结算；worker 不创建比赛。
 
 | 命令                                   | 用途                         |
 | -------------------------------------- | ---------------------------- |
@@ -162,7 +162,7 @@ PostgreSQL 的本地启动命令为 `docker compose -f deploy/compose.yaml up -d
 
 apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、player、cli 与 db（server 与 worker 共享的 Drizzle 表结构、连接和迁移）；games/paper 与 games/royale 分别包含圈地与圈地大逃杀的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
 
-`packages/sandbox` 提供可调用的独立进程执行器：QuickJS 在本场成功 tick 间常驻、失败后重建、线程 CPU/堆/栈限制、Memory 提交与失败回滚、本地日志，以及受限源码校验。使用方法、Linux 进程内存隔离和性能命令见 [沙箱包说明](packages/sandbox/README.md)。
+`packages/sandbox` 提供可调用的独立进程执行器：V8 isolate 在本场成功 tick 间常驻、失败后重建、isolate CPU/堆/栈限制、Memory 提交与失败回滚、本地日志，以及受限源码校验。使用方法、Linux 进程内存隔离和性能命令见 [沙箱包说明](packages/sandbox/README.md)。
 
 `packages/engine` 提供通用比赛编排、流式 gzip 回放和确定性重演校验，通过适配器调用沙箱。圈地包附带可信游戏定义、运行时基础 API 与官方示例 bot。玩家通过 `game.self.move(direction)` / `idle()` 登记意图，寻路与策略由玩家实现；其他游戏自行定义动作方法，平台不规定方向或角色模型。在根目录运行 `pnpm example:paper --seed 42` 可完成一场本地比赛、保存回放并验证重演，输出结果和回放绝对路径。使用方法见 [引擎说明](packages/engine/README.md)。
 
@@ -232,7 +232,7 @@ pnpm arena run --bot ./bot.js --seed 42
 pnpm arena replay ./replays/实际文件名.json.gz
 ```
 
-`pnpm build:devkits` 先构建，再按 `configs/devkits.ts` 注册生成 `data/releases/<gameId>/<release>/devkit.zip` 和不可变元数据。server 使用相同的 `DEVKITS_DIR`，相对路径以仓库根目录为基准。构建校验根锁文件，固定内部包本地归档、第三方依赖、WASM、SDK、提示词、示例及共享回放界面；已存在发行的内容不可覆盖，修改发行内容时递增游戏 `release`。
+`pnpm build:devkits` 先构建，再按 `configs/devkits.ts` 注册生成 `data/releases/<gameId>/<release>/devkit.zip` 和不可变元数据。server 使用相同的 `DEVKITS_DIR`，相对路径以仓库根目录为基准。构建校验根锁文件，固定内部包本地归档、第三方依赖、SDK、提示词、示例及共享回放界面；已存在发行的内容不可覆盖，修改发行内容时递增游戏 `release`。
 
 `arena init` 校验发行、ZIP 大小及 SHA-256、内部清单与逐文件摘要，拒绝非空目录与越界路径，不安装依赖或执行代码。安装后运行比赛和回放无需平台 API、数据库或账号。开发包的可视化回放命令输出 loopback URL，在浏览器打开即可，Ctrl+C 停止；`--verify --logs` 仍用于终端校验。实时调试命令 `pnpm arena dev --bot ./bot.js` 同样输出 loopback URL：自动与官方 bot 开局（也可 `--opponent` 指定本地 bot），运行中显示 tick 进度，整场完成后提供逐 tick 动作、日志、错误与 Memory 提交前后对比，并可在页面上同种子或换随机种子重新开局；修改代码后重开即生效，不热替换进行中的比赛。
 
@@ -262,4 +262,4 @@ docker compose --env-file .env.prod -f deploy/compose.prod.yaml --profile tools 
 
 ## 设计规范
 
-文档定义玩法、接口和实现约束。每个游戏可在 manifest 中覆盖资源限额；平台默认每 tick 20ms CPU、32MiB QuickJS 运行内存、64KiB Memory，圈地继承这些默认值。完整配置与继承规则见 [资源限额](docs/architecture/resource-limits.md)。这些数值是执行契约，验收测试负责检查实现是否满足契约。
+文档定义玩法、接口和实现约束。每个游戏可在 manifest 中覆盖资源限额；平台默认每 tick 20ms CPU、32MiB isolate 堆、64KiB Memory，圈地继承这些默认值。完整配置与继承规则见 [资源限额](docs/architecture/resource-limits.md)。这些数值是执行契约，验收测试负责检查实现是否满足契约。

@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # app/web 双 target：server 与 worker 共用 app（保留完整 workspace 布局，
-# 使启动脚本、drizzle 迁移与沙箱 WASM 的相对路径解析继续成立）；
+# 使启动脚本、drizzle 迁移与官方 bot 的相对路径解析继续成立；isolated-vm 的
+# linux 预编译二进制随 --ignore-scripts 安装，由 node-gyp-build 在加载时选取）；
 # web 基于 Caddy 托管 SPA 静态文件（Caddyfile 见 deploy/Caddyfile）。
 # 构建上下文是仓库根：docker build -f deploy/Dockerfile --target app .
 FROM node:26-slim AS build

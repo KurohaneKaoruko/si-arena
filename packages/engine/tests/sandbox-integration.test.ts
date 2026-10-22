@@ -9,7 +9,7 @@ import { toyGame, players, type ToyAction, type ToyState } from "./helpers";
 
 type Cell = readonly [number, number];
 
-test("real QuickJS matches recover from player errors, preserve Memory and generate code-free replay", async () => {
+test("real isolated-vm matches recover from player errors, preserve Memory and generate code-free replay", async () => {
   const limits = resolveResourceLimits({ cpuMs: 100 });
   const game = { ...toyGame, manifest: { ...toyGame.manifest, resolvedLimits: limits } };
   const sink = new MemoryReplaySink<ToyState, ToyAction>();

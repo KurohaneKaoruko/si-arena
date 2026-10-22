@@ -18,6 +18,7 @@ export const BOOTSTRAP = String.raw`(function(emitLog) {
   const setHas = Set.prototype.has;
   const setDelete = Set.prototype.delete;
   const SetClass = Set;
+  const RangeErrorClass = RangeError;
   let config;
   let game, action, submitted = false, phase = 'closed';
   let failure;
@@ -148,6 +149,9 @@ export const BOOTSTRAP = String.raw`(function(emitLog) {
     consoleObject[level] = (...args) => { if (config.captureLogs) log(level, args); };
   }
   defineProperty(globalThis, 'console', {value: freeze(consoleObject), writable: false, configurable: false});
+  // No threads exist to wake a blocked Atomics.wait, and WASM compiles on
+  // unbilled background threads; players get plain ECMAScript only.
+  for (const name of ['WebAssembly', 'SharedArrayBuffer', 'Atomics']) delete globalThis[name];
   function errorText(error) {
     let name = 'Error', message = 'Player execution failed', stack;
     // Descriptors never invoke guest getters. Proxy traps remain inside the budget.
@@ -161,6 +165,14 @@ export const BOOTSTRAP = String.raw`(function(emitLog) {
       }
     } catch (_) {}
     return { name: cut(name, 64), message: cut(message, config.limits.errorBytes / 8 | 0), ...(stack === undefined ? {} : {stack: cut(stack, config.limits.errorBytes / 8 | 0)}) };
+  }
+  // V8 reports exhausted engine resources as RangeErrors; an uncaught one fails
+  // the tick under its budget type. A caught one is ordinary JS: the limit held.
+  function resourceFailure(error, text) {
+    if (!(error instanceof RangeErrorClass)) return undefined;
+    if (text.message === 'Maximum call stack size exceeded') return { type: 'STACK_LIMIT', message: 'Call stack limit exceeded' };
+    if (/allocation failed|Invalid (?:array|string|typed array) length/.test(text.message)) return { type: 'HEAP_LIMIT', message: 'Heap allocation limit exceeded' };
+    return undefined;
   }
   function errorResult(error) {
     // Never stringify an object: player-installed Object.prototype.toJSON could forge success.
@@ -221,10 +233,9 @@ export const BOOTSTRAP = String.raw`(function(emitLog) {
         const m = encode(config.memory, config.limits.memoryBytes, 'MEMORY_INVALID', 'MEMORY_LIMIT', true);
         return '{"ok":true,"action":' + a + ',"memory":' + m + ',"logsTruncated":' + logsTruncated + '}';
       } catch (error) {
-        const e = failure || { type: 'RUNTIME_ERROR', ...errorText(error) };
-        return errorResult(e);
+        const text = errorText(error);
+        return errorResult(failure || resourceFailure(error, text) || { type: 'RUNTIME_ERROR', ...text });
       } finally { phase = 'closed'; }
-    },
-    diagnose(error) { return errorResult({type:'RUNTIME_ERROR', ...errorText(error)}); }
+    }
   };
 })`;

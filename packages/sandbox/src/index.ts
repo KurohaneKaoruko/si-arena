@@ -1,4 +1,4 @@
-export const SANDBOX_RUNTIME = "quickjs-wasm" as const;
+export const SANDBOX_RUNTIME = "v8-isolate" as const;
 export type { ExecuteTickInput, ExecuteTickResult, ExecutionIdentity } from "@si-arena/protocol";
 export { SandboxPlayer, validateSource } from "./player";
 export { createSandboxExecutor } from "./executor";

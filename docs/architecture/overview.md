@@ -10,7 +10,7 @@
 | 数据 | PostgreSQL 18 + Drizzle ORM + node-postgres |
 | 任务 | 首版 PostgreSQL 任务表，短事务领取、租约、幂等终态 |
 | 比赛运行 | 独立 Node.js worker，调用共享引擎和游戏包 |
-| 玩家执行 | quickjs-emscripten 同步发行版，QuickJS-WASM，独立执行子进程 |
+| 玩家执行 | isolated-vm（V8 isolate），独立执行子进程 |
 | 可视化 | 通用 Vue 播放器 + 游戏 renderer；首款网格游戏使用 Canvas |
 
 选择 Fastify 是为了直接实现业务 API，并与前端、引擎、本地工具共享 TS 协议和包。它的插件和 schema 机制用于组织可信服务代码，不把 Fastify 插件等同于游戏插件。[Fastify 文档](https://fastify.dev/docs/latest/Reference/)
@@ -29,8 +29,8 @@ flowchart TD
     Worker --> Engine[共享 tick 引擎 + 游戏规则]
     Worker --> RunnerA[玩家 A 执行子进程]
     Worker --> RunnerB[玩家 B 执行子进程]
-    RunnerA --> QA[QuickJS-WASM]
-    RunnerB --> QB[QuickJS-WASM]
+    RunnerA --> QA[V8 isolate]
+    RunnerB --> QB[V8 isolate]
     Worker --> Replays[回放文件存储]
     Web -->|读取回放| Replays
     Web --> Player[共享播放器 + 游戏渲染器]

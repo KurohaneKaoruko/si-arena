@@ -16,7 +16,7 @@
 
 镜像由 `deploy/Dockerfile` 的两个 target 构建（构建上下文仍是仓库根）：
 
-- `app`：`node:26-slim` + pnpm 12.14.0，包含完整 workspace 构建产物与依赖。保留仓库目录布局，使启动脚本、drizzle 迁移、`packages/sandbox/runtime/` 的 WASM 与 `games/*` 的官方 bot 等按相对路径解析的资源全部成立。server 与 worker 共用该镜像，仅启动命令不同。
+- `app`：`node:26-slim` + pnpm 12.14.0，包含完整 workspace 构建产物与依赖。保留仓库目录布局，使启动脚本、drizzle 迁移与 `games/*` 的官方 bot 等按相对路径解析的资源全部成立；isolated-vm 的 Linux 预编译二进制随 `--ignore-scripts` 安装，由 `node-gyp-build` 在加载时选取。server 与 worker 共用该镜像，仅启动命令不同。
 - `web`：`caddy:2-alpine` + `apps/web/dist` 静态文件 + `deploy/Caddyfile`。
 
 凭据统一放 `.env.prod`（参照 `.env.prod.example`，已被 git 忽略）。`POSTGRES_PASSWORD` 必填，用 `openssl rand -hex 24` 生成——base64 输出常含 `+ / =`，会被原样拼进 `DATABASE_URL` 导致连接串非法；`CADDY_DOMAIN` 决定是否启用自动 HTTPS。`HTTP_PORT`/`HTTPS_PORT`（默认 80/443）可把 caddy 发布到非标准宿主端口，用于与既有服务共机：此时 Let's Encrypt 的挑战流量到不了容器，`CADDY_DOMAIN` 必须留空走纯 HTTP，且两个端口都要换——任一映射仍占宿主 80/443 都会绑定冲突。所有 compose 命令都显式携带 `--env-file .env.prod`，避免误读开发用 `.env`。
@@ -93,4 +93,4 @@ pnpm publish:packages [--otp <验证码>]
 
 ## 沙箱隔离加固（可选）
 
-容器内 worker 默认 `WORKER_ISOLATION=local`：QuickJS 的 CPU、堆、栈与墙钟限制全部生效，但子进程 RSS 无 cgroup 上限。需要内核级内存硬限时，改用 `WORKER_ISOLATION=cgroup-v2` 并通过 `WORKER_CGROUP_ROOT` 指向宿主已委托（systemd `Delegate=`）的 cgroup v2 目录，将该目录挂载进 worker 容器。此时每个执行器获得独立资源组（`memory.max` 按发行 `resolvedLimits.processMemoryBytes`、`memory.swap.max=0`、`pids.max=16`、OOM 组杀）；隔离设施建立失败时拒绝执行，不回退。网络命名空间、只读根文件系统等容器层加固属部署侧责任，按需在 compose 或宿主配置。见 [沙箱](sandbox.md) 与 [资源限额](resource-limits.md)。
+容器内 worker 默认 `WORKER_ISOLATION=local`：isolate 的 CPU、堆、栈与墙钟限制全部生效，但子进程 RSS 无 cgroup 上限。需要内核级内存硬限时，改用 `WORKER_ISOLATION=cgroup-v2` 并通过 `WORKER_CGROUP_ROOT` 指向宿主已委托（systemd `Delegate=`）的 cgroup v2 目录，将该目录挂载进 worker 容器。此时每个执行器获得独立资源组（`memory.max` 按发行 `resolvedLimits.processMemoryBytes`、`memory.swap.max=0`、`pids.max=64`、OOM 组杀）；隔离设施建立失败时拒绝执行，不回退。网络命名空间、只读根文件系统等容器层加固属部署侧责任，按需在 compose 或宿主配置。见 [沙箱](sandbox.md) 与 [资源限额](resource-limits.md)。

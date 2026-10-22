@@ -1,7 +1,0 @@
-{
-  "upstream": "df4efb9ef2cb25c417ecb57986da462d11b244ed",
-  "quickjs": "2025-09-13",
-  "emscripten": "5.0.1",
-  "patch": "allocation-accounting-stack-latch-v1",
-  "wasmSha256": "7614e0e6037f8b15c6dee645be4f909e6592bd32e05b0f2ae7986d574b89583d"
-}

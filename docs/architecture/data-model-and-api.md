@@ -25,7 +25,7 @@ Memory 是比赛内临时执行数据，不写回 `game_entries`。比赛结束�
 4. 事务内确认当前游戏发行与检查时一致，插入或覆盖最新源码、实际字节数和该发行的 `botProtocolVersion`，保留排位与历史比赛统计。发行已切换时返回 409，要求刷新游戏信息后重新提交。
 5. 返回成功，不创建比赛、不调用游戏试跑。
 
-静态 AST 检查禁止导入、导出转发和顶层 await，同版 QuickJS 仅做 compileOnly 语法校验，不执行用户代码。它不能证明程序必定正常返回函数、动作合法或执行不超限；剩余错误由每 tick 执行协议处理。上传被拒绝时保留原代码。
+静态 AST 检查禁止导入、导出转发和顶层 await，同版 V8 仅做模块编译语法校验，不执行用户代码。它不能证明程序必定正常返回函数、动作合法或执行不超限；剩余错误由每 tick 执行协议处理。上传被拒绝时保留原代码。
 
 并发上传按最后成功提交覆盖。worker 开始比赛时用一个一致性快照读取双方最新源码、字节数和代码协议版本，使用该比赛创建时已经冻结的游戏发行、配置及 resolvedLimits。之后上传不替换本场代码。短事务只负责读取和检查，不能在整场执行时锁住源码行。
 
@@ -92,7 +92,7 @@ Boss 账号同样在启动时初始化：upsert `boss` 用户（无密码、带 
 
 `GET /games/:gameId/me`（认证）返回 `{ "entry": { rating, matchesPlayed, wins, draws, losses }, "boss": { available, attempts, wins }, "code": { source, sourceBytes, botProtocolVersion, updatedAt } | null, canMatch, cannotMatchReason, activeMatch: { id, status } | null }`；`cannotMatchReason` 取 `NO_CODE`、`PROTOCOL_MISMATCH`、`CODE_TOO_LARGE`，可为 null。`activeMatch` 仅查询本人在此游戏发起且状态为 `pending` 或 `running` 的比赛，被动参赛和终态比赛不包含在内。此字段用于恢复「查看当前比赛」入口，不代替匹配接口的幂等检查和数据库唯一约束。
 
-`PUT /games/:gameId/me/code`（认证）请求体为 `text/plain` 的源码文本，请求字节上限为当前发行 `resolvedLimits.codeBytes`。请求体必须是合法 UTF-8 文本，解码失败或空请求体返回 400 `VALIDATION_ERROR`。服务端运行沙箱静态校验（受限 AST 检查 + 同版 QuickJS compileOnly），同时校验数每进程最多 2，饱和返回 429。成功覆盖最新源码并返回 `{ sourceBytes, botProtocolVersion, updatedAt }`，排位分与比赛统计保持不变；校验失败返回 400 `CODE_INVALID`，原代码不变；超限返回 413。
+`PUT /games/:gameId/me/code`（认证）请求体为 `text/plain` 的源码文本，请求字节上限为当前发行 `resolvedLimits.codeBytes`。请求体必须是合法 UTF-8 文本，解码失败或空请求体返回 400 `VALIDATION_ERROR`。服务端运行沙箱静态校验（受限 AST 检查 + 同版 V8 模块编译），同时校验数每进程最多 2，饱和返回 429。成功覆盖最新源码并返回 `{ sourceBytes, botProtocolVersion, updatedAt }`，排位分与比赛统计保持不变；校验失败返回 400 `CODE_INVALID`，原代码不变；超限返回 413。
 
 `POST /games/:gameId/matches`（认证）必须携带 1–100 字符的 `Idempotency-Key` 请求头，请求体可省略或为 JSON：`{}` 表示主动匹配，`{ "opponentId" }` 表示指定对手练习，`{ "boss": true }` 表示挑战 Boss，其他形状返回 400 `VALIDATION_ERROR`。相同用户与键的重复请求返回 200 和已有比赛；同键不同游戏返回 409 `IDEMPOTENCY_MISMATCH`。建局在单事务中确定对手与比赛类型、冻结游戏发行/配置/resolvedLimits/botProtocolVersion 与随机 uint32 种子，写入 `pending` 比赛与两名参与者（发起者 slot 0，用户名与官方、Boss 标记快照）。
 

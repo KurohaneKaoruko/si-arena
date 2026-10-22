@@ -1,19 +1,9 @@
 import { Socket } from "node:net";
-import { setFlagsFromString } from "node:v8";
 import type { ExecuteTickInput, ExecutionIdentity, ResourceLimits } from "@si-arena/protocol";
 import { FramedChannel } from "./framing";
 import type { ExecutorBinding } from "./process";
 import { isRecord } from "./json";
-import { compileSource, GuestSession, initializeRuntime, prevalidateSource } from "./runtime";
-
-// Let hot QuickJS WASM functions reach the optimizing tier during the startup
-// warm-up instead of inside a billed tick. An unknown flag is ignored, so a V8
-// that renames it only loses the speed-up.
-try {
-  setFlagsFromString("--wasm-tiering-budget=200000");
-} catch {
-  // Keep the default tiering.
-}
+import { compileSource, GuestSession, prevalidateSource } from "./runtime";
 
 const limit = Number(process.argv[2]);
 const executionId = process.argv[3];
@@ -48,13 +38,8 @@ socket.on("end", () => channel.close());
 
 async function dispatch(message: Record<string, unknown>): Promise<void> {
   if (message.kind === "initialize" && !initialized && message.executionId === executionId) {
-    try {
-      await initializeRuntime();
-      initialized = true;
-      channel.send({ kind: "ready", executionId });
-    } catch {
-      channel.send({ kind: "system-error", executionId });
-    }
+    initialized = true;
+    channel.send({ kind: "ready", executionId });
     return;
   }
   if (!initialized) throw new Error("Executor is not ready");
@@ -130,7 +115,7 @@ async function dispatch(message: Record<string, unknown>): Promise<void> {
   };
   try {
     if (message.resetEnvironment) guest.close();
-    const result = guest.execute(
+    const result = await guest.execute(
       input,
       binding.sdkSource,
       message.logBytes,

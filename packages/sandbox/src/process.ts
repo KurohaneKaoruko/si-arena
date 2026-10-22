@@ -75,7 +75,6 @@ export class ExecutorProcess {
       ],
       {
         env: { LANG: "C.UTF-8" },
-        cwd: fileURLToPath(new URL("../runtime/", import.meta.url)),
         stdio: ["ignore", "ignore", "ignore", "pipe"],
       },
     );

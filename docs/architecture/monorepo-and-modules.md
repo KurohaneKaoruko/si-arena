@@ -19,7 +19,7 @@ apps/
 packages/
   protocol/              游戏契约、JSON 类型、回放协议
   engine/                通用 tick 循环与执行编排
-  sandbox/               玩家执行协议、父进程与子进程入口、WASM 绑定
+  sandbox/               玩家执行协议、父进程与子进程入口、isolate 运行时
   player/                Vue 回放播放器与通用控件
   cli/                   本地运行命令与调试服务
   db/                    共享 Drizzle 表结构、数据库连接与迁移（私有包）
@@ -144,7 +144,7 @@ export default function tick({ game, Memory }) {
 
 Memory 根必须是普通对象或无原型对象，其可枚举数据由有限数字、字符串、布尔值、null、稠密数组和普通对象组成。拒绝循环、undefined、BigInt、函数、Symbol、非有限数字、访问器和 Date/Map 等实例，不允许 JSON.stringify 的静默丢弃或转换替代协议校验。相同对象被多处引用可按 JSON 值展开，展开后的实际字节数受限。
 
-入口同步结束且返回 undefined；返回动作对象、Promise 或其他值为 `ENTRYPOINT_ERROR`。禁止静态 import、导出转发、动态 import 与顶层 await，模块加载器也拒绝导入。运行器不执行玩家排队的 Promise job，不提供定时器或网络。JS 语法先做 AST 约束检查，再用同版 QuickJS 的 compileOnly 模式校验，编译不执行顶层代码。[上游 compileOnly 接口](https://github.com/justjake/quickjs-emscripten/blob/main/packages/quickjs-emscripten-core/src/types.ts)
+入口同步结束且返回 undefined；返回动作对象、Promise 或其他值为 `ENTRYPOINT_ERROR`。禁止静态 import、导出转发、动态 import 与顶层 await，模块加载器也拒绝导入。运行器不执行玩家排队的 Promise job，不提供定时器或网络。JS 语法先做 AST 约束检查，再用同版 V8 的模块编译（isolated-vm `compileModule`）校验，编译不执行顶层代码。
 
 SDK 定义游戏的公开事实、基础动作方法与私有意图收集器，不包含寻路或具体策略算法。运行时 SDK 在沙箱内部初始化，不把宿主对象、引擎引用或业务服务方法直接交给玩家。首版上传文件需要自包含，除默认入口外不开放任意模块导入；用户可在本地打包自己的辅助代码。
 
