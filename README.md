@@ -161,7 +161,7 @@ API 提供 `/health`、`/api/games`、`/api/games/:gameId`，`/api/auth` 下的�
 
 PostgreSQL 的本地启动命令为 `docker compose -f deploy/compose.yaml up -d db`，数据保存在命名 volume；数据库连接使用 .env 中的 DATABASE_URL。首次使用先运行 `pnpm db:migrate` 创建表结构；server 启动时会幂等初始化 `official` 官方账号，并为每个已注册游戏安装官方 bot 源码（排位分与统计保持不变）；`BOSSES_DIR`（默认 `data/bosses`）下有 `<gameId>.js` 时同时安装该游戏的私有 Boss。游戏目录与规则页不依赖数据库连接，认证接口需要数据库。数据库集成测试需要 `ARENA_TEST_DATABASE_URL` 指向可创建临时库的连接，例如 `ARENA_TEST_DATABASE_URL=postgresql://si_arena:si_arena@127.0.0.1:5433/si_arena pnpm test --project server`；测试自建并清理独立数据库，未设置该变量时自动跳过。
 
-apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、runner、player、cli 与 db（server 与 worker 共享的 Drizzle 表结构、连接和迁移）；games/paper、games/royale、games/snake 与 games/bomber 分别包含圈地、圈地大逃杀、贪吃蛇大作战与炸弹人的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
+apps 包含 web、server、worker；packages 包含 protocol、engine、sandbox、runner、player、cli 与 db（server 与 worker 共享的 Drizzle 表结构、连接和迁移）；games/paper、games/royale、games/snake、games/bomber 与 games/tank 分别包含圈地、圈地大逃杀、贪吃蛇大作战、炸弹人与坦克对决的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
 
 `packages/runner` 提供整场独立进程执行器，`packages/sandbox` 提供每玩家独立 isolate：V8 isolate 在本场成功 tick 间常驻、失败后重建、isolate CPU/堆/栈限制、Memory 提交与失败回滚、本地日志，以及受限源码校验。使用方法、Linux 进程内存隔离和性能命令见 [runner 说明](packages/runner/README.md)。
 
@@ -183,6 +183,7 @@ pnpm test --project paper-rules
 pnpm test --project royale-rules
 pnpm test --project snake-rules
 pnpm test --project bomber-rules
+pnpm test --project tank-rules
 pnpm test:watch --project paper-rules
 pnpm test:coverage
 pnpm test:artifacts
@@ -202,10 +203,11 @@ pnpm arena run --game paper --bot ./my-bot.js --opponent ./another-bot.js --matc
 pnpm arena run --game royale --bot ./games/royale/bots/official.js --opponent ./games/royale/bots/official.js --opponent ./games/royale/bots/official.js --seed 42
 pnpm arena run --game snake --bot ./games/snake/bots/official.js --matches 20 --seed 42
 pnpm arena run --game bomber --bot ./games/bomber/bots/official.js --opponent ./games/bomber/bots/official.js --opponent ./games/bomber/bots/official.js --seed 42
+pnpm arena run --game tank --bot ./games/tank/bots/official.js --matches 20 --seed 42
 pnpm arena replay --game paper ./replays/match-实际文件名.json.gz --verify --logs
 ```
 
-根注册配置同时登记圈地、圈地大逃杀、贪吃蛇大作战与炸弹人，因此根目录命令需要 `--game` 选择游戏；独立开发包只含一个游戏，无需该参数。
+根注册配置同时登记圈地、圈地大逃杀、贪吃蛇大作战、炸弹人与坦克对决，因此根目录命令需要 `--game` 选择游戏；独立开发包只含一个游戏，无需该参数。
 
 CLI 支持按发行下载初始化、指定 bot、官方或本地对手、默认并行的批量比赛、gzip 回放及日志校验。输出 JSON Lines，包含发行、完整限额、结果和回放绝对路径。回放无需 bot 文件。根脚本通过可信配置注册游戏，CLI 自身不绑定圈地。`arena dev` 实时调试服务依赖开发包内置的页面资源，在独立开发包内提供。命令与接入方式见 [CLI 说明](packages/cli/README.md)。
 
