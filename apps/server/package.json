@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@si-arena/db": "workspace:*",
+    "@si-arena/game-bomber": "workspace:*",
     "@si-arena/game-paper": "workspace:*",
     "@si-arena/game-royale": "workspace:*",
     "@si-arena/game-snake": "workspace:*",

@@ -14,6 +14,12 @@ import {
   snakeHighlights,
   snakePlayerSummaries,
 } from "@si-arena/game-snake/renderer";
+import { bomberGame } from "@si-arena/game-bomber/game";
+import {
+  drawBomberBoard,
+  bomberHighlights,
+  bomberPlayerSummaries,
+} from "@si-arena/game-bomber/renderer";
 
 type ReplayGameOptions<
   State extends { tick: number },
@@ -22,7 +28,7 @@ type ReplayGameOptions<
   Event,
 > = Parameters<typeof defineReplayGame<State, Observation, Action, Event>>[0];
 
-/** The animation input shared by the grid renderers (paper, royale). */
+/** The animation input shared by the grid renderers (paper, royale, bomber). */
 interface BoardAnimation<State, Event> {
   previousState: DeepReadonly<State>;
   events: DeepReadonly<Event[]>;
@@ -42,13 +48,13 @@ function boardReplay<State extends { tick: number }, Observation, Action extends
   ) => void,
   summarize: (state: DeepReadonly<State>) => readonly ReplayPlayerSummary[],
   narrate?: ReplayGameOptions<State, Observation, Action, Event>["narrate"],
-  options: { aspectRatio: number; scoreUnit: string } = { aspectRatio: 1, scoreUnit: "格" },
+  options: { aspectRatio?: number; scoreUnit?: string } = {},
 ) {
   return defineReplayGame({
     game,
     ...(narrate ? { narrate } : {}),
-    aspectRatio: options.aspectRatio,
-    scoreUnit: options.scoreUnit,
+    aspectRatio: options.aspectRatio ?? 1,
+    scoreUnit: options.scoreUnit ?? "格",
     draw: (context, frame, width, height, motion) =>
       draw(context, frame.state, width, height, {
         previousState: frame.previousState,
@@ -68,6 +74,10 @@ export const replayGames = [
   boardReplay(snakeGame, drawSnakeBoard, snakePlayerSummaries, snakeHighlights, {
     aspectRatio: 1,
     scoreUnit: "节",
+  }),
+  boardReplay(bomberGame, drawBomberBoard, bomberPlayerSummaries, bomberHighlights, {
+    aspectRatio: 15 / 13,
+    scoreUnit: "分",
   }),
 ];
 

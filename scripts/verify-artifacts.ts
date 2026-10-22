@@ -176,6 +176,22 @@ for (let tick = 0; tick < 500 && !snakeResult; tick++) {
 if (snakeResult?.reason !== "elimination" || snakeResult.completedTicks !== 7 || snakeResult.players.some(p => p.rank !== 1 || p.score !== 0)) {
   throw new Error("Standalone snake match returned an unexpected result");
 }
+import { bomberGame, BOMBER_SDK_SOURCE, officialBotUrl as bomberBotUrl } from "@si-arena/game-bomber/game";
+const bomberRegistration = defineLocalGame({game:bomberGame,officialBotUrl:bomberBotUrl,module:{url:import.meta.resolve("@si-arena/game-bomber/game"),gameExport:"bomberGame",sdkSourceExport:"BOMBER_SDK_SOURCE"}});
+if(bomberRegistration.manifest.id!=="bomber"||bomberRegistration.manifest.maxPlayers!==4)throw new Error("Packed bomber registration failed");
+let bomberState = bomberGame.rules.init({
+  seed: 2, config: bomberGame.manifest.config,
+  players: [0, 1, 2, 3].map((slot) => ({ id: "p" + slot, slot })),
+});
+let bomberResult = undefined as ReturnType<typeof bomberGame.rules.step>["result"];
+for (let tick = 0; tick < 400 && !bomberResult; tick++) {
+  const output = bomberGame.rules.step(bomberState, Object.fromEntries(bomberState.players.map((p) => [p.id, { type: "idle" as const }])));
+  bomberState = output.nextState; bomberResult = output.result;
+}
+// Four idle players stay on their corners and die together when ring 0 collapses.
+if (bomberResult?.reason !== "elimination" || bomberResult.completedTicks !== 300 || bomberResult.players.some(p => p.rank !== 1 || p.score !== 0)) {
+  throw new Error("Standalone bomber match returned an unexpected result");
+}
 const bot = await SandboxPlayer.create({
   matchId: "artifact", playerId: "alpha", source: "let calls=0;export default ({game,Memory})=>{calls++;Memory.n=(Memory.n??0)+1;Memory.calls=calls;game.act()}",
   sdkSource: "export default (o,{submit})=>{submit({type:'idle'});return {act(){submit({type:o.fail?'invalid':'idle'})}}}",

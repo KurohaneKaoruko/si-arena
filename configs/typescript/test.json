@@ -27,6 +27,7 @@
     "../../packages/player/tests/**",
     "../../games/paper/tests/**",
     "../../games/royale/tests/**",
-    "../../games/snake/tests/**"
+    "../../games/snake/tests/**",
+    "../../games/bomber/tests/**"
   ]
 }

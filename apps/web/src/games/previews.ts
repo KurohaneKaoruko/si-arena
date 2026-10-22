@@ -5,6 +5,8 @@ import { royaleGame } from "@si-arena/game-royale/game";
 import { drawRoyaleBoard } from "@si-arena/game-royale/renderer";
 import { snakeGame } from "@si-arena/game-snake/game";
 import { drawSnakeBoard } from "@si-arena/game-snake/renderer";
+import { bomberGame } from "@si-arena/game-bomber/game";
+import { drawBomberBoard } from "@si-arena/game-bomber/renderer";
 
 export interface GamePreviewScene {
   aspectRatio: number;
@@ -84,6 +86,32 @@ export const gamePreviews: ReadonlyMap<string, (game: GameCatalogEntry) => GameP
           aspectRatio: state.width / state.height,
           draw: (context, width, height) =>
             drawSnakeBoard(context, state, width, height, {
+              previousState: state,
+              events: [],
+              progress: 1,
+              reducedMotion: true,
+              erroredPlayers: new Set(),
+            }),
+        };
+      },
+    ],
+    [
+      bomberGame.manifest.id,
+      (game) => {
+        if (game.release !== bomberGame.manifest.release)
+          throw new Error("未注册此游戏发行的初始画面。");
+        const state = bomberGame.rules.init({
+          seed: 42,
+          config: bomberGame.parseConfig(game.config),
+          players: Array.from({ length: game.maxPlayers }, (_, slot) => ({
+            id: `preview-${slot + 1}`,
+            slot,
+          })),
+        });
+        return {
+          aspectRatio: state.width / state.height,
+          draw: (context, width, height) =>
+            drawBomberBoard(context, state, width, height, {
               previousState: state,
               events: [],
               progress: 1,

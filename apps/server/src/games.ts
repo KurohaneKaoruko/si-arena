@@ -10,6 +10,11 @@ import {
   developmentFiles as snakeDevelopmentFiles,
   officialBotUrl as snakeOfficialBotUrl,
 } from "@si-arena/game-snake/game";
+import { bomberCatalogEntry } from "@si-arena/game-bomber";
+import {
+  developmentFiles as bomberDevelopmentFiles,
+  officialBotUrl as bomberOfficialBotUrl,
+} from "@si-arena/game-bomber/game";
 import type { GameCatalogEntry } from "@si-arena/protocol";
 
 export interface RegisteredGame {
@@ -29,6 +34,11 @@ export const registeredGames: readonly RegisteredGame[] = [
     entry: snakeCatalogEntry,
     officialBotUrl: snakeOfficialBotUrl,
     developmentFiles: snakeDevelopmentFiles,
+  },
+  {
+    entry: bomberCatalogEntry,
+    officialBotUrl: bomberOfficialBotUrl,
+    developmentFiles: bomberDevelopmentFiles,
   },
 ];
 
