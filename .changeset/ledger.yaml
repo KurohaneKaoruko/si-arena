@@ -14,6 +14,10 @@
   dir: packages/cli
   intents:
     - great-horses-count
+"@si-arena/cli@0.5.0":
+  dir: packages/cli
+  intents:
+    - bright-isolates-run
 "@si-arena/engine@0.2.0":
   dir: packages/engine
   intents:
@@ -30,6 +34,10 @@
   dir: packages/engine
   intents:
     - great-horses-count
+"@si-arena/engine@0.5.0":
+  dir: packages/engine
+  intents:
+    - bright-isolates-run
 "@si-arena/game-paper@0.2.0":
   dir: games/paper
   intents:
@@ -46,10 +54,18 @@
   dir: games/paper
   intents:
     - great-horses-count
+"@si-arena/game-paper@0.5.0":
+  dir: games/paper
+  intents:
+    - bright-isolates-run
 "@si-arena/game-royale@0.4.0":
   dir: games/royale
   intents:
     - great-horses-count
+"@si-arena/game-royale@0.5.0":
+  dir: games/royale
+  intents:
+    - bright-isolates-run
 "@si-arena/player@0.2.0":
   dir: packages/player
   intents:
@@ -66,6 +82,10 @@
   dir: packages/player
   intents:
     - great-horses-count
+"@si-arena/player@0.5.0":
+  dir: packages/player
+  intents:
+    - bright-isolates-run
 "@si-arena/protocol@0.1.0":
   dir: packages/protocol
   intents:
@@ -86,6 +106,10 @@
   dir: packages/protocol
   intents:
     - great-horses-count
+"@si-arena/protocol@0.5.0":
+  dir: packages/protocol
+  intents:
+    - bright-isolates-run
 "@si-arena/sandbox@0.2.0":
   dir: packages/sandbox
   intents:
@@ -102,3 +126,7 @@
   dir: packages/sandbox
   intents:
     - great-horses-count
+"@si-arena/sandbox@0.5.0":
+  dir: packages/sandbox
+  intents:
+    - bright-isolates-run
