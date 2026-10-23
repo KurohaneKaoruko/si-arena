@@ -7,7 +7,7 @@
 每个游戏页面提供独立开发包，包含：
 
 - 对应游戏规则包、引擎、沙箱执行器和本地工具。
-- SDK 类型定义、公开辅助函数、统一参赛提示词和说明。
+- SDK 类型定义、基础动作 API、统一参赛提示词和说明。
 - 官方示例 bot 源码与玩家代码模板。
 - 可视化播放器、本地调试界面和启动说明。
 - 软件发行信息、依赖声明、锁文件和必要许可证。
@@ -21,7 +21,7 @@
 ```sh
 npx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>
 cd paper-bot
-pnpm install
+pnpm install --frozen-lockfile
 pnpm arena dev --bot ./bot.js
 pnpm arena run --bot ./bot.js --matches 20 --seed 42
 pnpm arena replay ./replays/match.json.gz
@@ -32,6 +32,10 @@ pnpm arena replay ./replays/match.json.gz
 已有项目运行 `pnpm arena update`，再执行 `pnpm install --frozen-lockfile`。服务器地址由初始化记录，也可通过 `--server` 指定；直接解压 ZIP 后首次更新需要指定服务器。更新保留 bot.js、research/、回放、自定义对手和其他用户文件；更新的平台文件若被本地修改则备份到 .arena-backups/。下载校验失败不改项目，安装中普通错误会回滚；相同内容不重复写入。游戏规则、SDK 和本地工具随服务器开发包获取，游戏不公开发布到 npm。
 
 玩家可以复制游戏页「开发资料」区的 AI 安装提示词，交给本地编程 Agent 完成环境准备和策略研究。网页按当前游戏与站点地址生成初始化命令，要求保留已有项目与研究成果；统一参赛提示词定义各游戏的机制和验证方法。网页提示词随源码提供，开发包内 PROMPT.md 随开发包构建固定。公共流程维护在 packages/development/RESEARCH.md，与游戏专属提示词通过同一函数组装。修改资料后重新构建更新当前开发包，不改变游戏 release、botProtocolVersion 或旧回放的规则身份。
+
+开发包 README 说明安装、文件用途、比赛结果、更新和上传；PROMPT 说明规则、策略思路和研究流程；SDK 提供接口参考。
+
+文档需区分局内得分 score、最终名次 rank 和线上排位分。本地比赛不影响线上排位。批量胜负只统计单独第 1、并列第 1 和其他名次，多人比较还要查看每场名次。执行错误数包含所有玩家，可在回放中按玩家 ID 查找；命令成功退出不表示每个 tick 都执行成功。
 
 安装成功和战胜官方示例只是基线，不是研究结束条件。用户指定的预算优先；未指定时，环境准备后默认研究 30 分钟，预留最后约 20% 时间用于独立验证与交付。Agent 在预算内提出不同策略假设，通过正常沙箱中的比赛和失败回放验证机制与改进；预算到期、用户停止或工具受阻时保存成果并说明实际完成情况，不承诺找到最优解或打败所有玩家，也不为凑时长空转。
 

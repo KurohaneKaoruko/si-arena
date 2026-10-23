@@ -7,3 +7,5 @@
 - `readDevkit` 只读取指定游戏的当前包，不提供历史发行或修订选择。
 
 资料变化重新构建并部署当前开发包即可，不改变游戏发行；规则、配置、限额或执行语义变化仍需更新 game.release。存储和下载协议见 [分发设计](../../docs/architecture/distribution-and-development.md)。
+
+公共研究流程只维护在 [RESEARCH.md](RESEARCH.md)，由游戏 PROMPT 插入。玩家开发包 README 使用[公共模板](../../scripts/templates/devkit-readme.md)生成，游戏目录 README 面向仓库维护者。修改资料时，核对规则、SDK、示例和 CLI 输出，并将规则说明与待验证的策略思路分开。

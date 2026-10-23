@@ -32,6 +32,10 @@ const selectedGames = values.game
   : devkitGames;
 if (!selectedGames.length) throw new Error(`Unknown game: ${values.game}`);
 const root = fileURLToPath(new URL("../", import.meta.url));
+const readmeTemplate = await readFile(
+  new URL("./templates/devkit-readme.md", import.meta.url),
+  "utf8",
+);
 const pnpm = process.env.npm_execpath;
 if (!pnpm) throw new Error("Run with pnpm build:devkits");
 function runPnpm(args: string[], cwd = root) {
@@ -154,7 +158,10 @@ try {
     );
     await write(
       "README.md",
-      `# ${game.manifest.name} 开发包\n\n发行：${game.manifest.release}；玩家接口：${game.manifest.botProtocolVersion}。\n\n要求 Node.js 26+ 与 pnpm 12。\n\n\`\`\`sh\npnpm install --frozen-lockfile\npnpm arena dev --bot ./bot.js\npnpm arena run --bot ./bot.js --seed 42\npnpm arena run --bot ./bot.js --opponent ./bots/official.js --matches 20 --seed 42\npnpm arena replay ./replays/实际文件名.json.gz\npnpm arena replay ./replays/实际文件名.json.gz --verify --logs\n\`\`\`\n\n实时调试与可视化回放命令都会输出本地 URL，在浏览器打开，Ctrl+C 停止服务。调试页在整场完成后提供逐 tick 动作、日志、错误与 Memory 提交前后对比，修改 bot.js 后可直接重新开局。PROMPT.md 提供统一参赛提示词，SDK.md 说明接口，sdk/ 提供类型与运行源码。bots/official.js 为官方示例，使用相同沙箱与预算。\n\n运行依赖安装完成后，对战与回放均不访问平台，不需要账号或数据库。CLI 只在独立进程的 V8 isolate（isolated-vm）中执行玩家代码，回放不执行 bot。资源配置固定在 release.json，上传仍使用平台当前发行的预算。\n\nrelease.json 校验下载时的发行文件；开始编辑 bot.js 后不要求源码保持原始摘要。更新已有项目使用 pnpm arena update；首次直接解压 ZIP 的项目需要加 --server http(s)://<平台地址>。更新保留 bot.js、研究记录、自定义对手与回放；修改过的平台文件备份到 .arena-backups/，然后重新执行 pnpm install --frozen-lockfile。\n\nvendor/ 包含固定的内部包归档，第三方依赖由 pnpm-lock.yaml 锁定。isolated-vm 自带 macOS arm64、Linux x64/arm64 与 Windows x64 的预编译二进制，这些平台无需本机编译；其他平台需要 C++ 工具链并在 pnpm-workspace.yaml 的 allowBuilds 中放行 isolated-vm。\n`,
+      readmeTemplate
+        .replaceAll("{{GAME_NAME}}", () => game.manifest.name)
+        .replaceAll("{{GAME_RELEASE}}", () => game.manifest.release)
+        .replaceAll("{{BOT_PROTOCOL_VERSION}}", () => String(game.manifest.botProtocolVersion)),
     );
     await write(".gitignore", "node_modules/\nreplays/\n");
     const licensed = new Set<string>();

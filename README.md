@@ -50,7 +50,7 @@
 ## 三步上场
 
 ```sh
-# 1. 下载这一发行的开发包：提示词、SDK、官方 bot、本地对战与回放工具
+# 1. 下载服务器最新开发包：提示词、SDK、官方 bot、本地对战与回放工具
 npx @si-arena/cli@latest init paper ./paper-bot --server https://<平台地址>
 cd paper-bot && pnpm install --frozen-lockfile
 
@@ -61,7 +61,7 @@ pnpm arena dev --bot ./bot.js
 pnpm arena run --bot ./bot.js --matches 20 --seed 42
 ```
 
-大逃杀把 `paper` 换成 `royale` 即可；本地对战默认补满 5 名官方 bot。
+大逃杀把 `paper` 换成 `royale` 即可；本地对战默认加入 4 个官方对手，组成 5 人局。
 
 ## 核心特性
 
@@ -209,7 +209,7 @@ pnpm arena replay --game paper ./replays/match-实际文件名.json.gz --verify 
 
 根注册配置同时登记圈地、圈地大逃杀、贪吃蛇大作战、炸弹人与坦克对决，因此根目录命令需要 `--game` 选择游戏；独立开发包只含一个游戏，无需该参数。
 
-CLI 支持按发行下载初始化、指定 bot、官方或本地对手、默认并行的批量比赛、gzip 回放及日志校验。输出 JSON Lines，包含发行、完整限额、结果和回放绝对路径。回放无需 bot 文件。根脚本通过可信配置注册游戏，CLI 自身不绑定圈地。`arena dev` 实时调试服务依赖开发包内置的页面资源，在独立开发包内提供。命令与接入方式见 [CLI 说明](packages/cli/README.md)。
+CLI 支持下载服务器最新开发包初始化、更新已有项目、指定 bot、官方或本地对手、默认并行的批量比赛、gzip 回放及日志校验。输出 JSON Lines，包含发行、完整限额、结果和回放绝对路径。回放无需 bot 文件。根脚本通过可信配置注册游戏，CLI 自身不绑定圈地。`arena dev` 实时调试服务依赖开发包内置的页面资源，在独立开发包内提供。命令与接入方式见 [CLI 说明](packages/cli/README.md)。
 
 ## 网页参赛与回放
 
@@ -246,6 +246,8 @@ pnpm arena replay ./replays/实际文件名.json.gz
 已有项目执行 `pnpm arena update`，然后 `pnpm install --frozen-lockfile`。更新复用初始化记录的服务器，保留 bot.js、研究记录、自定义对手和回放；被修改的平台文件先备份到 .arena-backups/。直接解压 ZIP 的项目首次更新需加 `--server <平台地址>`；旧 CLI 可通过 `npx @si-arena/cli@latest update --server <平台地址>` 更新当前目录。
 
 公共研究流程维护在 [RESEARCH.md](packages/development/RESEARCH.md)，各游戏 PROMPT.md 只维护专属内容。网页和 ZIP 通过同一个组装函数获得完整提示词。
+
+开发包 README 使用 [devkit-readme.md](scripts/templates/devkit-readme.md) 生成，说明安装、文件用途、比赛结果、更新和上传。PROMPT 说明游戏规则、策略思路和研究流程；SDK 说明代码接口与错误处理；release.json 记录本地发行和资源限制。
 
 `arena init` 校验发行、ZIP 大小及 SHA-256、内部清单与逐文件摘要，拒绝非空目录与越界路径，不安装依赖或执行代码。安装后运行比赛和回放无需平台 API、数据库或账号。开发包的可视化回放命令输出 loopback URL，在浏览器打开即可，Ctrl+C 停止；`--verify --logs` 仍用于终端校验。实时调试命令 `pnpm arena dev --bot ./bot.js` 同样输出 loopback URL：自动与官方 bot 开局（也可 `--opponent` 指定本地 bot），运行中显示 tick 进度，整场完成后提供逐 tick 动作、日志、错误与 Memory 提交前后对比，并可在页面上同种子或换随机种子重新开局；修改代码后重开即生效，不热替换进行中的比赛。
 
