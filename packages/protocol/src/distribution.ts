@@ -28,6 +28,22 @@ export const DEVKIT_MAX_EXTRACTED_BYTES = 128 * 1024 * 1024;
 export const DEVKIT_MAX_FILES = 2048;
 export const GAME_ID_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 export const GAME_RELEASE_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._@+-]{0,127}$/;
+/** The immutable release.json digest also identifies a development package revision. */
+export const DEVKIT_REVISION_PATTERN = /^[a-f0-9]{64}$/;
+
+export function devkitMetadataPath(gameId: string, release: string, revision: string): string {
+  if (
+    !GAME_ID_PATTERN.test(gameId) ||
+    !GAME_RELEASE_PATTERN.test(release) ||
+    !DEVKIT_REVISION_PATTERN.test(revision)
+  )
+    throw new TypeError("Invalid development package identity");
+  return `/api/games/${gameId}/releases/${encodeURIComponent(release)}/devkits/${revision}`;
+}
+
+export function devkitDownloadPath(gameId: string, release: string, revision: string): string {
+  return `${devkitMetadataPath(gameId, release, revision)}/download`;
+}
 
 function check(value: unknown): asserts value {
   if (!value) throw new TypeError("Invalid development package metadata");

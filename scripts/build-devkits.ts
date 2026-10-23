@@ -1,3 +1,4 @@
+import { publishDevkit, readDevelopmentMaterials } from "@si-arena/development";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
@@ -8,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { zipSync } from "fflate";
 import { ENGINE_COMPATIBILITY } from "@si-arena/engine";
 import {
+  devkitDownloadPath,
   DEVKIT_MAX_ARCHIVE_BYTES,
   DEVKIT_MAX_EXTRACTED_BYTES,
   parseDevkitManifest,
@@ -111,11 +113,7 @@ try {
       workspaceSettings + "\noverrides: " + JSON.stringify(dependencies) + "\n",
     );
     runPnpm(["install", "--lockfile-only", "--ignore-scripts", "--no-frozen-lockfile"], stage);
-    const development = {
-      prompt: await readFile(registration.developmentFiles.prompt, "utf8"),
-      sdk: await readFile(registration.developmentFiles.sdk, "utf8"),
-      template: await readFile(registration.developmentFiles.template, "utf8"),
-    };
+    const development = await readDevelopmentMaterials(registration.developmentFiles);
     await write("PROMPT.md", development.prompt);
     await write("SDK.md", development.sdk);
     await write("bot.js", development.template);
@@ -234,40 +232,18 @@ try {
       ...descriptor,
       manifestSha256: sha(manifestBytes),
       archive: {
-        url: `/api/games/${game.manifest.id}/releases/${encodeURIComponent(game.manifest.release)}/download`,
+        url: devkitDownloadPath(game.manifest.id, game.manifest.release, sha(manifestBytes)),
         bytes: zip.length,
         sha256: sha(zip),
       },
     });
-    const parent = join(destination, game.manifest.id);
-    await mkdir(parent, { recursive: true });
-    const published = join(parent, game.manifest.release);
-    const existing = await readFile(join(published, "metadata.json"), "utf8").catch(
-      (error: NodeJS.ErrnoException) => {
-        if (error.code === "ENOENT") return null;
-        throw error;
-      },
-    );
-    if (existing) {
-      if (parseGameReleaseMetadata(JSON.parse(existing)).archive.sha256 !== metadata.archive.sha256)
-        throw new Error(
-          `Release ${game.manifest.release} already exists with different contents; increment the game release before publishing`,
-        );
-    } else {
-      const candidate = await mkdtemp(join(parent, ".publish-"));
-      try {
-        await writeFile(join(candidate, "devkit.zip"), zip);
-        await writeFile(join(candidate, "metadata.json"), json(metadata));
-        await rename(candidate, published);
-      } finally {
-        await rm(candidate, { recursive: true, force: true });
-      }
-    }
+    const publishedFile = await publishDevkit(destination, metadata, zip);
     console.log(
       JSON.stringify({
         gameId: game.manifest.id,
         release: game.manifest.release,
-        file: join(published, "devkit.zip"),
+        revision: metadata.manifestSha256,
+        file: publishedFile,
         bytes: zip.length,
         sha256: metadata.archive.sha256,
       }),

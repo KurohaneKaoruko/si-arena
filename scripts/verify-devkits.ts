@@ -71,10 +71,14 @@ function service(args: string[], cwd = root) {
 const temporary = await mkdtemp(join(tmpdir(), "si-arena-devkit-verification-"));
 const services: ReturnType<typeof service>[] = [];
 try {
+  const builtArchives = join(temporary, "built-releases");
   const archives = join(temporary, "releases");
   await node(["--import", "tsx", join(root, "scripts/build-devkits.ts")], root, {
-    DEVKITS_DIR: archives,
+    DEVKITS_DIR: builtArchives,
   });
+  await node(["--import", "tsx", join(root, "scripts/seed-releases.ts"), builtArchives, archives]);
+  // Deployment retries must preserve existing revisions and selectors.
+  await node(["--import", "tsx", join(root, "scripts/seed-releases.ts"), builtArchives, archives]);
   const appUrl = pathToFileURL(join(root, "apps/server/dist/app.js")).href;
   const api = service([
     "--input-type=module",
@@ -106,6 +110,14 @@ try {
       "init must not install or execute modules",
     );
     await install(project);
+    const materialsResponse = await fetch(
+      new URL(`/api/games/${registration.game.manifest.id}/development`, server),
+    );
+    assert.equal(materialsResponse.status, 200);
+    const materials = (await materialsResponse.json()) as { prompt: string };
+    assert.equal(await readFile(join(project, "PROMPT.md"), "utf8"), materials.prompt);
+    assert.ok(materials.prompt.includes("## 研究目标与预算"));
+    assert.ok(!materials.prompt.includes("<!-- SI_ARENA_RESEARCH -->"));
     const original = await readFile(join(project, "bot.js"), "utf8");
     await writeFile(join(project, "bot.js"), 'console.log("local verification");\n' + original);
     const run = (

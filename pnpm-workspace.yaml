@@ -9,6 +9,7 @@ versioning:
   fixed:
     - [
         "@si-arena/protocol",
+        "@si-arena/development",
         "@si-arena/sandbox",
         "@si-arena/runner",
         "@si-arena/engine",

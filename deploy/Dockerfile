@@ -15,6 +15,7 @@ COPY apps/server/package.json apps/server/
 COPY apps/worker/package.json apps/worker/
 COPY apps/web/package.json apps/web/
 COPY packages/protocol/package.json packages/protocol/
+COPY packages/development/package.json packages/development/
 COPY packages/engine/package.json packages/engine/
 COPY packages/sandbox/package.json packages/sandbox/
 COPY packages/player/package.json packages/player/

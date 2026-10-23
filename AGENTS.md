@@ -31,19 +31,20 @@ SI Arena（`si-arena`，SI = Super Intelligence）是 AI 编程自由竞技游�
 
 ## 仓库职责与依赖方向
 
-| 目录                | 职责与边界                                                         |
-| ------------------- | ------------------------------------------------------------------ |
-| `apps/web`          | Vue 网站，组装页面、播放器与游戏 renderer                          |
-| `apps/server`       | Fastify API、账号、上传和主动匹配                                  |
-| `apps/worker`       | 领取已有比赛，组装执行器与游戏，保存回放并结算                     |
-| `packages/protocol` | 共享 JSON、游戏、资源、执行和回放契约；不依赖业务包                |
-| `packages/engine`   | 通用 tick 编排；通过适配器执行玩家代码，不绑定具体游戏             |
-| `packages/sandbox`  | V8 isolate（isolated-vm）与隔离执行；不依赖账号、数据库或画面      |
-| `packages/runner`   | 每场独立进程，组装引擎与沙箱，管理进程资源与有界诊断；不依赖数据库 |
-| `packages/player`   | 通用 Vue 回放播放器；不执行 bot，不引入服务端模块                  |
-| `packages/cli`      | `arena` 命令和本地调试，复用引擎、沙箱与游戏包                     |
-| `packages/db`       | 共享 Drizzle 表结构、连接与迁移；私有包，仅 server 与 worker 使用  |
-| `games/<gameId>`    | manifest、纯规则、SDK、说明、renderer 与官方 bot                   |
+| 目录                   | 职责与边界                                                         |
+| ---------------------- | ------------------------------------------------------------------ |
+| `apps/web`             | Vue 网站，组装页面、播放器与游戏 renderer                          |
+| `apps/server`          | Fastify API、账号、上传和主动匹配                                  |
+| `apps/worker`          | 领取已有比赛，组装执行器与游戏，保存回放并结算                     |
+| `packages/protocol`    | 共享 JSON、游戏、资源、执行和回放契约；不依赖业务包                |
+| `packages/development` | 公共研究提示词、资料组装与不可变开发包修订；不参与比赛执行         |
+| `packages/engine`      | 通用 tick 编排；通过适配器执行玩家代码，不绑定具体游戏             |
+| `packages/sandbox`     | V8 isolate（isolated-vm）与隔离执行；不依赖账号、数据库或画面      |
+| `packages/runner`      | 每场独立进程，组装引擎与沙箱，管理进程资源与有界诊断；不依赖数据库 |
+| `packages/player`      | 通用 Vue 回放播放器；不执行 bot，不引入服务端模块                  |
+| `packages/cli`         | `arena` 命令和本地调试，复用引擎、沙箱与游戏包                     |
+| `packages/db`          | 共享 Drizzle 表结构、连接与迁移；私有包，仅 server 与 worker 使用  |
+| `games/<gameId>`       | manifest、纯规则、SDK、说明、renderer 与官方 bot                   |
 
 - 通过 workspace 包的公开 exports 导入，内部依赖使用 `workspace:*`；不跨包引用 `src` 或 `dist` 私有路径。
 - 公共依赖版本集中在 `pnpm-workspace.yaml` 的 catalog，使用 `catalog:` 引用；修改依赖同步维护 lockfile。
@@ -74,6 +75,7 @@ SI Arena（`si-arena`，SI = Super Intelligence）是 AI 编程自由竞技游�
 - 同一用户同一游戏最多有一个未完成的主动请求；用幂等键与数据库唯一约束共同防止并发重复建局，不能只靠先查再写。
 - worker 在短事务中领取已有任务，执行期间不持有整场数据库锁。失去有效租约或执行标识不匹配后不能提交计分，也不能覆盖公开回放。
 - 先可靠保存不可覆盖的回放候选，再在一个数据库事务中确认执行权、提交比赛终态和双方排位。重复提交不能重复计分，系统失败不计分。
+- 游戏发行与开发包修订分开：仅提示词、说明变化时重新构建开发包，以清单 SHA-256 自动标识修订，不递增游戏 release 或 botProtocolVersion，不改回放注册。公共研究流程只维护在 packages/development/RESEARCH.md。
 - 不保存玩家历史源码来恢复失败比赛；游戏发行归档与玩家代码版本管理是两件事。
 - `botProtocolVersion` 只在玩家接口不兼容时递增；兼容升级不要求重传，不兼容升级暂停旧选手主动与被动匹配并要求重传，排位保留。
 

@@ -1,0 +1,41 @@
+{
+  "name": "@si-arena/development",
+  "version": "0.7.0",
+  "license": "MIT",
+  "author": {
+    "name": "lovekeqing",
+    "email": "2911331070@qq.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lovezhangchuangxin/si-arena.git",
+    "directory": "packages/development"
+  },
+  "files": [
+    "dist",
+    "RESEARCH.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown --config ../../tsdown.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsdown --config ../../tsdown.config.ts --watch",
+    "test": "vitest run --configLoader runner --config ../../vitest.config.ts --project development",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@si-arena/protocol": "workspace:*"
+  },
+  "engines": {
+    "node": ">=26"
+  }
+}

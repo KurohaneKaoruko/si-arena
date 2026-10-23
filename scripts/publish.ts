@@ -18,6 +18,7 @@ import { x as extract } from "tar";
 
 const PUBLIC_PACKAGES = [
   { name: "@si-arena/protocol", directory: "packages/protocol" },
+  { name: "@si-arena/development", directory: "packages/development" },
   { name: "@si-arena/sandbox", directory: "packages/sandbox" },
   { name: "@si-arena/engine", directory: "packages/engine" },
   { name: "@si-arena/runner", directory: "packages/runner" },

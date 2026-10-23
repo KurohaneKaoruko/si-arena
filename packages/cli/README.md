@@ -9,7 +9,7 @@
 ```sh
 pnpm exec arena init paper ./paper-bot --server http://127.0.0.1:3000
 # 指定历史发行，不读取 current 别名
-pnpm exec arena init paper ./paper-bot --release paper@0.3.0 --server http://127.0.0.1:3000
+pnpm exec arena init paper ./paper-bot --release '<游戏发行>' --revision '<清单SHA-256>' --server http://127.0.0.1:3000
 ```
 
 对外入口是 `npx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>`（需要已发布的 npm 包）。CLI 默认连接 loopback，平台地址由 `--server` 传入；自托管构建可设置 `SI_ARENA_SERVER_URL` 烧入自己的默认地址。`--server` 允许 HTTP 与 HTTPS，下载仅使用同源元数据中的固定发行地址，不跟随 HTTP 重定向。
@@ -124,3 +124,5 @@ arena --registry ./arena.config.mjs replay ./replays/match.json.gz --verify
 完整开发包约定见 [分发设计](../../docs/architecture/distribution-and-development.md)。本地和网站 `/replays` 共用浏览器播放器，见 [播放器说明](../player/README.md)。
 
 批量运行默认按 CPU、参赛人数与可用内存限制并发，`--jobs 1` 串行。输出仍按种子序号排序。系统失败输出 `match-error`，其他场继续；`batch.failedMatches` 统计失败数，失败批次返回非零退出码。每场独立进程，普通玩家故障只重建对应 isolate，比赛进程崩溃则整场不计分。
+
+开发包修订与游戏发行独立：`--release` 选择该游戏发行的当前开发包，另加 `--revision` 固定内容摘要。初始化 JSON 输出包含 `release` 和 `revision`，仅资料变化不会影响游戏规则或已有回放。

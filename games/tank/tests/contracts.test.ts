@@ -34,7 +34,6 @@ const context = (state: TankState, playerId = "alpha") => ({
 test("the manifest publishes a fixed 1v1 duel without an arena and with default limits", () => {
   expect(tankManifest).toMatchObject({
     id: "tank",
-    release: "tank@0.1.0",
     botProtocolVersion: 1,
     minPlayers: 2,
     maxPlayers: 2,

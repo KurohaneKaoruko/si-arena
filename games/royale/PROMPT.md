@@ -1,17 +1,17 @@
 # SI Arena：圈地大逃杀参赛提示词
 
-这是 SI Arena 平台的大逃杀竞技：最多 5 个 bot 同场，被淘汰即出局，最终名次按 Elo 逐对结算计入大逃杀排位分（初始 1000）。目标不是写出一份能运行的代码，而是写出尽可能强的策略——以稳定活过官方示例 bot 为底线，向排行榜上游竞争。
+这是 SI Arena 平台的大逃杀竞技：最多 5 个 bot 同场，被淘汰即出局，最终名次按 Elo 逐对结算计入大逃杀排位分（初始 1000）。目标不是写出一份能运行的代码，而是写出尽可能强的策略，在预算内持续提高对未知对手的竞争力。
 
-交付物是一份可直接上传的 UTF-8 JavaScript 完整文件：在开发包项目中工作时，把最终代码写入 bot.js 并完成本地验证；在对话中直接应答时，只输出最终完整代码，不输出 Markdown 围栏或解释。
+交付物是一份可直接上传的 UTF-8 JavaScript 完整文件 bot.js，以及保存在本地的研究记录。先完成下面的研究与验证流程，再交付本次预算内表现最好的策略。
 
-## 强度标准与验证
+<!-- SI_ARENA_RESEARCH -->
 
-- 验收底线：本地与 4 个官方示例 bot 同场打满 20 局（`pnpm arena run --bot ./bot.js --opponent ./bots/official.js --opponent ./bots/official.js --opponent ./bots/official.js --opponent ./bots/official.js --matches 20 --seed 42`），按每场 `match` 行 `result.players` 中的 `rank` 计算，你的平均名次优于官方 bot，且没有任何 tick 执行错误（批量汇总行的胜负只按第 1 名计）；未达标必须继续改进并复测。
-- 只给 `--bot` 时对手是 1 个官方 bot（两人局）；每多一个 `--opponent` 多一个对手，最多 4 个。两人局、五人局都要测：地图大小随人数变化。
-- 换起始种子复测（如 `--seed 1337`）确认不是种子运气；也可以挂自己的旧版本对弈，避免只针对官方 bot 过拟合。
+## 本游戏的验证方法
+
+- 满员基线命令：`pnpm arena run --bot ./bot.js --opponent ./bots/official.js --opponent ./bots/official.js --opponent ./bots/official.js --opponent ./bots/official.js --matches 20 --seed 42`。逐场读取 `match` 行的 `result.players`，按玩家 ID 统计冠军率和平均名次，并检查执行错误；批量胜负汇总不足以描述多人表现。用本地历史文件替换部分 --opponent，组成混合阵容。
+- 只给 `--bot` 时自动补满 5 席官方 bot；显式给出 `--opponent` 后人数为 1 + 对手数，最多 4 个对手。两人局、五人局都要测：地图大小随人数变化。
 - 分析败局而不是猜测：events 里的 death 记录了每次出局的原因，trail-cut 记录了切断者，据此定位是外出太贪、安全余量不足、被安全区吞掉还是进攻时机错误。
 - `pnpm arena dev --bot ./bot.js` 启动可视化调试页：命令输出本地 URL，在浏览器打开；整场自动跑完后可逐 tick 观察各方行为，再针对性修改策略。
-- 在没有本地环境的对话中使用本提示词时，同样要求按下面的结算顺序逐条推演关键场景（越界、同格、交换、自撞尾迹、被切断、被圈住、安全区）确认动作合法且有竞争力后再输出。
 
 ## 对局与名次
 
@@ -88,7 +88,7 @@ export default function tick({ game, Memory }) {
 
 ## Memory 与资源
 
-- 当前发行 royale@0.2.0、玩家接口 v1：源码和 SDK 在环境创建时加载一次，成功 tick 间复用 JavaScript 环境。全局变量、闭包、Map 与 TypedArray 可跨 tick 缓存，均占用 32MiB 堆预算。
+- 玩家接口 v1（发行与实际限额见 release.json）：源码和 SDK 在环境创建时加载一次，成功 tick 间复用 JavaScript 环境。全局变量、闭包、Map 与 TypedArray 可跨 tick 缓存，均占用 32MiB 堆预算。
 - 任一 tick 执行失败后重建环境，全局缓存和 API 模块状态清空，顶层代码重新运行；下一 tick 从上次成功的 JSON `Memory` 恢复。把恢复所需的计划与状态写进 Memory；不要把上一 tick 的观察缓存当作当前世界，每 tick 以新传入的 game 为准。
 - 默认预算：源码 256KiB、每 tick CPU 20ms（首次与重建后的 tick 包含玩家模块初始化）、isolate 常驻堆 32MiB、栈 256KiB、Memory 64KiB、动作输出 1KiB；以开发包 release.json 的 `resolvedLimits` 为准。
 - 抛错、超时、非法动作或超限时：该 tick 按 idle 处理，本次对 Memory 的修改丢弃（上次成功的 Memory 保留），下一 tick 继续调用你。停留不会自动避险：站在别人能走到的格子或即将消失的外圈上，停留同样可能出局。

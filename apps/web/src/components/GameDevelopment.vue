@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { GameCatalogEntry } from "@si-arena/protocol";
-import { parseGameDevelopment, parseGameReleaseMetadata } from "@si-arena/protocol";
+import {
+  devkitDownloadPath,
+  parseGameDevelopment,
+  parseGameReleaseMetadata,
+} from "@si-arena/protocol";
 import { computed, ref, watch } from "vue";
 import { useApiResource } from "../composables/useApiResource";
 import { useToast } from "../composables/useToast";
@@ -34,6 +38,15 @@ const {
     return value;
   },
 );
+// Derive same-site URLs from validated identity, never navigate an arbitrary archive URL.
+const downloadPath = computed(() => {
+  const value = release.value;
+  if (!value) return undefined;
+  const legacy = `${releasePath.value}/download`;
+  return value.archive.url === legacy
+    ? legacy
+    : devkitDownloadPath(value.game.id, value.game.release, value.manifestSha256);
+});
 const command = computed(
   () =>
     `npx @si-arena/cli@latest init ${props.game.id} ./${props.game.id}-bot --server ${JSON.stringify(window.location.origin)}`,
@@ -55,16 +68,13 @@ const steps = [
 const setupPrompt = computed(() => {
   const directory = `./${props.game.id}-bot`;
   return [
-    `我要参加 SI Arena 平台的「${props.game.name}」编程竞技。请你在我的电脑上完成环境准备、项目初始化与依赖安装，然后按项目内的参赛提示词为我编写参赛 bot，并用本地工具验证通过。`,
+    `我要参加 SI Arena 平台的「${props.game.name}」编程竞技。请作为我的策略研究 Agent，在本地完成环境准备、机制研究、对照实验和迭代优化，交付预算内最强的可用 bot。跑通代码或战胜官方示例不是任务终点。`,
     ``,
-    `1. 检查环境（node -v、pnpm -v）：需要 Node.js ≥ 26 与 pnpm ≥ 12；缺失或版本过低时，自行选择当前系统上合适的方式安装或升级。`,
-    `2. 在当前目录执行初始化命令：`,
+    `1. 检查 node -v、pnpm -v：需要 Node.js ≥ 26 与 pnpm ≥ 12，缺失时按当前系统准备环境。初始化命令如下；若目录已有项目，先检查发行与已有成果，保留代码和研究记录，不覆盖或删除非空目录：`,
     `   ${command.value}`,
-    `3. 进入 ${directory}，执行 pnpm install --frozen-lockfile。`,
-    `4. 依次完整阅读项目内的 PROMPT.md（比赛规则与胜负判定）、SDK.md（每 tick 玩家接口）和 bots/official.js（官方示例策略）。`,
-    `5. 以明显强于官方示例 bot 为目标编写完整参赛代码，写入 bot.js 覆盖模板；PROMPT.md 中「只输出最终完整代码」指写入该文件，不要另建文件或输出围栏。`,
-    `6. 运行 pnpm arena run --bot ./bot.js --matches 20 --seed 42，按 PROMPT.md 的强度标准验证：对官方 bot 胜率不低于 80%、无执行错误；未达标继续改进并复测。`,
-    `7. 完成后向我报告最终战绩，并提醒我回到平台网页，在游戏页用「上传策略」选择（或拖放）bot.js 文件上传参赛。`,
+    `2. 进入 ${directory}，执行 pnpm install --frozen-lockfile。阅读 PROMPT.md、SDK.md、release.json 和 bots/official.js；必要时核对包内规则实现。`,
+    `3. 完整执行 PROMPT.md 的研究流程与预算规则（用户明确要求优先），不要把安装完成或战胜官方示例当作任务完成。已有成果先保存并作为基线，用 pnpm arena run --bot ./bot.js 开始本地验证，后续对照实验、历史最佳保留和独立验证均按 PROMPT.md 执行。`,
+    `4. 交付最终 bot.js 与真实研究报告。研究记录留在本地，提醒我回到网页上传 bot.js，上传和线上开赛由我操作。`,
   ].join("\n");
 });
 async function copy(text: string, label: string, onFail?: () => void) {
@@ -123,9 +133,7 @@ watch(
         <AppButton @click="copy(setupPrompt, 'AI 安装提示词', () => (setupOpen = true))"
           >复制 AI 安装提示词</AppButton
         >
-        <AppButton v-if="release" :href="`${releasePath}/download`" download
-          >下载开发包 ZIP</AppButton
-        >
+        <AppButton v-if="release" :href="downloadPath" download>下载开发包 ZIP</AppButton>
         <span v-if="release" class="font-mono text-xs text-faint"
           >{{ (release.archive.bytes / 1024 / 1024).toFixed(1) }} MiB</span
         >

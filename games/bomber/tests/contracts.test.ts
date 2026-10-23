@@ -39,7 +39,6 @@ const context = (state: BomberState, playerId = "alpha") => ({
 test("the manifest publishes the arena and default limits", () => {
   expect(bomberManifest).toMatchObject({
     id: "bomber",
-    release: "bomber@0.1.0",
     botProtocolVersion: 1,
     minPlayers: 2,
     maxPlayers: 4,

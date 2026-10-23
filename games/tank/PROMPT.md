@@ -1,16 +1,16 @@
 # SI Arena：坦克对决参赛提示词
 
-这是 SI Arena 平台的排位竞技：你的 bot 会与官方示例 bot 及其他玩家上传的 bot 进行 1v1 坦克对决，成绩计入排行榜。目标不是写出一份能运行的代码，而是写出尽可能强的策略——以明显强于官方示例 bot 为底线，向排行榜上游竞争。
+这是 SI Arena 平台的排位竞技：你的 bot 会与官方示例 bot 及其他玩家上传的 bot 进行 1v1 坦克对决，成绩计入排行榜。目标不是写出一份能运行的代码，而是写出尽可能强的策略，在预算内持续提高对未知对手的竞争力。
 
-交付物是一份可直接上传的 UTF-8 JavaScript 完整文件：在开发包项目中工作时，把最终代码写入 bot.js 并完成本地验证；在对话中直接应答时，只输出最终完整代码，不输出 Markdown 围栏或解释。
+交付物是一份可直接上传的 UTF-8 JavaScript 完整文件 bot.js，以及保存在本地的研究记录。先完成下面的研究与验证流程，再交付本次预算内表现最好的策略。
 
-## 强度标准与验证
+<!-- SI_ARENA_RESEARCH -->
 
-- 验收底线：本地对官方示例 bot 打满 20 局（`pnpm arena run --bot ./bot.js --matches 20 --seed 42`，覆盖种子 42–61），胜率不低于 80%，且没有任何 tick 执行错误；未达标必须继续改进并复测。批量汇总行按 `result.players` 的 `rank` 统计胜负，并列第 1 记为平局。
-- 换起始种子复测（如 `--seed 1337`）确认不是种子运气；进一步可用 `--opponent` 挂自己的旧版本对弈，避免只针对官方 bot 过拟合。
+## 本游戏的验证方法
+
+- 基线命令：`pnpm arena run --bot ./bot.js --matches 20 --seed 42`（种子 42–61）。对战本地历史版本可用 `pnpm arena run --bot ./bot.js --opponent ./research/best-v1.js --matches 20 --seed 42`；先保存该历史文件。记录胜、平、负及执行错误；战胜官方 80% 也必须继续预算内的研究。
 - 分析败局而不是猜测：events 里的 hit 记录了每次被命中的位置与攻击者，bullets-cancelled 记录了对消，据此定位是躲避太慢、逼近路线暴露在对方炮口下，还是对峙时白白浪费炮弹。
 - `pnpm arena dev --bot ./bot.js` 启动可视化调试页：命令输出本地 URL，在浏览器打开；整场自动跑完后可逐 tick 观察双方行为，再针对性修改策略。
-- 在没有本地环境的对话中使用本提示词时，同样要求按下面的结算顺序逐条推演关键场景（移动阻挡、炮弹两个子步、对消、砖墙、命中与同归于尽）确认动作合法且有竞争力后再输出。
 
 ## 对局与胜负
 
@@ -86,7 +86,7 @@ export default function tick({ game, Memory }) {
 
 ## Memory 与资源
 
-- 当前发行 tank@0.1.0、玩家接口 v1：源码和 SDK 在环境创建时加载一次，成功 tick 间复用 JavaScript 环境。全局变量、闭包、Map 与 TypedArray 可跨 tick 缓存，均占用 32MiB 堆预算。
+- 玩家接口 v1（发行与实际限额见 release.json）：源码和 SDK 在环境创建时加载一次，成功 tick 间复用 JavaScript 环境。全局变量、闭包、Map 与 TypedArray 可跨 tick 缓存，均占用 32MiB 堆预算。
 - 任一 tick 执行失败后重建环境，全局缓存和 API 模块状态清空，顶层代码重新运行；下一 tick 从上次成功的 JSON `Memory` 恢复。把恢复所需的计划与状态写进 Memory；不要把上一 tick 的观察缓存当作当前世界，每 tick 以新传入的 game 为准。
 - 默认预算：源码 256KiB、每 tick CPU 20ms（首次与重建后的 tick 包含玩家模块初始化）、isolate 常驻堆 32MiB、栈 256KiB、Memory 64KiB、动作输出 1KiB；以开发包 release.json 的 `resolvedLimits` 为准。
 - 抛错、超时、非法动作或超限时：该 tick 按 idle 处理，本次对 Memory 的修改丢弃（上次成功的 Memory 保留），下一 tick 继续调用你。停留不会自动躲弹：站在对方射线上不动照样挨打。

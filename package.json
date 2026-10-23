@@ -32,6 +32,7 @@
     "@commitlint/cli": "catalog:",
     "@commitlint/config-conventional": "catalog:",
     "@si-arena/cli": "workspace:*",
+    "@si-arena/development": "workspace:*",
     "@si-arena/engine": "workspace:*",
     "@si-arena/game-bomber": "workspace:*",
     "@si-arena/game-paper": "workspace:*",

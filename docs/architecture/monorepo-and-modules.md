@@ -2,7 +2,7 @@
 
 ## 目录
 
-仓库项目标识为 `si-arena`，产品名称为 SI Arena，SI 代表 Super Intelligence。对外发布的 npm 包统一使用 `@si-arena` 组织：公共包按职责命名为 `@si-arena/protocol`、`@si-arena/engine`、`@si-arena/sandbox`、`@si-arena/runner`、`@si-arena/player` 和 `@si-arena/cli`，游戏包采用 `@si-arena/game-<gameId>`，圈地为 `@si-arena/game-paper`。平台 web、server 和 worker 是私有 workspace 应用，不作为玩家开发包发布。`@si-arena/db` 是私有共享包，承载 Drizzle 表结构、数据库连接工厂与迁移目录，仅供 server 和 worker 在 workspace 内部使用，不对外发布。
+仓库项目标识为 `si-arena`，产品名称为 SI Arena，SI 代表 Super Intelligence。对外发布的 npm 包统一使用 `@si-arena` 组织：公共包按职责命名为 `@si-arena/protocol`、`@si-arena/engine`、`@si-arena/sandbox`、`@si-arena/runner`、`@si-arena/player`、`@si-arena/cli` 和 `@si-arena/development`，游戏包采用 `@si-arena/game-<gameId>`，圈地为 `@si-arena/game-paper`。平台 web、server 和 worker 是私有 workspace 应用，不作为玩家开发包发布。`@si-arena/db` 是私有共享包，承载 Drizzle 表结构、数据库连接工厂与迁移目录，仅供 server 和 worker 在 workspace 内部使用，不对外发布。
 
 ```text
 configs/
@@ -18,6 +18,7 @@ apps/
   worker/                比赛任务、回放保存、排位结算
 packages/
   protocol/              游戏契约、JSON 类型、回放协议
+  development/           公共研究提示词、资料组装、开发包修订存储
   engine/                通用 tick 循环与执行编排
   sandbox/               isolate 运行时、资源计量、玩家提交
   runner/                独立比赛进程、可信注册、有界通信与监督
@@ -40,6 +41,7 @@ games/
 ## 依赖方向
 
 - `protocol` 不依赖其他业务包，不包含运行器和数据库。
+- `development` 只依赖 protocol 和 Node 文件 API，供 server 与构建脚本组装资料和管理开发包修订；不进入规则、沙箱或浏览器运行时。
 - `sandbox` 依赖协议，不依赖账号、排位、游戏画面或数据库。
 - `engine` 依赖协议，通过执行适配器调用沙箱，不依赖某个具体游戏。
 - 游戏规则和 SDK 依赖协议及必要纯函数，不依赖平台业务。

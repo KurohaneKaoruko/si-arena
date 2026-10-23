@@ -36,7 +36,6 @@ const context = (state: RoyaleState, playerId = "alpha") => ({
 test("the manifest publishes the arena and default limits", () => {
   expect(royaleManifest).toMatchObject({
     id: "royale",
-    release: "royale@0.2.0",
     botProtocolVersion: 1,
     minPlayers: 2,
     maxPlayers: 5,

@@ -1,8 +1,10 @@
+import { readDevelopmentMaterials, readDevkit } from "@si-arena/development";
 import { open, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import {
+  type GameReleaseMetadata,
   GAME_ID_PATTERN,
   GAME_RELEASE_PATTERN,
   parseGameReleaseMetadata,
@@ -14,6 +16,31 @@ export const defaultReleasesDirectory = resolve(
   fileURLToPath(new URL("../../../../", import.meta.url)),
   "data/releases",
 );
+async function download(reply: FastifyReply, release: GameReleaseMetadata, path: string) {
+  const file = await open(join(path, "devkit.zip"), "r").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!file) return sendError(reply, 404, "DEVKIT_NOT_FOUND", "开发包文件不存在");
+  try {
+    const info = await file.stat();
+    if (!info.isFile() || info.size !== release.archive.bytes)
+      throw new Error("Development package size differs from release metadata");
+    return reply
+      .header("Content-Type", "application/zip")
+      .header("Content-Length", info.size)
+      .header(
+        "Content-Disposition",
+        `attachment; filename="${release.game.id}-${release.game.release}-devkit.zip"`,
+      )
+      .header("ETag", `"${release.archive.sha256}"`)
+      .header("Cache-Control", "public, max-age=31536000, immutable")
+      .send(file.createReadStream());
+  } catch (error) {
+    await file.close();
+    throw error;
+  }
+}
 export function releaseRoutes(directory = defaultReleasesDirectory): FastifyPluginAsync {
   async function metadata(gameId: string, release: string) {
     if (!GAME_ID_PATTERN.test(gameId) || !GAME_RELEASE_PATTERN.test(release)) return null;
@@ -29,6 +56,7 @@ export function releaseRoutes(directory = defaultReleasesDirectory): FastifyPlug
       throw new Error("Release metadata identity mismatch");
     return value;
   }
+
   return async (app) => {
     app.get<{ Params: { gameId: string } }>(
       "/api/games/:gameId/official-bot",
@@ -51,25 +79,22 @@ export function releaseRoutes(directory = defaultReleasesDirectory): FastifyPlug
           (candidate) => candidate.entry.id === request.params.gameId,
         );
         if (!game) return sendError(reply, 404, "GAME_NOT_FOUND", "游戏不存在");
-        const [prompt, sdk, template, officialBot] = await Promise.all([
-          readFile(game.developmentFiles.prompt, "utf8"),
-          readFile(game.developmentFiles.sdk, "utf8"),
-          readFile(game.developmentFiles.template, "utf8"),
+        const [materials, officialBot] = await Promise.all([
+          readDevelopmentMaterials(game.developmentFiles),
           readFile(game.officialBotUrl, "utf8"),
         ]);
         reply.header("Cache-Control", "no-store");
-        return { prompt, sdk, template, officialBot };
+        return { ...materials, officialBot };
       },
     );
     app.get<{ Params: { gameId: string; releaseId: string } }>(
       "/api/games/:gameId/releases/:releaseId",
       async (request, reply) => {
         reply.header("Cache-Control", "no-store");
-        const result = await metadata(request.params.gameId, request.params.releaseId);
+        const result = await readDevkit(directory, request.params.gameId, request.params.releaseId);
         if (!result)
           return sendError(reply, 404, "RELEASE_NOT_FOUND", "游戏发行不存在或开发包尚未生成");
-        reply.header("Cache-Control", "public, max-age=31536000, immutable");
-        return result;
+        return result.metadata;
       },
     );
     app.get<{ Params: { gameId: string } }>(
@@ -78,9 +103,9 @@ export function releaseRoutes(directory = defaultReleasesDirectory): FastifyPlug
         const game = gameCatalog.get(request.params.gameId);
         if (!game) return sendError(reply, 404, "GAME_NOT_FOUND", "游戏不存在");
         reply.header("Cache-Control", "no-store");
-        return reply.redirect(
-          `/api/games/${game.id}/releases/${encodeURIComponent(game.release)}/download`,
-        );
+        const selected = await readDevkit(directory, game.id, game.release);
+        if (!selected) return sendError(reply, 404, "RELEASE_NOT_FOUND", "开发包尚未生成");
+        return reply.redirect(selected.metadata.archive.url);
       },
     );
     app.get<{ Params: { gameId: string; releaseId: string } }>(
@@ -91,31 +116,28 @@ export function releaseRoutes(directory = defaultReleasesDirectory): FastifyPlug
         const release = await metadata(gameId, releaseId);
         if (!release)
           return sendError(reply, 404, "RELEASE_NOT_FOUND", "游戏发行不存在或开发包尚未生成");
-        const file = await open(join(directory, gameId, releaseId, "devkit.zip"), "r").catch(
-          (error: NodeJS.ErrnoException) => {
-            if (error.code === "ENOENT") return null;
-            throw error;
-          },
-        );
-        if (!file) return sendError(reply, 404, "DEVKIT_NOT_FOUND", "开发包文件不存在");
-        try {
-          const info = await file.stat();
-          if (!info.isFile() || info.size !== release.archive.bytes)
-            throw new Error("Development package size differs from release metadata");
-          return reply
-            .header("Content-Type", "application/zip")
-            .header("Content-Length", info.size)
-            .header(
-              "Content-Disposition",
-              `attachment; filename="${gameId}-${releaseId}-devkit.zip"`,
-            )
-            .header("ETag", `"${release.archive.sha256}"`)
-            .header("Cache-Control", "public, max-age=31536000, immutable")
-            .send(file.createReadStream());
-        } catch (error) {
-          await file.close();
-          throw error;
-        }
+        return download(reply, release, join(directory, gameId, releaseId));
+      },
+    );
+    app.get<{ Params: { gameId: string; releaseId: string; revision: string } }>(
+      "/api/games/:gameId/releases/:releaseId/devkits/:revision",
+      async (request, reply) => {
+        reply.header("Cache-Control", "no-store");
+        const { gameId, releaseId, revision } = request.params;
+        const selected = await readDevkit(directory, gameId, releaseId, revision);
+        if (!selected) return sendError(reply, 404, "RELEASE_NOT_FOUND", "开发包修订不存在");
+        reply.header("Cache-Control", "public, max-age=31536000, immutable");
+        return selected.metadata;
+      },
+    );
+    app.get<{ Params: { gameId: string; releaseId: string; revision: string } }>(
+      "/api/games/:gameId/releases/:releaseId/devkits/:revision/download",
+      async (request, reply) => {
+        reply.header("Cache-Control", "no-store");
+        const { gameId, releaseId, revision } = request.params;
+        const selected = await readDevkit(directory, gameId, releaseId, revision);
+        if (!selected) return sendError(reply, 404, "RELEASE_NOT_FOUND", "开发包修订不存在");
+        return download(reply, selected.metadata, selected.directory);
       },
     );
   };

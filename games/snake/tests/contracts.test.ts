@@ -32,7 +32,6 @@ const context = (state: SnakeState, playerId = "alpha") => ({
 test("the manifest publishes the arena and default limits", () => {
   expect(snakeManifest).toMatchObject({
     id: "snake",
-    release: "snake@0.1.0",
     botProtocolVersion: 1,
     minPlayers: 2,
     maxPlayers: 4,

@@ -1,6 +1,6 @@
 # 圈地大逃杀玩家 API
 
-当前发行为 `royale@0.2.0`、玩家接口 v1。玩家提交自包含的 UTF-8 JavaScript ESM，默认导出同步函数，每 tick 调用一次：
+当前发行为 `当前游戏发行（见 release.json）`、玩家接口 v1。玩家提交自包含的 UTF-8 JavaScript ESM，默认导出同步函数，每 tick 调用一次：
 
 ```js
 /** @param {import("@si-arena/game-royale/sdk").RoyaleTickInput} input */

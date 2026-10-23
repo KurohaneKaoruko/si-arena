@@ -61,7 +61,9 @@ test("copies materials with feedback, escapes code and links only to the pinned 
   expect(wrapper.find("img").exists()).toBe(false);
   expect(wrapper.text()).toContain(docs.officialBot);
   const download = wrapper.findAll("a").find((link) => link.text() === "下载开发包 ZIP")!;
-  expect(download.attributes("href")).toBe("/api/games/paper/releases/paper%400.3.0/download");
+  expect(download.attributes("href")).toBe(
+    `/api/games/paper/releases/${encodeURIComponent(paperGame.manifest.release)}/devkits/${metadata.manifestSha256}/download`,
+  );
 });
 test("materials remain usable when the archive is unavailable and clipboard failures explain manual copying", async () => {
   vi.stubGlobal("navigator", {

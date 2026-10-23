@@ -13,7 +13,7 @@ import { serveReplay } from "./viewer";
 const HELP = `SI Arena CLI
 
 Usage:
-  arena init <gameId> <directory> [--server <url>] [--release <releaseId>]
+  arena init <gameId> <directory> [--server <url>] [--release <releaseId>] [--revision <sha256>]
   arena --registry ./arena.config.mjs run --bot ./bot.js [options]
   arena --registry ./arena.config.mjs replay ./replays/match.json.gz --verify [--logs]
   arena replay ./replays/match.json.gz  (standalone development package viewer)
@@ -21,7 +21,8 @@ Usage:
 
 Options:
   --server <url>     Platform origin (HTTP or HTTPS)
-  --release <id>     Download a fixed historical release
+  --release <id>     Select a game release (latest development package revision)
+  --revision <sha>   Pin a development package revision; requires --release
   --registry <file>  Explicitly trust and load a local game registration module
   --game <id>        Select a registered game (optional with one game)
   --bot <file>       Player JavaScript source, executed in its own V8 isolate
@@ -62,6 +63,7 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
       registry: { type: "string" },
       server: { type: "string" },
       release: { type: "string" },
+      revision: { type: "string" },
       game: { type: "string" },
       bot: { type: "string" },
       opponent: { type: "string", multiple: true },
@@ -80,7 +82,7 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
     throw new Error(`Unknown command: ${command ?? "(missing)"}. Run arena --help.`);
   const allowed = new Set(
     command === "init"
-      ? ["server", "release"]
+      ? ["server", "release", "revision"]
       : [
           "registry",
           "game",
@@ -102,7 +104,7 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
   if (command === "init") {
     if (positionals.length !== 3)
       throw new Error(
-        "Usage: arena init <gameId> <directory> [--server <url>] [--release <releaseId>]",
+        "Usage: arena init <gameId> <directory> [--server <url>] [--release <releaseId>] [--revision <sha256>]",
       );
     const result = await initializeGame({
       gameId: positionals[1]!,
@@ -110,6 +112,7 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
       cwd,
       ...(values.server ? { server: values.server } : {}),
       ...(values.release ? { release: values.release } : {}),
+      ...(values.revision ? { revision: values.revision } : {}),
       ...(context.signal ? { signal: context.signal } : {}),
     });
     output({

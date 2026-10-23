@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { zipSync } from "fflate";
 import {
+  devkitDownloadPath,
   resolveResourceLimits,
   type DevkitDescriptor,
   type GameReleaseMetadata,
@@ -37,7 +38,7 @@ const descriptor: DevkitDescriptor = {
   runtime: { node: ">=26", pnpm: ">=12", nodeVersion: "26.11.1", packageManager: "pnpm@12.14.0" },
   sourceLockSha256: "a".repeat(64),
 };
-function archive(change?: (files: Record<string, Uint8Array>) => void) {
+function archive(change?: (files: Record<string, Uint8Array>) => void, prompt = "PROMPT.md") {
   const files = Object.fromEntries(
     [
       "package.json",
@@ -52,7 +53,13 @@ function archive(change?: (files: Record<string, Uint8Array>) => void) {
       "dist/viewer/index.html",
     ].map((path) => [
       path,
-      Buffer.from(path === "arena.mjs" ? 'throw new Error("must not execute during init")' : path),
+      Buffer.from(
+        path === "arena.mjs"
+          ? 'throw new Error("must not execute during init")'
+          : path === "PROMPT.md"
+            ? prompt
+            : path,
+      ),
     ]),
   );
   const entries = Object.fromEntries(
@@ -76,7 +83,8 @@ function archive(change?: (files: Record<string, Uint8Array>) => void) {
   };
   return { bytes, metadata };
 }
-async function fixture(pkg = archive()) {
+async function fixture(pkg = archive(), later?: ReturnType<typeof archive>) {
+  let selected = pkg;
   const directory = await mkdtemp(join(tmpdir(), "si-arena-init-"));
   cleanups.push(() => rm(directory, { recursive: true, force: true }));
   const paths: string[] = [];
@@ -85,9 +93,16 @@ async function fixture(pkg = archive()) {
     if (request.url === "/api/games/counter") {
       response.setHeader("Content-Type", "application/json");
       response.end(JSON.stringify(descriptor.game));
-    } else if (request.url === "/api/games/counter/releases/counter%401")
+    } else if (request.url === "/api/games/counter/releases/counter%401") {
+      response.end(JSON.stringify(selected.metadata));
+      if (later) selected = later;
+    } else if (
+      request.url ===
+      `/api/games/counter/releases/counter%401/devkits/${pkg.metadata.manifestSha256}`
+    )
       response.end(JSON.stringify(pkg.metadata));
     else if (request.url === pkg.metadata.archive.url) response.end(pkg.bytes);
+    else if (later && request.url === later.metadata.archive.url) response.end(later.bytes);
     else response.writeHead(404).end();
   });
   server.listen(0, "127.0.0.1");
@@ -215,4 +230,42 @@ test("honors cancellation without leaving files", async () => {
     }),
   ).rejects.toThrow();
   expect(await readdir(f.directory)).toEqual([]);
+});
+
+test("pins development revisions across a selector switch and supports explicit revision downloads", async () => {
+  const first = archive(undefined, "first prompt");
+  const second = archive(undefined, "second prompt");
+  for (const pkg of [first, second])
+    pkg.metadata.archive.url = devkitDownloadPath(
+      "counter",
+      "counter@1",
+      pkg.metadata.manifestSha256,
+    );
+  const f = await fixture(first, second);
+  const options = { gameId: "counter", cwd: f.directory, server: f.server };
+  const result = await initializeGame({ ...options, directory: "first" });
+  expect(result.revision).toBe(first.metadata.manifestSha256);
+  expect(await readFile(join(result.directory, "PROMPT.md"), "utf8")).toBe("first prompt");
+  const latest = await initializeGame({ ...options, directory: "latest" });
+  expect(latest.release).toBe(result.release);
+  expect(latest.revision).toBe(second.metadata.manifestSha256);
+  const pinned = await initializeGame({
+    ...options,
+    directory: "pinned",
+    release: result.release,
+    revision: result.revision,
+  });
+  expect(pinned.revision).toBe(result.revision);
+  expect(await readFile(join(pinned.directory, "PROMPT.md"), "utf8")).toBe("first prompt");
+  await expect(
+    initializeGame({ ...options, directory: "invalid", revision: result.revision }),
+  ).rejects.toThrow("requires --release");
+  await expect(
+    initializeGame({
+      ...options,
+      directory: "invalid",
+      release: result.release,
+      revision: "../escape",
+    }),
+  ).rejects.toThrow("SHA-256");
 });

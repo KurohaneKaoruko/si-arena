@@ -3,6 +3,7 @@ import { lstat, mkdir, mkdtemp, readdir, rename, rm, rmdir, writeFile } from "no
 import { dirname, join, resolve } from "node:path";
 import { unzipSync } from "fflate";
 import {
+  DEVKIT_REVISION_PATTERN,
   DEVKIT_MAX_ARCHIVE_BYTES,
   DEVKIT_MAX_EXTRACTED_BYTES,
   DEVKIT_MAX_FILES,
@@ -21,12 +22,18 @@ export async function initializeGame(options: {
   directory: string;
   server?: string;
   release?: string;
+  revision?: string;
   cwd?: string;
   signal?: AbortSignal;
-}): Promise<{ directory: string; release: string }> {
+}): Promise<{ directory: string; release: string; revision: string }> {
   if (!GAME_ID_PATTERN.test(options.gameId)) throw new Error("Invalid game ID");
   if (options.release !== undefined && !GAME_RELEASE_PATTERN.test(options.release))
     throw new Error("Invalid release ID");
+  if (
+    options.revision !== undefined &&
+    (!options.release || !DEVKIT_REVISION_PATTERN.test(options.revision))
+  )
+    throw new Error("--revision requires --release and a SHA-256 revision");
   const base = serverBase(options.server ?? DEFAULT_SERVER_URL);
   const target = resolve(options.cwd ?? process.cwd(), options.directory);
   const existing = await lstat(target).catch((error: NodeJS.ErrnoException) => {
@@ -72,7 +79,7 @@ export async function initializeGame(options: {
       release = raw.release;
     }
     const metadataUrl = new URL(
-      `games/${options.gameId}/releases/${encodeURIComponent(release)}`,
+      `games/${options.gameId}/releases/${encodeURIComponent(release)}${options.revision ? `/devkits/${options.revision}` : ""}`,
       base,
     );
     const metadata = parseGameReleaseMetadata(
@@ -82,7 +89,11 @@ export async function initializeGame(options: {
         ),
       ),
     );
-    if (metadata.game.id !== options.gameId || metadata.game.release !== release)
+    if (
+      metadata.game.id !== options.gameId ||
+      metadata.game.release !== release ||
+      (options.revision !== undefined && metadata.manifestSha256 !== options.revision)
+    )
       throw new Error("Release metadata does not match the requested game");
     const archiveUrl = new URL(metadata.archive.url, metadataUrl);
     if (
@@ -116,7 +127,7 @@ export async function initializeGame(options: {
       throw error;
     }
     stage = undefined;
-    return { directory: target, release };
+    return { directory: target, release, revision: metadata.manifestSha256 };
   } finally {
     if (stage) await rm(stage, { recursive: true, force: true });
     if (created) await rmdir(target).catch(() => {});
@@ -140,7 +151,7 @@ function serverBase(value: string): URL {
 }
 async function download(url: URL, max: number, signal: AbortSignal): Promise<Uint8Array> {
   if (max > DEVKIT_MAX_ARCHIVE_BYTES) throw new Error("Development package exceeds download limit");
-  const response = await fetch(url, { signal, redirect: "error" });
+  const response = await fetch(url, { signal, redirect: "error", cache: "no-store" });
   if (!response.ok) {
     await response.body?.cancel();
     throw new Error(`Download failed: HTTP ${response.status} (${url.pathname})`);
