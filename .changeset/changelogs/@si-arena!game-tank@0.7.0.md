@@ -1,0 +1,10 @@
+## 0.7.0
+
+### Minor Changes
+
+- 新增独立 1v1 游戏「坦克对决」（tank@0.1.0，玩家接口 v1）：21×15 中心对称砖墙迷宫，炮弹每 tick 飞两格、打穿砖墙、迎面对消，三点生命先清零者负；附规则、SDK、renderer、官方 bot 与完整测试，并在服务端、worker、网站、本地 CLI 与开发包中注册。
+
+### Patch Changes
+
+- Updated dependencies:
+  - @si-arena/protocol@0.7.0

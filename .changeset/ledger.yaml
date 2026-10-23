@@ -22,6 +22,12 @@
   dir: packages/cli
   intents:
     - match-runner
+"@si-arena/cli@0.7.0":
+  dir: packages/cli
+  intents:
+    - bomber-game
+    - snake-game
+    - tank-game
 "@si-arena/engine@0.2.0":
   dir: packages/engine
   intents:
@@ -46,6 +52,10 @@
   dir: packages/engine
   intents:
     - match-runner
+"@si-arena/game-bomber@0.7.0":
+  dir: games/bomber
+  intents:
+    - bomber-game
 "@si-arena/game-paper@0.2.0":
   dir: games/paper
   intents:
@@ -82,6 +92,14 @@
   dir: games/royale
   intents:
     - match-runner
+"@si-arena/game-snake@0.7.0":
+  dir: games/snake
+  intents:
+    - snake-game
+"@si-arena/game-tank@0.7.0":
+  dir: games/tank
+  intents:
+    - tank-game
 "@si-arena/player@0.2.0":
   dir: packages/player
   intents:
