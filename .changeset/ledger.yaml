@@ -28,6 +28,10 @@
     - bomber-game
     - snake-game
     - tank-game
+"@si-arena/cli@0.8.0":
+  dir: packages/cli
+  intents:
+    - latest-server-devkits
 "@si-arena/engine@0.2.0":
   dir: packages/engine
   intents:
@@ -148,6 +152,10 @@
   dir: packages/protocol
   intents:
     - match-runner
+"@si-arena/protocol@0.8.0":
+  dir: packages/protocol
+  intents:
+    - latest-server-devkits
 "@si-arena/runner@0.6.0":
   dir: packages/runner
   intents:

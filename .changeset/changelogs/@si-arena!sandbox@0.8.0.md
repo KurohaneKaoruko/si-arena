@@ -1,6 +1,6 @@
-## 0.7.0
+## 0.8.0
 
 ### Patch Changes
 
 - Updated dependencies:
-  - @si-arena/protocol@0.7.0
+  - @si-arena/protocol@0.8.0
