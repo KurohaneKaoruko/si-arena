@@ -3,7 +3,7 @@ import { TETRIS_LINE_POINTS } from "../constants";
 import type { TetrisAction, TetrisEvent, TetrisObservation, TetrisState } from "../sdk";
 import { parseTetrisAction, tetrisDefaultAction } from "./actions";
 import { observeTetris, tetrisFinished } from "./observation";
-import { fallInterval, fits, initTetris, levelOf, pieceCells, SPAWN_X } from "./state";
+import { fallInterval, fits, initTetris, levelOf, pieceCells, SPAWN_X, xorshift32 } from "./state";
 
 export { parseTetrisAction } from "./actions";
 export { parseTetrisState } from "./state";
@@ -65,13 +65,7 @@ function workingCopy(state: DeepReadonly<TetrisState>): TetrisState {
 /** Draws the next type, appending a fresh shuffled bag when the queue runs low. */
 function drawFromBag(state: TetrisState): number {
   let rngState = state.rngState;
-  const next = () => {
-    rngState ^= rngState << 13;
-    rngState ^= rngState >>> 17;
-    rngState ^= rngState << 5;
-    rngState >>>= 0;
-    return rngState;
-  };
+  const next = () => (rngState = xorshift32(rngState));
   const type = state.queue.shift()!;
   if (state.queue.length < 2) {
     const bag = [1, 2, 3, 4, 5, 6, 7];

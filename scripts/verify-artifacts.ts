@@ -213,16 +213,15 @@ let tetrisState = tetrisGame.rules.init({
   seed: 2, config: tetrisGame.manifest.config,
   players: [{ id: "alpha", slot: 0 }],
 });
-void tetrisState;
 let tetrisResult = undefined as ReturnType<typeof tetrisGame.rules.step>["result"];
 for (let tick = 0; tick < 1500 && !tetrisResult; tick++) {
   const output = tetrisGame.rules.step(tetrisState, { alpha: { type: "idle" as const } });
   tetrisState = output.nextState; tetrisResult = output.result;
 }
+// An idle player never clears a line and tops out once the stack reaches the spawn row.
 if (tetrisResult?.reason !== "top-out" || tetrisResult.completedTicks !== 1260 || tetrisResult.players.some(p => p.rank !== 1 || p.score !== 0)) {
   throw new Error("Standalone tetris run returned an unexpected result");
 }
-void TETRIS_SDK_SOURCE;
 const bot = await SandboxPlayer.create({
   matchId: "artifact", playerId: "alpha", source: "let calls=0;export default ({game,Memory})=>{calls++;Memory.n=(Memory.n??0)+1;Memory.calls=calls;game.act()}",
   sdkSource: "export default (o,{submit})=>{submit({type:'idle'});return {act(){submit({type:o.fail?'invalid':'idle'})}}}",

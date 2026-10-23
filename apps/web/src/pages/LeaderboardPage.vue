@@ -96,14 +96,18 @@ defineExpose({ refresh: reload });
           <caption class="sr-only">
             {{
               game.name
-            }}排行榜，按排位分排序
+            }}{{
+              solo ? "排行榜，按单人最高得分排序" : "排行榜，按排位分排序"
+            }}
           </caption>
           <thead class="text-[13px] text-faint">
             <tr>
               <th scope="col" class="w-12 py-3.5 pr-2 pl-4 font-medium @lg:w-16 @lg:pl-5">#</th>
               <th scope="col" class="px-2 py-3.5 font-medium">选手</th>
               <th scope="col" class="hidden px-2 py-3.5 font-medium @lg:table-cell">战绩</th>
-              <th scope="col" class="py-3.5 pr-4 pl-2 text-right font-medium @lg:pr-5">排位分</th>
+              <th scope="col" class="py-3.5 pr-4 pl-2 text-right font-medium @lg:pr-5">
+                {{ solo ? "最高分" : "排位分" }}
+              </th>
               <th v-if="challengeable" scope="col" class="w-0 py-3.5 pr-4 @lg:pr-5">
                 <span class="sr-only">挑战</span>
               </th>

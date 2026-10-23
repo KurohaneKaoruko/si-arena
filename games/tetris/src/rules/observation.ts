@@ -19,7 +19,7 @@ function readEvents(raw: unknown, ids: readonly string[]): TetrisEvent[] {
     if (!ids.includes(id)) throw new TypeError("Unknown event player");
     return id;
   };
-  return readArray(raw, raw.length, "events").map((item): TetrisEvent => {
+  return raw.map((item): TetrisEvent => {
     if (item === null || typeof item !== "object") throw new TypeError("Invalid event");
     const type = Object.getOwnPropertyDescriptor(item, "type")?.value;
     if (type === "spawn") {

@@ -1,4 +1,5 @@
 ---
+"@si-arena/engine": minor
 "@si-arena/protocol": minor
 ---
 

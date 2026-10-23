@@ -121,18 +121,31 @@ function shuffledBag(next: () => number): TetrisPieceType[] {
   return bag;
 }
 
-/** xorshift32; state is stored in the world so runs stay reproducible. */
+/** One xorshift32 round; the only place the bit-twiddling lives. */
+export function xorshift32(state: number): number {
+  state ^= state << 13;
+  state ^= state >>> 17;
+  state ^= state << 5;
+  return state >>> 0;
+}
+
+/**
+ * xorshift32 stream; the exposed state is live, so a snapshot taken after
+ * consuming draws reflects every `next()` call made so far.
+ */
 export function createRng(seed: number): { state: number; next(): number } {
-  let state = seed || 0x9e3779b9;
+  let current = seed || 0x9e3779b9;
   const next = () => {
-    state ^= state << 13;
-    state ^= state >>> 17;
-    state ^= state << 5;
-    state >>>= 0;
-    return state;
+    current = xorshift32(current);
+    return current;
   };
   for (let warmUp = 0; warmUp < 4; warmUp++) next();
-  return { state, next };
+  return {
+    next,
+    get state() {
+      return current;
+    },
+  };
 }
 
 export function initTetris(input: InitInput): TetrisState {
