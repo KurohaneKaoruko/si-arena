@@ -19,6 +19,7 @@ const row = (rank: number, userId: string, username: string) => ({
   draws: 1,
   losses: 1,
   placementTotal: 0,
+  bestScore: 0,
 });
 const board = {
   total: 2,

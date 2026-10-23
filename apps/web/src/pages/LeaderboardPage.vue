@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { clampMatchPage, type GameCatalogEntry, type LeaderboardPlayer } from "@si-arena/protocol";
+import {
+  clampMatchPage,
+  isSoloGame,
+  type GameCatalogEntry,
+  type LeaderboardPlayer,
+} from "@si-arena/protocol";
 import { parseLeaderboard } from "../api/contracts";
 import { session } from "../auth/session";
 import { useApiResource } from "../composables/useApiResource";
@@ -33,16 +38,19 @@ const { data, status, empty, error, refreshError, pending, reload } = useApiReso
   },
 );
 const arena = computed(() => !!props.game.arena);
-const challengeable = computed(() => !arena.value && !!session.user);
+const solo = computed(() => isSoloGame(props.game));
+const challengeable = computed(() => !arena.value && !solo.value && !!session.user);
 const match = useMatchRequest(() => props.game.id);
 const podium = computed(() => (data.value?.page === 1 ? data.value.players.slice(0, 3) : []));
 
 function record(p: LeaderboardPlayer) {
+  if (solo.value) return `${p.matchesPlayed} 次挑战`;
   if (!arena.value) return `${p.matchesPlayed} 场 · ${p.wins} 胜 ${p.draws} 平 ${p.losses} 负`;
   const average = p.matchesPlayed ? (p.placementTotal / p.matchesPlayed).toFixed(1) : "—";
   return `${p.matchesPlayed} 场 · ${p.wins} 冠 · 平均第 ${average} 名`;
 }
 function score(p: LeaderboardPlayer) {
+  if (solo.value) return p.bestScore.toLocaleString();
   return p.rating.toFixed(2);
 }
 function rankClass(rank: number) {
