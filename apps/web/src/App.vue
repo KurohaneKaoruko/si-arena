@@ -8,7 +8,7 @@ import ToastHost from "./components/ui/ToastHost.vue";
 import AppButton from "./components/ui/AppButton.vue";
 
 const route = useRoute();
-const gameWorkspace = computed(() => !!route.params.gameId);
+const gameWorkspace = computed(() => route.meta.workspace === true);
 /** Sign-in pages bring their own brand panel instead of the site header. */
 const bare = computed(() => route.meta.bare === true);
 provideCatalog();

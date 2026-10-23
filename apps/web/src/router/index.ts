@@ -53,6 +53,8 @@ export const router = createRouter({
     {
       path: "/games/:gameId",
       component: () => import("../pages/GameLayout.vue"),
+      // Fixed-viewport workbench: the shell stops page scrolling for these routes only.
+      meta: { workspace: true },
       children: [
         {
           path: "",
