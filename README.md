@@ -161,7 +161,7 @@ API 提供 `/health`、`/api/games`、`/api/games/:gameId`，`/api/auth` 下的�
 
 PostgreSQL 的本地启动命令为 `docker compose -f deploy/compose.yaml up -d db`，数据保存在命名 volume；数据库连接使用 .env 中的 DATABASE_URL。首次使用先运行 `pnpm db:migrate` 创建表结构；server 启动时会幂等初始化 `official` 官方账号，并为每个已注册游戏安装官方 bot 源码（排位分与统计保持不变）；`BOSSES_DIR`（默认 `data/bosses`）下有 `<gameId>.js` 时同时安装该游戏的私有 Boss。游戏目录与规则页不依赖数据库连接，认证接口需要数据库。数据库集成测试需要 `ARENA_TEST_DATABASE_URL` 指向可创建临时库的连接，例如 `ARENA_TEST_DATABASE_URL=postgresql://si_arena:si_arena@127.0.0.1:5433/si_arena pnpm test --project server`；测试自建并清理独立数据库，未设置该变量时自动跳过。
 
-apps 包含 web、server、worker；packages 包含 protocol、development（开发资料与包修订）、engine、sandbox、runner、player、cli 与 db（server 与 worker 共享的 Drizzle 表结构、连接和迁移）；games/paper、games/royale、games/snake、games/bomber 与 games/tank 分别包含圈地、圈地大逃杀、贪吃蛇大作战、炸弹人与坦克对决的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
+apps 包含 web、server、worker；packages 包含 protocol、development（私有开发资料与当前开发包管理）、engine、sandbox、runner、player、cli 与 db（server 与 worker 共享的 Drizzle 表结构、连接和迁移）；games/paper、games/royale、games/snake、games/bomber 与 games/tank 分别包含圈地、圈地大逃杀、贪吃蛇大作战、炸弹人与坦克对决的 manifest、SDK、规则与渲染入口。规则与渲染分别导出，服务端加载游戏元数据不会引入 Vue 或 DOM。
 
 `packages/runner` 提供整场独立进程执行器，`packages/sandbox` 提供每玩家独立 isolate：V8 isolate 在本场成功 tick 间常驻、失败后重建、isolate CPU/堆/栈限制、Memory 提交与失败回滚、本地日志，以及受限源码校验。使用方法、Linux 进程内存隔离和性能命令见 [runner 说明](packages/runner/README.md)。
 
@@ -241,13 +241,15 @@ pnpm arena run --bot ./bot.js --seed 42
 pnpm arena replay ./replays/实际文件名.json.gz
 ```
 
-`pnpm build:devkits` 按 `configs/devkits.ts` 构建，生成 `data/releases/<gameId>/<release>/devkits/<revision>/` 下的 ZIP 与不可变元数据，再更新 `current.json` 选择器。修订号是开发包清单的 SHA-256，自动随内容变化；只改提示词或说明无需更新游戏 `release`，旧回放不受影响。server 使用相同的 `DEVKITS_DIR`，相对路径以仓库根目录为基准。`arena init --release <游戏发行> --revision <修订摘要>` 可固定下载版本。
+`pnpm build:devkits` 按 `configs/devkits.ts` 构建全部开发包，`pnpm build:devkits --game tank` 只生成指定游戏的 ZIP；同一次构建复用通用包归档。产物写到 `data/releases/<gameId>/`，先写完整 ZIP，再原子替换 current.json 元数据。server 使用相同的 DEVKITS_DIR，相对路径以仓库根目录为基准。玩家始终从服务器下载当前最新包，不提供历史发行或修订选择。只改资料无需升级游戏发行，规则与执行契约变化仍需更新 game.release。
+
+已有项目执行 `pnpm arena update`，然后 `pnpm install --frozen-lockfile`。更新复用初始化记录的服务器，保留 bot.js、研究记录、自定义对手和回放；被修改的平台文件先备份到 .arena-backups/。直接解压 ZIP 的项目首次更新需加 `--server <平台地址>`；旧 CLI 可通过 `npx @si-arena/cli@latest update --server <平台地址>` 更新当前目录。
 
 公共研究流程维护在 [RESEARCH.md](packages/development/RESEARCH.md)，各游戏 PROMPT.md 只维护专属内容。网页和 ZIP 通过同一个组装函数获得完整提示词。
 
 `arena init` 校验发行、ZIP 大小及 SHA-256、内部清单与逐文件摘要，拒绝非空目录与越界路径，不安装依赖或执行代码。安装后运行比赛和回放无需平台 API、数据库或账号。开发包的可视化回放命令输出 loopback URL，在浏览器打开即可，Ctrl+C 停止；`--verify --logs` 仍用于终端校验。实时调试命令 `pnpm arena dev --bot ./bot.js` 同样输出 loopback URL：自动与官方 bot 开局（也可 `--opponent` 指定本地 bot），运行中显示 tick 进度，整场完成后提供逐 tick 动作、日志、错误与 Memory 提交前后对比，并可在页面上同种子或换随机种子重新开局；修改代码后重开即生效，不热替换进行中的比赛。
 
-对外 npm 入口为 `npx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>`。CLI 默认连接 `http://127.0.0.1:3000`，平台地址由 `--server` 传入；自托管构建可设置 `SI_ARENA_SERVER_URL` 烧入自己的默认地址，官方发布不设置。公开包采用统一版本（lockstep）：`pnpm change` 记录意图、`pnpm version -r` 统一升版，`pnpm publish:packages` 按拓扑序发布到 `@si-arena` 组织（支持 `--dry-run` 演练与 `--otp` 二次验证）。仓库构建与测试不发布 npm 包。
+对外 npm 入口为 `npx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>`。CLI 默认连接 `http://127.0.0.1:3000`，平台地址由 `--server` 传入；自托管构建可设置 `SI_ARENA_SERVER_URL` 烧入自己的默认地址，官方发布不设置。游戏和 packages/development 是私有 workspace 包，不公开发布 npm、不参与统一升版；游戏内容由服务器开发包分发。通用工具的公开包采用统一版本（lockstep）：`pnpm change` 记录意图、`pnpm version -r` 统一升版，`pnpm publish:packages` 按拓扑序发布到 `@si-arena` 组织（支持 `--dry-run` 演练与 `--otp` 二次验证）。仓库构建与测试不发布 npm 包。
 
 ## 生产部署
 

@@ -43,8 +43,7 @@ try {
   runPnpm([
     "--filter",
     "./packages/**",
-    // @si-arena/db is a private workspace-only package; only distributed
-    // packages belong in the packed-artifact verification.
+    // Private game modules are distributed inside devkits; db stays server-only.
     "--filter",
     "!./packages/db",
     "--filter",
@@ -58,7 +57,7 @@ try {
   const entries: string[] = [];
   const externalDependencies: Record<string, string> = {};
   const archives = (await readdir(packs)).filter((file) => file.endsWith(".tgz"));
-  assert.ok(archives.length > 0, "No public workspace packages were packed");
+  assert.ok(archives.length > 0, "No distributed workspace packages were packed");
   let cliDirectory: string | undefined;
   for (const [index, archive] of archives.entries()) {
     const unpack = join(temporary, "unpack", String(index));

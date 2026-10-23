@@ -9,19 +9,19 @@ versioning:
   fixed:
     - [
         "@si-arena/protocol",
-        "@si-arena/development",
         "@si-arena/sandbox",
         "@si-arena/runner",
         "@si-arena/engine",
         "@si-arena/player",
-        "@si-arena/game-paper",
-        "@si-arena/game-royale",
-        "@si-arena/game-snake",
-        "@si-arena/game-bomber",
-        "@si-arena/game-tank",
         "@si-arena/cli",
       ]
   ignore:
+    - "@si-arena/development"
+    - "@si-arena/game-paper"
+    - "@si-arena/game-tank"
+    - "@si-arena/game-bomber"
+    - "@si-arena/game-royale"
+    - "@si-arena/game-snake"
     - "@si-arena/db"
     - "@si-arena/server"
     - "@si-arena/worker"

@@ -22,15 +22,12 @@ const { data, status, error, reload } = useApiResource(
   () => `${base.value}/development`,
   parseGameDevelopment,
 );
-const releasePath = computed(
-  () => `${base.value}/releases/${encodeURIComponent(props.game.release)}`,
-);
 const {
   data: release,
   status: releaseStatus,
   reload: reloadRelease,
 } = useApiResource(
-  () => releasePath.value,
+  () => `${base.value}/devkit`,
   (raw) => {
     const value = parseGameReleaseMetadata(raw);
     if (value.game.id !== props.game.id || value.game.release !== props.game.release)
@@ -38,15 +35,7 @@ const {
     return value;
   },
 );
-// Derive same-site URLs from validated identity, never navigate an arbitrary archive URL.
-const downloadPath = computed(() => {
-  const value = release.value;
-  if (!value) return undefined;
-  const legacy = `${releasePath.value}/download`;
-  return value.archive.url === legacy
-    ? legacy
-    : devkitDownloadPath(value.game.id, value.game.release, value.manifestSha256);
-});
+const downloadPath = computed(() => devkitDownloadPath(props.game.id));
 const command = computed(
   () =>
     `npx @si-arena/cli@latest init ${props.game.id} ./${props.game.id}-bot --server ${JSON.stringify(window.location.origin)}`,
@@ -60,7 +49,7 @@ const quickStart = computed(() =>
   ].join("\n"),
 );
 const steps = [
-  { title: "初始化项目", text: "下载本发行的开发包并校验" },
+  { title: "初始化项目", text: "下载最新开发包并校验" },
   { title: "让 AI 写 bot.js", text: "把统一提示词交给你的 AI" },
   { title: "本地对战调试", text: "和官方 bot 开局、看回放" },
   { title: "上传并匹配", text: "回到对局页发起排位" },
@@ -70,7 +59,7 @@ const setupPrompt = computed(() => {
   return [
     `我要参加 SI Arena 平台的「${props.game.name}」编程竞技。请作为我的策略研究 Agent，在本地完成环境准备、机制研究、对照实验和迭代优化，交付预算内最强的可用 bot。跑通代码或战胜官方示例不是任务终点。`,
     ``,
-    `1. 检查 node -v、pnpm -v：需要 Node.js ≥ 26 与 pnpm ≥ 12，缺失时按当前系统准备环境。初始化命令如下；若目录已有项目，先检查发行与已有成果，保留代码和研究记录，不覆盖或删除非空目录：`,
+    `1. 检查 node -v、pnpm -v：需要 Node.js ≥ 26 与 pnpm ≥ 12，缺失时按当前系统准备环境。初始化命令如下；若目录已有项目，先保留代码和研究记录，在已有项目中执行 pnpm arena update，再执行 pnpm install --frozen-lockfile，不重新初始化或删除非空目录：`,
     `   ${command.value}`,
     `2. 进入 ${directory}，执行 pnpm install --frozen-lockfile。阅读 PROMPT.md、SDK.md、release.json 和 bots/official.js；必要时核对包内规则实现。`,
     `3. 完整执行 PROMPT.md 的研究流程与预算规则（用户明确要求优先），不要把安装完成或战胜官方示例当作任务完成。已有成果先保存并作为基线，用 pnpm arena run --bot ./bot.js 开始本地验证，后续对照实验、历史最佳保留和独立验证均按 PROMPT.md 执行。`,
@@ -138,6 +127,10 @@ watch(
           >{{ (release.archive.bytes / 1024 / 1024).toFixed(1) }} MiB</span
         >
       </div>
+      <p class="text-sm leading-6 text-soft">
+        已有项目更新：<code>pnpm arena update</code>，然后执行
+        <code>pnpm install --frozen-lockfile</code>。保留玩家代码和研究记录。
+      </p>
       <StateBlock v-if="releaseStatus === 'loading'" status="loading" />
       <div v-else-if="releaseStatus === 'error'" class="flex flex-wrap items-center gap-3">
         <p class="text-sm leading-6 text-soft">

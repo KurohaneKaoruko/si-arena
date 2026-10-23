@@ -27,9 +27,11 @@ pnpm arena run --bot ./bot.js --matches 20 --seed 42
 pnpm arena replay ./replays/match.json.gz
 ```
 
-初始化命令也支持 `pnpm dlx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>`。它下载并解压开发包、固定发行与资源配置，不自动安装依赖、不覆盖非空目录，也不创建线上比赛。`--release <releaseId>` 用于选择指定游戏发行。
+初始化命令也支持 `pnpm dlx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>`。它下载并解压开发包、固定发行与资源配置，不自动安装依赖、不覆盖非空目录，也不创建线上比赛。始终获取最新包，不提供发行或修订选择。
 
-玩家可以复制游戏页「开发资料」区的 AI 安装提示词，交给本地编程 Agent 完成环境准备和策略研究。网页按当前游戏与站点地址生成初始化命令，要求保留已有项目与研究成果；统一参赛提示词定义各游戏的机制和验证方法。网页提示词随源码提供，开发包内 PROMPT.md 随开发包修订冻结。公共流程维护在 packages/development/RESEARCH.md，与游戏专属提示词通过同一函数组装。修改资料后重新构建产生内容摘要修订，不改变游戏 release、botProtocolVersion 或旧回放的规则身份。
+已有项目运行 `pnpm arena update`，再执行 `pnpm install --frozen-lockfile`。服务器地址由初始化记录，也可通过 `--server` 指定；直接解压 ZIP 后首次更新需要指定服务器。更新保留 bot.js、research/、回放、自定义对手和其他用户文件；更新的平台文件若被本地修改则备份到 .arena-backups/。下载校验失败不改项目，安装中普通错误会回滚；相同内容不重复写入。游戏规则、SDK 和本地工具随服务器开发包获取，游戏不公开发布到 npm。
+
+玩家可以复制游戏页「开发资料」区的 AI 安装提示词，交给本地编程 Agent 完成环境准备和策略研究。网页按当前游戏与站点地址生成初始化命令，要求保留已有项目与研究成果；统一参赛提示词定义各游戏的机制和验证方法。网页提示词随源码提供，开发包内 PROMPT.md 随开发包构建固定。公共流程维护在 packages/development/RESEARCH.md，与游戏专属提示词通过同一函数组装。修改资料后重新构建更新当前开发包，不改变游戏 release、botProtocolVersion 或旧回放的规则身份。
 
 安装成功和战胜官方示例只是基线，不是研究结束条件。用户指定的预算优先；未指定时，环境准备后默认研究 30 分钟，预留最后约 20% 时间用于独立验证与交付。Agent 在预算内提出不同策略假设，通过正常沙箱中的比赛和失败回放验证机制与改进；预算到期、用户停止或工具受阻时保存成果并说明实际完成情况，不承诺找到最优解或打败所有玩家，也不为凑时长空转。
 

@@ -1,6 +1,7 @@
 {
   "name": "@si-arena/development",
   "version": "0.7.0",
+  "private": true,
   "license": "MIT",
   "author": {
     "name": "lovekeqing",
@@ -21,9 +22,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "build": "tsdown --config ../../tsdown.config.ts",

@@ -18,16 +18,10 @@ import { x as extract } from "tar";
 
 const PUBLIC_PACKAGES = [
   { name: "@si-arena/protocol", directory: "packages/protocol" },
-  { name: "@si-arena/development", directory: "packages/development" },
   { name: "@si-arena/sandbox", directory: "packages/sandbox" },
   { name: "@si-arena/engine", directory: "packages/engine" },
   { name: "@si-arena/runner", directory: "packages/runner" },
   { name: "@si-arena/player", directory: "packages/player" },
-  { name: "@si-arena/game-paper", directory: "games/paper" },
-  { name: "@si-arena/game-royale", directory: "games/royale" },
-  { name: "@si-arena/game-snake", directory: "games/snake" },
-  { name: "@si-arena/game-bomber", directory: "games/bomber" },
-  { name: "@si-arena/game-tank", directory: "games/tank" },
   { name: "@si-arena/cli", directory: "packages/cli" },
 ] as const;
 

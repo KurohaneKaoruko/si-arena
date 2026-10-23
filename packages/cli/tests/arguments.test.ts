@@ -3,6 +3,9 @@ import { runCli } from "../src";
 
 test.each([
   ["run"],
+  ["update", "extra"],
+  ["init", "paper", "target", "--release", "paper@1"],
+  ["init", "paper", "target", "--revision", "a".repeat(64)],
   ["run", "--bot", "x", "extra"],
   ["dev"],
   ["replay", "x"],

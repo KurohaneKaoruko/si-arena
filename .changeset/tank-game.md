@@ -1,5 +1,4 @@
 ---
-"@si-arena/game-tank": minor
 "@si-arena/cli": minor
 ---
 

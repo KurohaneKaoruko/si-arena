@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:devkits": "pnpm build && node --import tsx scripts/build-devkits.ts",
+    "build:devkits": "pnpm build:packages && node --import tsx scripts/build-devkits.ts",
     "dev": "pnpm build:packages && pnpm -r --parallel run dev",
     "dev:web": "pnpm build:packages && pnpm --filter @si-arena/web dev",
     "dev:server": "pnpm build:packages && pnpm --filter @si-arena/server dev",

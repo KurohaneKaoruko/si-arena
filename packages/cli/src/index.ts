@@ -7,3 +7,4 @@ export {
   type LocalSummary,
   type LocalDiagnostic,
 } from "./local-game";
+export { updateGame } from "./update";

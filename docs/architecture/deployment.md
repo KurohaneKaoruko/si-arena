@@ -43,7 +43,7 @@ pnpm build:devkits
 docker compose --env-file .env.prod -f deploy/compose.prod.yaml --profile tools run --rm seed-releases
 ```
 
-`seed-releases` 把宿主 `./data/releases` 拷入 `releases_data` 卷。开发包存储在 `<gameId>/<release>/devkits/<manifestSha256>/`，历史修订不可覆盖，`current.json` 选择当前修订。修改提示词或说明后重新构建即可产生新修订，不递增游戏 release；规则或执行契约变化才递增游戏发行。保留历史目录，部署时先同步完整修订，再切换 current.json，避免选择器指向未复制完成的文件。回放只按游戏发行注册，不受资料修订影响。
+`seed-releases` 把宿主 `./data/releases` 中各游戏的当前开发包同步到 releases_data 卷。每个游戏目录保存 current.json 完整元数据和摘要命名 ZIP；先复制完整 ZIP，再原子替换当前元数据。资料变化重新构建并 seed 即可；规则或执行契约变化仍需升级游戏发行。玩家只下载当前包，旧回放的可信规则归档单独管理。存储布局升级后需要重新构建并 seed，旧发行/修订 URL 不再提供下载。
 
 日常更新：`git pull && docker compose --env-file .env.prod -f deploy/compose.prod.yaml up -d --build`，迁移服务会在启动前自动应用新的数据库变更。
 
@@ -63,7 +63,7 @@ Boss 是部署方私有的 bot，源码不进仓库。把每个游戏的 Boss �
 
 ## 版本与 npm 发布
 
-公开包采用统一版本（lockstep）：`pnpm-workspace.yaml` 的 `versioning.fixed` 把 7 个公开包（protocol、sandbox、engine、player、game-paper、game-royale、cli）声明为一个固定组，private 包在 `versioning.ignore` 中排除。发版流程：
+公开工具包采用统一版本（lockstep）：protocol、sandbox、engine、runner、player、cli 在 pnpm-workspace.yaml 的 versioning.fixed 中组成固定组。游戏包和 development 是私有 workspace 模块，与平台应用及 db 一起排除在公开发布和升版之外。新增或更新游戏只需要部署平台及当前开发包，不需要发布 npm。发版流程：
 
 ```sh
 # 1. 记录变更意图（哪些包受影响、bump 级别、changelog 摘要）
@@ -77,11 +77,11 @@ git add -A && git commit -m "chore: release <版本>"
 pnpm publish:packages [--otp <验证码>]
 ```
 
-`scripts/publish.ts` 只做执行器：校验工作区干净、公开包版本一致、抽查 CLI tarball 中 `workspace:*` 已替换为当前版本，然后按依赖拓扑序（protocol → sandbox → engine → player → game-paper → game-royale → cli）以 `--access public` 发布。`--dry-run` 走全链但不真正发布，用于演练。npm 账号开启 2FA 时用 `--otp` 或 `NPM_CONFIG_OTP` 传入验证码。
+`scripts/publish.ts` 只做执行器：校验工作区干净、公开包版本一致、抽查 CLI tarball 中 `workspace:*` 已替换为当前版本，然后按依赖拓扑序（protocol → sandbox → engine → runner → player → cli）以 `--access public` 发布。`--dry-run` 走全链但不真正发布，用于演练。npm 账号开启 2FA 时用 `--otp` 或 `NPM_CONFIG_OTP` 传入验证码。
 
 发布后注意：
 
-- 开发包发行与 npm 版本是两条线：devkit 内部包走 vendor 本地归档，不要求已发布 npm；但正式对外建议发版后重建 devkit，使 `release.json` 的 components 记录真实发布版本。
+- 开发包发行与 npm 版本是两条线：devkit 内部包走 vendor 本地归档，不要求已发布 npm；游戏与工具内容由清单中的摘要及组件版本固定，游戏内容更新无需 npm 发布。
 - CI（`.github/workflows/ci.yml`）在 push/PR 时运行 `pnpm check`、`pnpm test:artifacts` 与两个镜像的 docker build，不自动发布。
 
 ## 数据与备份

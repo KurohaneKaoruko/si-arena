@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { unzipSync, zipSync } from "fflate";
+import { publishDevkit, readDevkit } from "@si-arena/development";
+import { parseDevkitManifest } from "@si-arena/protocol";
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
@@ -9,6 +13,7 @@ import { createInterface } from "node:readline";
 import { once } from "node:events";
 import { devkitGames } from "../configs/devkits";
 
+const hash = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const root = fileURLToPath(new URL("../", import.meta.url));
 const pnpm = process.env.npm_execpath;
 if (!pnpm) throw new Error("Run with pnpm test:artifacts");
@@ -73,11 +78,16 @@ const services: ReturnType<typeof service>[] = [];
 try {
   const builtArchives = join(temporary, "built-releases");
   const archives = join(temporary, "releases");
+  const selectedArchives = join(temporary, "selected-game");
+  await node(["--import", "tsx", join(root, "scripts/build-devkits.ts"), "--game", "tank"], root, {
+    DEVKITS_DIR: selectedArchives,
+  });
+  assert.deepEqual(await readdir(selectedArchives), ["tank"]);
   await node(["--import", "tsx", join(root, "scripts/build-devkits.ts")], root, {
     DEVKITS_DIR: builtArchives,
   });
   await node(["--import", "tsx", join(root, "scripts/seed-releases.ts"), builtArchives, archives]);
-  // Deployment retries must preserve existing revisions and selectors.
+  // Deployment retries must preserve the current package.
   await node(["--import", "tsx", join(root, "scripts/seed-releases.ts"), builtArchives, archives]);
   const appUrl = pathToFileURL(join(root, "apps/server/dist/app.js")).href;
   const api = service([
@@ -98,8 +108,6 @@ try {
           project,
           "--server",
           server,
-          "--release",
-          registration.game.manifest.release,
         ])
       ).trim(),
     ) as { type: string; directory: string };
@@ -120,6 +128,56 @@ try {
     assert.ok(!materials.prompt.includes("<!-- SI_ARENA_RESEARCH -->"));
     const original = await readFile(join(project, "bot.js"), "utf8");
     await writeFile(join(project, "bot.js"), 'console.log("local verification");\n' + original);
+    const update = JSON.parse((await node(["arena.mjs", "update"], project)).trim()) as {
+      type: string;
+      updated: boolean;
+    };
+    assert.equal(update.type, "updated");
+    assert.equal(update.updated, false);
+    assert.equal(
+      await readFile(join(project, "bot.js"), "utf8"),
+      'console.log("local verification");\n' + original,
+    );
+    if (registration === devkitGames[0]) {
+      const current = await readDevkit(archives, registration.game.manifest.id);
+      assert.ok(current);
+      const files = unzipSync(await readFile(current.path));
+      const manifest = parseDevkitManifest(
+        JSON.parse(Buffer.from(files["release.json"]!).toString("utf8")),
+      );
+      files["PROMPT.md"] = Buffer.from(materials.prompt + "\n\nArtifact update verification.\n");
+      manifest.files["PROMPT.md"] = {
+        bytes: files["PROMPT.md"].length,
+        sha256: hash(files["PROMPT.md"]),
+      };
+      files["release.json"] = Buffer.from(JSON.stringify(manifest, null, 2) + "\n");
+      const bytes = zipSync(files, { level: 6, mtime: new Date(1980, 0, 1) });
+      await publishDevkit(
+        archives,
+        {
+          ...current.metadata,
+          manifestSha256: hash(files["release.json"]),
+          archive: { ...current.metadata.archive, bytes: bytes.length, sha256: hash(bytes) },
+        },
+        bytes,
+      );
+      await writeFile(join(project, "SDK.md"), "player notes");
+      const changed = JSON.parse((await node(["arena.mjs", "update"], project)).trim()) as {
+        updated: boolean;
+        backup: string;
+      };
+      assert.equal(changed.updated, true);
+      assert.equal(await readFile(join(changed.backup, "SDK.md"), "utf8"), "player notes");
+      assert.equal(
+        await readFile(join(project, "PROMPT.md"), "utf8"),
+        Buffer.from(files["PROMPT.md"]).toString("utf8"),
+      );
+      assert.equal(
+        await readFile(join(project, "bot.js"), "utf8"),
+        'console.log("local verification");\n' + original,
+      );
+      await install(project);
+    }
     const run = (
       await node(
         ["arena.mjs", "run", "--bot", "./bot.js", "--matches", "2", "--seed", "42"],
@@ -223,15 +281,12 @@ try {
       project,
     );
     const metadataResponse = await fetch(
-      new URL(
-        `/api/games/${registration.game.manifest.id}/releases/${encodeURIComponent(registration.game.manifest.release)}`,
-        server,
-      ),
+      new URL(`/api/games/${registration.game.manifest.id}/devkit`, server),
     );
     assert.equal(metadataResponse.status, 200);
   }
   console.log(
-    `Verified ${devkitGames.length} standalone ZIP development package(s): real API download and init, frozen pnpm installation, official opponents, batch matches, logs, replay after removing bots, local viewer and strict NodeNext SDK types outside the workspace.`,
+    `Verified ${devkitGames.length} standalone ZIP development package(s): real API latest download, init and update, frozen pnpm installation, official opponents, batch matches, logs, replay after removing bots, local viewer and strict NodeNext SDK types outside the workspace.`,
   );
 } finally {
   for (const { child } of services)

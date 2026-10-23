@@ -34,14 +34,14 @@ function metadata(text: string): GameReleaseMetadata {
     sourceLockSha256: sha("lock"),
     manifestSha256: sha(text),
     archive: {
-      url: devkitDownloadPath(game.id, game.release, sha(text)),
+      url: devkitDownloadPath(game.id),
       bytes: Buffer.byteLength(text),
       sha256: sha(text),
     },
   };
 }
 
-test("revisions coexist without changing game identity; retries cannot overwrite a published revision", async () => {
+test("publishes only the current package atomically and checks archives and game contracts", async () => {
   const root = await mkdtemp(join(tmpdir(), "arena-devkit-store-"));
   try {
     const first = metadata("first");
@@ -49,28 +49,28 @@ test("revisions coexist without changing game identity; retries cannot overwrite
     const file = await publishDevkit(root, first, Buffer.from("first"));
     await publishDevkit(root, first, Buffer.from("first"));
     await publishDevkit(root, second, Buffer.from("second"));
-    expect((await readDevkit(root, "test", "test@1"))?.metadata).toEqual(second);
-    expect((await readDevkit(root, "test", "test@1", first.manifestSha256))?.metadata).toEqual(
-      first,
-    );
-    expect(first.game).toEqual(second.game);
-    const changedRules = { ...second, game: { ...second.game, maxTicks: 2 } };
-    await expect(publishDevkit(root, changedRules, Buffer.from("second"))).rejects.toThrow(
-      "Game contract changed",
-    );
-    const conflicting = {
-      ...first,
-      archive: { ...first.archive, bytes: 6, sha256: sha("forged") },
-    };
-    await expect(publishDevkit(root, conflicting, Buffer.from("forged"))).rejects.toThrow();
+    expect((await readDevkit(root, "test"))?.metadata).toEqual(second);
     expect(await readFile(file, "utf8")).toBe("first");
-    expect((await readDevkit(root, "test", "test@1"))?.metadata).toEqual(second);
-    expect(await readDevkit(root, "test", "test@1", "../escape")).toBeNull();
-    await writeFile(
-      join(root, "test", "test@1", "current.json"),
-      JSON.stringify({ revision: "../escape" }),
+    await expect(
+      publishDevkit(
+        root,
+        { ...second, game: { ...second.game, maxTicks: 2 } },
+        Buffer.from("second"),
+      ),
+    ).rejects.toThrow("Game contract changed");
+    await expect(publishDevkit(root, second, Buffer.from("bad"))).rejects.toThrow(
+      "archive mismatch",
     );
-    await expect(readDevkit(root, "test", "test@1")).rejects.toThrow("selector");
+    expect((await readDevkit(root, "test"))?.metadata).toEqual(second);
+    const nextRelease = { ...second, game: { ...second.game, release: "test@2", maxTicks: 2 } };
+    await publishDevkit(root, nextRelease, Buffer.from("second"));
+    expect((await readDevkit(root, "test"))?.metadata).toEqual(nextRelease);
+    expect(await readDevkit(root, "../escape")).toBeNull();
+    await writeFile(
+      join(root, "test", "current.json"),
+      JSON.stringify({ ...second, game: { ...second.game, id: "other" } }),
+    );
+    await expect(readDevkit(root, "test")).rejects.toThrow("identity mismatch");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

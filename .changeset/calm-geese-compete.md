@@ -1,7 +1,6 @@
 ---
 "@si-arena/cli": minor
 "@si-arena/engine": minor
-"@si-arena/game-paper": minor
 "@si-arena/player": minor
 "@si-arena/protocol": minor
 "@si-arena/sandbox": minor

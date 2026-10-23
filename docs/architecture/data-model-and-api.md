@@ -128,11 +128,8 @@ Boss 账号同样在启动时初始化：upsert `boss` 用户（无密码、带 
 | `GET /games` | 游戏目录和基本信息 |
 | `GET /games/:gameId` | 当前发行、基本玩法、配置与完整资源限额 |
 | `GET /games/:gameId/development` | 当前发行的 `{ prompt, sdk, officialBot, template }` 纯文本资料 |
-| `GET /games/:gameId/releases/:releaseId` | 选择游戏发行的当前开发包修订，返回元数据与固定下载地址，响应 no-store |
-| `GET /games/:gameId/download` | 302 指向当前发行的固定 ZIP 下载地址，别名响应 no-store |
-| `GET /games/:gameId/releases/:releaseId/download` | 旧布局的固定开发包（仅兼容历史文件） |
-| `GET /games/:gameId/releases/:releaseId/devkits/:revision` | 固定修订元数据，revision 为 manifestSha256，immutable |
-| `GET /games/:gameId/releases/:releaseId/devkits/:revision/download` | 固定修订 ZIP，immutable |
+| `GET /games/:gameId/devkit` | 当前游戏最新开发包元数据，含摘要、大小和下载地址，no-store |
+| `GET /games/:gameId/download` | 直接返回当前 ZIP，no-store；ETag 为 ZIP SHA-256，If-Match 不匹配返回 412 |
 | `GET /games/:gameId/official-bot` | 当前官方 bot 源码 |
 | `GET /games/:gameId/me` | 当前用户的参赛信息、最新代码、botProtocolVersion 与 canMatch/不能参赛原因 |
 | `PUT /games/:gameId/me/code` | 覆盖最新代码，不运行比赛 |

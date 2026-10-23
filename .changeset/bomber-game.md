@@ -1,5 +1,4 @@
 ---
-"@si-arena/game-bomber": minor
 "@si-arena/cli": minor
 ---
 

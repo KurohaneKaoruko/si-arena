@@ -1,5 +1,4 @@
 ---
-"@si-arena/game-snake": minor
 "@si-arena/cli": minor
 ---
 

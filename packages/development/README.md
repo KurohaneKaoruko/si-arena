@@ -1,9 +1,9 @@
-# @si-arena/development
+# Development
 
-开发资料与开发包修订的 Node 工具，供 server 和构建脚本通过公开 exports 使用。不参与比赛执行或回放，不依赖游戏包、沙箱和数据库。
+私有 workspace 工具包，供 server 和构建、部署脚本通过 exports 使用。不公开发布 npm，不参与统一升版，不进入玩家开发包运行依赖，也不参与比赛执行或回放。
 
-- 公共研究流程只编辑 [RESEARCH.md](RESEARCH.md)。各游戏 PROMPT.md 在 `<!-- SI_ARENA_RESEARCH -->` 处插入它，网页和 ZIP 共用 `readDevelopmentMaterials`。
-- `publishDevkit` 以清单摘要为修订身份，先发布完整目录，再原子切换 current.json；`select: false` 只复制修订，供部署同步使用。
-- `readDevkit` 解析当前选择器或固定修订，保留旧目录布局的读取能力。修订与路径身份不匹配时失败。
+- `readDevelopmentMaterials` 将游戏 PROMPT.md 的唯一研究标记替换为 RESEARCH.md；网页与 ZIP 使用相同完整文本。
+- `publishDevkit` 先写完整的摘要命名 ZIP，再原子替换游戏 current.json 元数据。
+- `readDevkit` 只读取指定游戏的当前包，不提供历史发行或修订选择。
 
-只改资料时运行 `pnpm build:devkits` 即可生成新修订，无需修改游戏 manifest、SDK 中的发行号、回放注册或测试夹具。规则、资源限额或执行语义改变仍需更新游戏发行。完整契约见[分发设计](../../docs/architecture/distribution-and-development.md)。
+资料变化重新构建并部署当前开发包即可，不改变游戏发行；规则、配置、限额或执行语义变化仍需更新 game.release。存储和下载协议见 [分发设计](../../docs/architecture/distribution-and-development.md)。

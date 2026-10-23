@@ -27,7 +27,7 @@ const metadata = {
   manifestSha256: "b".repeat(64),
   archive: { url: "javascript:alert(1)", bytes: 100, sha256: "c".repeat(64) },
 };
-test("copies materials with feedback, escapes code and links only to the pinned same-site download", async () => {
+test("copies materials with feedback, escapes code and links only to the current same-site download", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { clipboard: { writeText } });
   vi.stubGlobal(
@@ -61,9 +61,7 @@ test("copies materials with feedback, escapes code and links only to the pinned 
   expect(wrapper.find("img").exists()).toBe(false);
   expect(wrapper.text()).toContain(docs.officialBot);
   const download = wrapper.findAll("a").find((link) => link.text() === "下载开发包 ZIP")!;
-  expect(download.attributes("href")).toBe(
-    `/api/games/paper/releases/${encodeURIComponent(paperGame.manifest.release)}/devkits/${metadata.manifestSha256}/download`,
-  );
+  expect(download.attributes("href")).toBe("/api/games/paper/download");
 });
 test("materials remain usable when the archive is unavailable and clipboard failures explain manual copying", async () => {
   vi.stubGlobal("navigator", {

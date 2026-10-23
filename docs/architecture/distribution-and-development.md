@@ -20,7 +20,7 @@ pnpm 用户使用等价入口：
 pnpm dlx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>
 ```
 
-`init <gameId> <directory>` 先通过 `GET /games/:gameId` 获取游戏发行 ID，再通过 `GET /games/:gameId/releases/:releaseId` 选择该发行的当前开发包修订。选择器响应为 `no-store`，返回的 `archive.url` 固定到修订；之后只按这个地址下载和校验，不再查询当前别名，因此发布切换不会混包。`--release <releaseId>` 选择游戏发行，配合 `--revision <sha256>` 可直接获取固定开发包修订；初始化结果同时报告 `release` 与 `revision`。
+`init <gameId> <directory>` 通过 `GET /games/:gameId/devkit` 获取服务器当前开发包元数据，再从 `GET /games/:gameId/download` 下载 ZIP。只提供最新包，不支持选择游戏发行或开发包修订。两个接口均为 `no-store`。CLI 下载时以压缩包 SHA-256 发送 `If-Match`；如果发布切换导致不匹配，服务器返回 412，CLI 重新获取最新元数据，最多尝试三次，避免混用不同构建。初始化结果报告实际游戏发行。
 
 CLI 默认连接 `http://127.0.0.1:3000`，平台地址由 `--server <url>` 传入，支持源站或以 `/api` 结尾的基址；官方 npm 包不烧入特定部署地址，自托管构建可设置 `SI_ARENA_SERVER_URL` 固定自己的默认地址。`--server` 接受 HTTP 与 HTTPS，无域名的部署可直接使用 IP + HTTP。下载地址必须与所选服务同源，HTTP 重定向被拒绝。发行元数据给出压缩包字节数与 SHA-256，CLI 在解压前验证；内部 release.json 的摘要、发行、组件版本和 resolvedLimits 必须与外部元数据一致，每个发行文件还验证字节数与 SHA-256。校验值来自受信连接的元数据，不仅依赖 ZIP 内部自述。
 
@@ -28,7 +28,7 @@ CLI 默认连接 `http://127.0.0.1:3000`，平台地址由 `--server <url>` 传�
 
 初始化只下载和生成项目，不自动安装依赖或执行玩家代码。用户进入目录后运行 `pnpm install`，再启动本地工具。npm 用于获取 CLI，与 monorepo 和开发包使用 pnpm 管理依赖不冲突。
 
-CLI 不携带全部游戏，新游戏通过同一发行 API 与下载包接入。网站保留 ZIP 下载入口，与 CLI 共用产物、发行清单、校验信息和冻结的 `resolvedLimits`。
+CLI 不携带全部游戏，新游戏通过同一开发包 API 与下载包接入。网站保留 ZIP 下载入口，与 CLI 共用产物、发行清单、校验信息和冻结的 `resolvedLimits`。
 
 ## 本地命令与可信注册
 
@@ -51,6 +51,7 @@ paper-devkit/
   pnpm-lock.yaml
   README.md
   release.json
+  .arena.json           CLI 初始化后记录服务器、游戏和清单摘要
   arena.mjs
   PROMPT.md
   SDK.md
@@ -81,27 +82,27 @@ pnpm 打包会转换 workspace 依赖声明，但不会自动把所有依赖实�
 
 内部包通过 pnpm pack 形成随包本地归档，开发包的依赖与 pnpm-workspace.yaml overrides 将整条内部依赖链指向 vendor/，不要求内部包已经发布到 npm。归档保留公开 exports、类型与比赛子进程，安装后按原包布局解析；viewer 额外构建成共享 Vue 控件和 renderer 的静态产物。SDK 类型、运行源码、官方 JS 与许可证同时放入开发目录。不得因树摇或资源路径改写遗漏动态加载文件。
 
-仓库命令为 `pnpm build:devkits`，在完整构建后读取 `configs/devkits.ts` 的可信注册。构建入口拒绝不同步的根锁文件，用同一 catalog、供应链策略和已有解析生成独立锁文件，记录根锁文件 SHA-256。初始化不执行 pnpm，用户安装时使用开发包固定的锁文件。
+仓库命令为 `pnpm build:devkits`，支持 `pnpm build:devkits --game tank` 只生成指定游戏的 ZIP；同一次构建中通用包只打包一次并复用。构建共享模块后读取 `configs/devkits.ts` 的可信注册。构建入口拒绝不同步的根锁文件，用同一 catalog、供应链策略和已有解析生成独立锁文件，记录根锁文件 SHA-256。初始化不执行 pnpm，用户安装时使用开发包固定的锁文件。
 
-游戏发行 `game.release` 固定比赛执行与回放所需的规则、配置、限额和执行行为。开发包修订使用 `release.json` 的 SHA-256（即元数据的 `manifestSha256`），包含该游戏发行、工具组件版本与所有文件摘要；没有第二份手工版本号。提示词、说明或不改变执行契约的工具更新只生成新修订，不改变游戏发行或玩家接口版本；规则、配置、限额及影响执行/重演的引擎或沙箱行为改变仍必须更新游戏发行。
+游戏发行 `game.release` 固定比赛执行与回放所需的规则、配置、限额和执行行为。内容摘要用于校验和识别构建，不作为玩家可选择的版本。提示词、说明或不改变执行契约的工具更新只重新构建开发包，不改变游戏发行或玩家接口版本；规则、配置、限额及影响执行/重演的引擎或沙箱行为改变仍必须更新游戏发行。
 
-存储位于 `DEVKITS_DIR/<gameId>/<release>/devkits/<revision>/`，包含不可变 `metadata.json` 与 `devkit.zip`。构建先原子发布完整修订，再原子替换游戏发行目录中的 `current.json`（`{ "revision": "<sha256>" }`）。重复发布相同修订可重试，不同内容不能覆盖已有修订。不同修订共存，所有回放仍按游戏发行选规则。已有当前开发包时，发布器拒绝同一游戏发行下不同的游戏 manifest 或 engineCompatibility；代码行为是否变化仍需由规则与执行测试确认，不能用资料修订绕过游戏发行升级。
+游戏与 `packages/development` 是私有 workspace 包，保留 exports 与独立测试，不参与公开 npm 发布或统一升版。游戏产物随平台部署及服务器开发包分发；增加或修改游戏无需发布 npm。通用工具需要更新 npm 使用者时，才发布相应公开包。
 
-兼容旧存储：没有 `current.json` 时读取原 `<gameId>/<release>/metadata.json`；旧 `/releases/:releaseId/download` 只提供原 `devkit.zip`，不会重定向到新修订或覆盖旧字节。新旧 CLI 均可读取现有元数据结构，新 CLI 可用 `--release` 与 `--revision` 固定新修订。发布新修订后选择器返回新固定地址，旧地址仍可下载。
+存储为 `DEVKITS_DIR/<gameId>/current.json`（完整元数据）和 `<archiveSha256>.zip`。发布器先写完整 ZIP，再原子替换 current.json；内部摘要文件名让进行中的下载保持一致，不提供历史查询或历史下载接口。发布器拒绝同一游戏发行下不同的游戏 manifest 或 engineCompatibility，规则与执行测试仍负责确认代码行为没有绕过发行升级。部署用 seed-releases 同步各游戏当前包。存储布局升级后重新构建并 seed，旧发行/修订下载路由不再提供服务。旧回放的可信规则归档独立于开发包下载。
 
 ## 提示词来源
 
 `packages/development/RESEARCH.md` 是公共研究流程的唯一可执行提示词来源。每个游戏的 `PROMPT.md` 仅维护游戏目标、规则、接口和专属验证方法，并用一个 `<!-- SI_ARENA_RESEARCH -->` 标记插入公共流程。`@si-arena/development` 的 `readDevelopmentMaterials` 同时供 server 与开发包构建调用；标记缺失或重复会失败，不静默交付残缺提示词。
 
-网页复制/下载与 ZIP 内的 PROMPT.md 都是已经组装好的完整文本，不需要玩家自行寻找公共文件。网页安装提示词只负责环境准备与启动，研究预算和步骤引用 PROMPT.md，避免再维护一份。开发包内副本随修订冻结，源码变化后重新构建并部署开发包；开发资料 API 展示部署源码的组装结果，部署时同时更新服务与开发包才能保持一致。
+网页复制/下载与 ZIP 内的 PROMPT.md 都是已经组装好的完整文本，不需要玩家自行寻找公共文件。网页安装提示词只负责环境准备与启动，研究预算和步骤引用 PROMPT.md，避免再维护一份。开发包内副本随构建固定，源码变化后重新构建并部署开发包；开发资料 API 展示部署源码的组装结果，部署时同时更新服务与开发包才能保持一致。
 
 ## 发行清单
 
-`release.json` 使用 `DevkitManifest`：`formatVersion: 1`，`game` 为完整 GameCatalogEntry（含发行、botProtocolVersion、配置和 resolvedLimits），`engineCompatibility`、`components` 精确版本映射、`runtime` 的 Node/pnpm 要求与构建精确版本、`sourceLockSha256`，以及 `files` 的相对路径到字节数和 SHA-256 映射。清单自身由外部 `manifestSha256` 保护。`GameReleaseMetadata` 保存同一发行描述，另有 `archive: { url, bytes, sha256 }` 和 `manifestSha256`。已发布档案不可覆盖；模板初始化时校验原始摘要，用户编辑 bot.js 后运行比赛不再要求它保持下载时的摘要。
+`release.json` 使用 `DevkitManifest`：`formatVersion: 1`，`game` 为完整 GameCatalogEntry（含发行、botProtocolVersion、配置和 resolvedLimits），`engineCompatibility`、`components` 精确版本映射、`runtime` 的 Node/pnpm 要求与构建精确版本、`sourceLockSha256`，以及 `files` 的相对路径到字节数和 SHA-256 映射。清单自身由外部 `manifestSha256` 保护。`GameReleaseMetadata` 保存同一发行描述，另有 `archive: { url, bytes, sha256 }` 和 `manifestSha256`。下载时校验原始摘要，用户编辑 bot.js 后运行比赛不再要求它保持下载时的摘要。
 
 CLI 启动时检查 Node 主版本，初始化和本地执行均要求 Node.js 26 及以上。运行环境采用 Node.js 26 与 pnpm 12，包配置声明 `node: >=26`、`pnpm: >=12`。每次发行在清单和锁文件中记录构建所用精确版本及依赖，不在安装时漂移版本。构建入口读取根 package.json 的 packageManager 和锁文件，拒绝锁文件不同步的构建。
 
-回放播放器使用可信发行注册表查找规则与 renderer。注册列表见 `apps/web/src/games/replays.ts`，发行值取各游戏 manifest；开发包修订不参与回放选择。未注册的游戏发行或协议不匹配时拒绝。后续如需支持历史发行，必须显式提供其可信规则与 renderer，不保留用户历史 bot。
+回放播放器使用可信发行注册表查找规则与 renderer。注册列表见 `apps/web/src/games/replays.ts`，发行值取各游戏 manifest；开发包内容摘要不参与回放选择。未注册的游戏发行或协议不匹配时拒绝。后续如需支持历史发行，必须显式提供其可信规则与 renderer，不保留用户历史 bot。
 
 ## 本地 CLI
 
@@ -109,12 +110,17 @@ CLI 启动时检查 Node 主版本，初始化和本地执行均要求 Node.js 2
 
 | 命令 | 责任 |
 | --- | --- |
-| `arena init` | 解析游戏发行并下载独立开发包，生成本地目录 |
+| `arena init` | 下载服务器当前开发包，生成本地目录并记录服务器 |
+| `arena update` | 更新当前项目的平台文件，保留玩家代码与研究成果 |
 | `arena dev` | 启动 loopback 调试页面：与官方或本地对手自动开局，运行中显示进度，完成后逐 tick 回看并对比 Memory，可同种子或换种子重开 |
 | `arena run` | 无界面执行一场或多场，输出摘要、错误和回放 |
 | `arena replay` | 打开已有回放，不加载 bot |
 
 开发包通过 package script 提供 `pnpm arena ...` 入口，无需全局安装。初始化使用临时获取的 `@si-arena/cli`；进入项目后的命令使用开发包固定版本的本地工具，不能因初始化 CLI 使用 latest 而自动升级本地运行器。启动说明必须与实际 scripts 一致。
+
+更新已有项目执行 `pnpm arena update`，完成后执行 `pnpm install --frozen-lockfile`。更新复用 `.arena.json` 的服务器，也可显式 `--server`；直接解压 ZIP 的项目首次更新需要指定服务器。旧版 CLI 没有 update 命令时，可在项目内执行 `npx @si-arena/cli@latest update --server <平台地址>`。
+
+更新只管理 package.json、锁文件、arena.mjs、提示词、SDK、说明、.gitignore、bots/official.js，以及 vendor/、sdk/、dist/、LICENSES/ 下清单列出的文件和本地元数据；不覆盖 bot.js、research/、replays/、自定义对手及其他用户文件。与旧清单摘要不同的被替换或移除文件先保留到 `.arena-backups/<id>/`；旧清单中未修改的过期平台文件会删除。路径存在符号链接或目录冲突时拒绝更新。完整下载校验后才开始修改；更新锁拒绝同一项目的并发更新，普通安装错误和取消回滚原文件，回滚遇到更新期间的新编辑时保留当前文件、继续恢复其余文件，恢复未完成时保留并报告原文件暂存目录。更新不会安装依赖、运行玩家代码、上传或创建比赛；相同内容与服务器返回已是最新，不重复写入。发行或玩家协议变化时保留 bot.js，由玩家适配后再上传。
 
 修改代码后重启本地对局，保持线上“本场代码固定”的语义。多场批量运行每场独立初始化世界和 Memory，可以指定可复现种子序列。玩家文件只由本地运行器读取后作为字符串送入沙箱，不能直接通过宿主 `import` 执行。
 
@@ -152,7 +158,7 @@ viewer 使用与网站相同的通用播放器和游戏 renderer。调试 API �
 
 在非 monorepo 目录解压安装，完成官方对战、日志回放、批量运行和不匹配发行的拒绝。验证目标 macOS/Linux/Windows 环境的 isolated-vm 二进制加载、Node API 和进程终止行为，不能只以开发机成功作为跨平台结论。
 
-初始化期间切换平台当前发行时，仍按已解析发行下载和校验同一产物。压缩包摘要、大小或内部发行不一致时失败，不生成完整项目标记。
+初始化或更新期间切换服务器当前包时，条件下载失败后重新解析最新元数据，不混用构建。压缩包摘要、大小或内部发行不一致时失败，不生成完整项目标记。
 
 ## 开发约束
 

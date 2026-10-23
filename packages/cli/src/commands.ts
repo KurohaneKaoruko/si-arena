@@ -7,13 +7,15 @@ import { readReplayFile } from "@si-arena/engine/node";
 import { checkCancelled, ENGINE_COMPATIBILITY, type LocalGameRegistration } from "./local-game";
 import { CLI_NAME, CLI_VERSION } from "./metadata";
 import { initializeGame } from "./init";
+import { updateGame } from "./update";
 import { serveDev } from "./dev";
 import { serveReplay } from "./viewer";
 
 const HELP = `SI Arena CLI
 
 Usage:
-  arena init <gameId> <directory> [--server <url>] [--release <releaseId>] [--revision <sha256>]
+  arena init <gameId> <directory> [--server <url>]
+  arena update [--server <url>]  (update the current development project)
   arena --registry ./arena.config.mjs run --bot ./bot.js [options]
   arena --registry ./arena.config.mjs replay ./replays/match.json.gz --verify [--logs]
   arena replay ./replays/match.json.gz  (standalone development package viewer)
@@ -21,8 +23,6 @@ Usage:
 
 Options:
   --server <url>     Platform origin (HTTP or HTTPS)
-  --release <id>     Select a game release (latest development package revision)
-  --revision <sha>   Pin a development package revision; requires --release
   --registry <file>  Explicitly trust and load a local game registration module
   --game <id>        Select a registered game (optional with one game)
   --bot <file>       Player JavaScript source, executed in its own V8 isolate
@@ -62,8 +62,6 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
       version: { type: "boolean", short: "v" },
       registry: { type: "string" },
       server: { type: "string" },
-      release: { type: "string" },
-      revision: { type: "string" },
       game: { type: "string" },
       bot: { type: "string" },
       opponent: { type: "string", multiple: true },
@@ -78,11 +76,17 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
   if (values.version) return write(`${CLI_NAME} ${CLI_VERSION}`);
   if (values.help || positionals.length === 0) return write(HELP);
   const command = positionals[0];
-  if (command !== "run" && command !== "replay" && command !== "init" && command !== "dev")
+  if (
+    command !== "run" &&
+    command !== "replay" &&
+    command !== "init" &&
+    command !== "update" &&
+    command !== "dev"
+  )
     throw new Error(`Unknown command: ${command ?? "(missing)"}. Run arena --help.`);
   const allowed = new Set(
-    command === "init"
-      ? ["server", "release", "revision"]
+    command === "init" || command === "update"
+      ? ["server"]
       : [
           "registry",
           "game",
@@ -101,18 +105,28 @@ export async function runCli(args: string[], context: CliContext = {}): Promise<
       throw new Error(`Duplicate option: --${token.name}`);
     seen.add(token.name);
   }
+  if (command === "update") {
+    if (positionals.length !== 1) throw new Error("Usage: arena update [--server <url>]");
+    const result = await updateGame({
+      cwd,
+      ...(values.server ? { server: values.server } : {}),
+      ...(context.signal ? { signal: context.signal } : {}),
+    });
+    output({
+      type: "updated",
+      ...result,
+      ...(result.updated ? { next: ["pnpm install --frozen-lockfile"] } : {}),
+    });
+    return;
+  }
   if (command === "init") {
     if (positionals.length !== 3)
-      throw new Error(
-        "Usage: arena init <gameId> <directory> [--server <url>] [--release <releaseId>] [--revision <sha256>]",
-      );
+      throw new Error("Usage: arena init <gameId> <directory> [--server <url>]");
     const result = await initializeGame({
       gameId: positionals[1]!,
       directory: positionals[2]!,
       cwd,
       ...(values.server ? { server: values.server } : {}),
-      ...(values.release ? { release: values.release } : {}),
-      ...(values.revision ? { revision: values.revision } : {}),
       ...(context.signal ? { signal: context.signal } : {}),
     });
     output({

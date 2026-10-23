@@ -1,19 +1,17 @@
 import { publishDevkit } from "@si-arena/development";
 import { devkitDownloadPath, type GameReleaseMetadata } from "@si-arena/protocol";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, test } from "vitest";
 import { buildApp } from "../src/app";
 import { gameCatalog } from "../src/games";
 
-test("development materials and immutable release downloads are public without a database", async () => {
+test("development materials and current package downloads are public without a database", async () => {
   const directory = await mkdtemp(join(tmpdir(), "si-arena-releases-"));
   const game = gameCatalog.get("paper")!;
   const bytes = Buffer.from("zip fixture");
-  const releaseDir = join(directory, game.id, game.release);
-  await mkdir(releaseDir, { recursive: true });
   const metadata: GameReleaseMetadata = {
     formatVersion: 1,
     game,
@@ -23,13 +21,12 @@ test("development materials and immutable release downloads are public without a
     sourceLockSha256: "a".repeat(64),
     manifestSha256: "b".repeat(64),
     archive: {
-      url: `/api/games/paper/releases/${encodeURIComponent(game.release)}/download`,
+      url: devkitDownloadPath(game.id),
       bytes: bytes.length,
       sha256: createHash("sha256").update(bytes).digest("hex"),
     },
   };
-  await writeFile(join(releaseDir, "metadata.json"), JSON.stringify(metadata));
-  await writeFile(join(releaseDir, "devkit.zip"), bytes);
+  await publishDevkit(directory, metadata, bytes);
   const app = buildApp({ releasesDir: directory });
   try {
     const docs = await app.inject("/api/games/paper/development");
@@ -43,63 +40,62 @@ test("development materials and immutable release downloads are public without a
     expect(official.statusCode).toBe(200);
     expect(official.body).toBe(docs.json().officialBot);
     expect(official.headers["content-disposition"]).toContain("official.js");
-    const manifest = await app.inject(
-      `/api/games/paper/releases/${encodeURIComponent(game.release)}`,
-    );
+    const manifest = await app.inject("/api/games/paper/devkit");
     expect(manifest.statusCode).toBe(200);
     expect(manifest.json()).toEqual(metadata);
     expect(manifest.headers["cache-control"]).toBe("no-store");
-    const alias = await app.inject("/api/games/paper/download");
-    expect(alias.statusCode).toBe(302);
-    expect(alias.headers.location).toBe(metadata.archive.url);
-    expect(alias.headers["cache-control"]).toBe("no-store");
     const zip = await app.inject(metadata.archive.url);
+    expect(zip.statusCode).toBe(200);
     expect(zip.rawPayload).toEqual(bytes);
     expect(zip.headers["content-type"]).toBe("application/zip");
     expect(zip.headers["content-encoding"]).toBeUndefined();
-    expect(zip.headers.etag).toContain(metadata.archive.sha256);
-    expect((await app.inject("/api/games/paper/releases/unknown")).statusCode).toBe(404);
-    const legacyPinned = devkitDownloadPath(game.id, game.release, metadata.manifestSha256);
-    expect((await app.inject(legacyPinned)).rawPayload).toEqual(bytes);
-    expect((await app.inject("/api/games/paper/releases/..%2Fsecret/download")).statusCode).toBe(
-      404,
-    );
-    // Publishing newer materials must not change the game identity or legacy downloads.
-    const selector = `/api/games/paper/releases/${encodeURIComponent(game.release)}`;
-    for (const digit of ["c", "d"]) {
-      const revision = digit.repeat(64);
-      const nextBytes = Buffer.from(`revision ${digit}`);
-      const next = {
-        ...metadata,
-        manifestSha256: revision,
-        archive: {
-          url: devkitDownloadPath(game.id, game.release, revision),
-          bytes: nextBytes.length,
-          sha256: createHash("sha256").update(nextBytes).digest("hex"),
-        },
-      };
-      await publishDevkit(directory, next, nextBytes);
-      const selected = await app.inject(selector);
-      expect(selected.json()).toEqual(next);
-      expect(selected.headers["cache-control"]).toBe("no-store");
-      const pinned = await app.inject(next.archive.url.replace(/\/download$/, ""));
-      expect(pinned.json()).toEqual(next);
-      expect(pinned.headers["cache-control"]).toContain("immutable");
-      expect((await app.inject(next.archive.url)).rawPayload).toEqual(nextBytes);
-      expect((await app.inject(metadata.archive.url)).rawPayload).toEqual(bytes);
-      expect((await app.inject(legacyPinned)).rawPayload).toEqual(bytes);
-    }
-    expect((await app.inject(devkitDownloadPath(game.id, game.release, "c".repeat(64)))).body).toBe(
-      "revision c",
-    );
-    expect((await app.inject(`${selector}/devkits/${"e".repeat(64)}/download`)).statusCode).toBe(
-      404,
-    );
-    expect((await app.inject(`${selector}/devkits/..%2Fsecret/download`)).statusCode).toBe(404);
-    await writeFile(join(releaseDir, "devkit.zip"), "wrong-size");
+    expect(zip.headers["cache-control"]).toBe("no-store");
+    const nextBytes = Buffer.from("latest package");
+    const next = {
+      ...metadata,
+      manifestSha256: "c".repeat(64),
+      archive: {
+        ...metadata.archive,
+        bytes: nextBytes.length,
+        sha256: createHash("sha256").update(nextBytes).digest("hex"),
+      },
+    };
+    const path = await publishDevkit(directory, next, nextBytes);
+    expect((await app.inject("/api/games/paper/devkit")).json()).toEqual(next);
+    expect((await app.inject(metadata.archive.url)).rawPayload).toEqual(nextBytes);
+    expect(
+      (
+        await app.inject({
+          url: metadata.archive.url,
+          headers: { "if-match": `"${metadata.archive.sha256}"` },
+        })
+      ).statusCode,
+    ).toBe(412);
+    expect(
+      (
+        await app.inject({
+          url: metadata.archive.url,
+          headers: { "if-match": `"${next.archive.sha256}"` },
+        })
+      ).rawPayload,
+    ).toEqual(nextBytes);
+    for (const url of [
+      `/api/games/paper/releases/${encodeURIComponent(game.release)}`,
+      `/api/games/paper/releases/${encodeURIComponent(game.release)}/download`,
+      `/api/games/paper/releases/${encodeURIComponent(game.release)}/devkits/${metadata.manifestSha256}/download`,
+      "/api/games/unknown/download",
+    ])
+      expect((await app.inject(url)).statusCode).toBe(404);
+    await writeFile(path, "wrong-size");
     expect((await app.inject(metadata.archive.url)).statusCode).toBe(500);
-    await rm(join(releaseDir, "devkit.zip"));
+    await rm(path);
     expect((await app.inject(metadata.archive.url)).statusCode).toBe(404);
+    await publishDevkit(
+      directory,
+      { ...next, game: { ...game, release: "paper@future" } },
+      nextBytes,
+    );
+    expect((await app.inject("/api/games/paper/devkit")).statusCode).toBe(404);
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });

@@ -9,12 +9,11 @@
 ```sh
 pnpm exec arena init paper ./paper-bot --server http://127.0.0.1:3000
 # 指定历史发行，不读取 current 别名
-pnpm exec arena init paper ./paper-bot --release '<游戏发行>' --revision '<清单SHA-256>' --server http://127.0.0.1:3000
 ```
 
-对外入口是 `npx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>`（需要已发布的 npm 包）。CLI 默认连接 loopback，平台地址由 `--server` 传入；自托管构建可设置 `SI_ARENA_SERVER_URL` 烧入自己的默认地址。`--server` 允许 HTTP 与 HTTPS，下载仅使用同源元数据中的固定发行地址，不跟随 HTTP 重定向。
+对外入口是 `npx @si-arena/cli@latest init paper ./paper-bot --server http(s)://<平台地址>`（需要已发布的 npm 包）。CLI 默认连接 loopback，平台地址由 `--server` 传入；自托管构建可设置 `SI_ARENA_SERVER_URL` 烧入自己的默认地址。`--server` 允许 HTTP 与 HTTPS，下载仅使用同源的当前开发包地址，不跟随 HTTP 重定向。
 
-初始化先固定发行，下载最大 32MiB ZIP，校验外部字节数与 SHA-256、内部 release.json 摘要、组件版本/配置及逐文件摘要，最多解压 128MiB、2048 个文件加清单。只写常规文件，不恢复 ZIP 中的符号链接属性；拒绝越界、重复、大小写冲突和 Windows 保留路径。拒绝非空目标目录，校验后在相邻临时目录完整写入并原子移入，失败不留下半个项目。不会自动安装依赖、运行模块或创建线上比赛。
+初始化获取服务器最新开发包，下载最大 32MiB ZIP，校验外部字节数与 SHA-256、内部 release.json 摘要、组件版本/配置及逐文件摘要，最多解压 128MiB、2048 个文件加清单。只写常规文件，不恢复 ZIP 中的符号链接属性；拒绝越界、重复、大小写冲突和 Windows 保留路径。拒绝非空目标目录，校验后在相邻临时目录完整写入并原子移入，失败不留下半个项目。不会自动安装依赖、运行模块或创建线上比赛。
 
 进入生成目录后：
 
@@ -125,4 +124,13 @@ arena --registry ./arena.config.mjs replay ./replays/match.json.gz --verify
 
 批量运行默认按 CPU、参赛人数与可用内存限制并发，`--jobs 1` 串行。输出仍按种子序号排序。系统失败输出 `match-error`，其他场继续；`batch.failedMatches` 统计失败数，失败批次返回非零退出码。每场独立进程，普通玩家故障只重建对应 isolate，比赛进程崩溃则整场不计分。
 
-开发包修订与游戏发行独立：`--release` 选择该游戏发行的当前开发包，另加 `--revision` 固定内容摘要。初始化 JSON 输出包含 `release` 和 `revision`，仅资料变化不会影响游戏规则或已有回放。
+## 更新已有项目
+
+```sh
+pnpm arena update
+pnpm install --frozen-lockfile
+```
+
+只更新服务器当前开发包，不支持发行或修订选择。初始化会在 .arena.json 记录服务器地址；可使用 `--server <url>` 显式指定。直接解压 ZIP 的项目首次更新需要指定服务器；旧本地 CLI 尚无更新命令时，在项目中运行 `npx @si-arena/cli@latest update --server <url>`。
+
+更新保留 bot.js、研究目录、回放、自定义对手及其他用户文件；只替换清单中的平台文件，删除过期且未修改的平台文件。修改过的被替换/删除文件先备份到 .arena-backups/。先完整下载和校验，再安装；拒绝符号链接、路径冲突和并发更新，普通失败回滚，回滚遇到更新期间的新编辑时保留当前文件、继续恢复其余文件，并报告旧文件暂存目录。内容相同提示已是最新，不重复写入。更新不安装依赖、不运行玩家代码、不上传或创建比赛。规则和玩家接口不兼容时，玩家需要适配保留的 bot.js。
